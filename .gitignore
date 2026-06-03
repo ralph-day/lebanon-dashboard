@@ -1,0 +1,17 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Built frontend
+client/dist/
+
+# Secrets — never commit these
+server/.env
+*.env
+
+# Excel data files — contain survey data
+*.xlsx
+tmp_data.xlsx
+
+# OS
+.DS_Store

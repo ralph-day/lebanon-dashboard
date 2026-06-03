@@ -1,0 +1,208 @@
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import AnomalyAlerts from './AnomalyAlerts'
+
+const NAT_COLORS = { Palestinian: '#3b82f6', Lebanese: '#10b981', Syrian: '#f59e0b' }
+
+function StatCard({ label, value, sub, color = 'blue' }) {
+  const colors = {
+    blue:  'bg-blue-50 text-blue-700 border-blue-100',
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    slate: 'bg-slate-50 text-slate-700 border-slate-100',
+  }
+  return (
+    <div className={`rounded-xl border p-5 ${colors[color]}`}>
+      <p className="text-xs font-medium uppercase tracking-wide opacity-70">{label}</p>
+      <p className="text-3xl font-bold mt-1">{value}</p>
+      {sub && <p className="text-xs mt-1 opacity-60">{sub}</p>}
+    </div>
+  )
+}
+
+function ActiveBadge({ name, lastSeen, recentCount, isActive }) {
+  const mins = lastSeen ? Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000) : null
+  const timeLabel = mins == null ? '—' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${isActive ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-800 truncate">{name.split('(')[0].trim()}</p>
+        <p className="text-xs text-slate-400">{timeLabel}</p>
+      </div>
+      {isActive && (
+        <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+          +{recentCount} today
+        </span>
+      )}
+    </div>
+  )
+}
+
+export default function OverviewPanel({ data }) {
+  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [] } = data
+
+  const totalCompleted = overview.totalTarget - overview.remaining
+  const pct = overview.totalTarget > 0 ? Math.round((totalCompleted / overview.totalTarget) * 100) : 0
+
+  const natData = [
+    { name: 'Palestinian', value: natTotals.palestinian },
+    { name: 'Lebanese',    value: natTotals.lebanese },
+    { name: 'Syrian',      value: natTotals.syrian },
+  ].filter(d => d.value > 0)
+
+  const qaData = [
+    { name: 'Pass',   value: qa.pass,   fill: '#10b981' },
+    { name: 'Review', value: qa.review, fill: '#f59e0b' },
+    { name: 'Fail',   value: qa.fail,   fill: '#ef4444' },
+  ]
+
+  const genderData = [
+    { name: 'Men',   value: genderTotals.men,   fill: '#3b82f6' },
+    { name: 'Women', value: genderTotals.women, fill: '#ec4899' },
+  ]
+
+  const statusCounts = locations.reduce((acc, l) => {
+    const s = (l.status || '').replace(/[^\w\s]/g, '').trim() || 'Unknown'
+    acc[s] = (acc[s] || 0) + 1
+    return acc
+  }, {})
+
+  // Sort assignments: active first, then by pct desc
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    if (a.isActive !== b.isActive) return b.isActive - a.isActive
+    return b.pct - a.pct
+  })
+
+  const activeCount = assignments.filter(a => a.isActive).length
+
+  return (
+    <div className="space-y-6">
+
+      {/* ── Anomaly Alerts ────────────────────────────────────────────────── */}
+      <AnomalyAlerts anomalies={anomalies} />
+
+      {/* ── Active Field Team ─────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Field Team Status</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Submissions in the last 4 hours</p>
+          </div>
+          <span className={`text-xs font-bold px-3 py-1 rounded-full ${activeCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+            {activeCount} / {assignments.length} active
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          {sortedAssignments.map(a => (
+            <ActiveBadge
+              key={a.code}
+              name={`${a.name} (${a.code})`}
+              lastSeen={a.lastSeen}
+              recentCount={a.recentCount}
+              isActive={a.isActive}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Big numbers ───────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatCard label="Total Surveys" value={totalCompleted.toLocaleString()} sub={`Target: ${overview.totalTarget.toLocaleString()}`} color="blue" />
+        <StatCard label="Completed Today" value={overview.completedToday} sub="accepted submissions" color="green" />
+        <StatCard label="Remaining" value={overview.remaining.toLocaleString()} sub="surveys to collect" color="amber" />
+        <StatCard label="Locations" value={overview.totalLocations} sub="survey areas" color="slate" />
+      </div>
+
+      {/* ── Progress bar ──────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-slate-700">Overall Progress</span>
+          <span className="text-sm font-bold text-blue-600">{pct}%</span>
+        </div>
+        <div className="w-full bg-slate-100 rounded-full h-4">
+          <div className="bg-blue-600 h-4 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 100)}%` }} />
+        </div>
+        <div className="flex justify-between text-xs text-slate-400 mt-1.5">
+          <span>{totalCompleted.toLocaleString()} collected</span>
+          <span>{overview.totalTarget.toLocaleString()} total target</span>
+        </div>
+      </div>
+
+      {/* ── Charts row ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Respondents by Nationality</h3>
+          <ResponsiveContainer width="100%" height={170}>
+            <PieChart>
+              <Pie data={natData} cx="50%" cy="50%" innerRadius={45} outerRadius={68} dataKey="value" paddingAngle={3}>
+                {natData.map(e => <Cell key={e.name} fill={NAT_COLORS[e.name] || '#94a3b8'} />)}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {natData.map(d => (
+              <span key={d.name} className="flex items-center gap-1 text-xs text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: NAT_COLORS[d.name] }} />{d.name}: {d.value}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Survey Quality Status</h3>
+          <ResponsiveContainer width="100%" height={170}>
+            <PieChart>
+              <Pie data={qaData} cx="50%" cy="50%" innerRadius={45} outerRadius={68} dataKey="value" paddingAngle={3}>
+                {qaData.map(e => <Cell key={e.name} fill={e.fill} />)}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {qaData.map(d => (
+              <span key={d.name} className="flex items-center gap-1 text-xs text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: d.fill }} />{d.name}: {d.value}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Gender Breakdown</h3>
+          <ResponsiveContainer width="100%" height={170}>
+            <BarChart data={genderData} layout="vertical" margin={{ left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11 }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={50} />
+              <Tooltip />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                {genderData.map(e => <Cell key={e.name} fill={e.fill} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {genderData.map(d => (
+              <span key={d.name} className="flex items-center gap-1 text-xs text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: d.fill }} />{d.name}: {d.value}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Location status summary ────────────────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-3">Location Status Summary</h3>
+        <div className="flex flex-wrap gap-3">
+          {Object.entries(statusCounts).map(([status, count]) => (
+            <div key={status} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-sm">
+              <span>{status}</span>
+              <span className="bg-slate-200 text-slate-700 rounded-full px-2 py-0.5 text-xs font-medium">{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
