@@ -284,7 +284,7 @@ app.post('/api/refresh', requireAuth, async (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, '../client/dist');
   app.use(express.static(clientBuild));
-  app.get('*', (req, res) => res.sendFile(path.join(clientBuild, 'index.html')));
+  app.get('/*', (req, res) => res.sendFile(path.join(clientBuild, 'index.html')));
 }
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
