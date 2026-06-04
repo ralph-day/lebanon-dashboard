@@ -20,14 +20,17 @@ function StatCard({ label, value, sub, color = 'blue' }) {
   )
 }
 
-function ActiveBadge({ name, lastSeen, recentCount, isActive }) {
+function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
   const mins = lastSeen ? Math.floor((Date.now() - new Date(lastSeen).getTime()) / 60000) : null
   const timeLabel = mins == null ? '—' : mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ${mins % 60}m ago`
   return (
-    <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${isActive ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${isActive ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+    >
       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`} />
       <div className="min-w-0 flex-1">
-        <button onClick={() => navigate(`/enumerator/${a.code}`)} className="text-sm font-semibold text-slate-800 truncate hover:text-blue-600 transition-colors text-left w-full">{name.split('(')[0].trim()}</button>
+        <p className="text-sm font-semibold text-slate-800 truncate hover:text-blue-600">{name.split('(')[0].trim()}</p>
         <p className="text-xs text-slate-400">{timeLabel}</p>
       </div>
       {isActive && (
@@ -98,10 +101,12 @@ export default function OverviewPanel({ data }) {
           {sortedAssignments.map(a => (
             <ActiveBadge
               key={a.code}
+              code={a.code}
               name={`${a.name} (${a.code})`}
               lastSeen={a.lastSeen}
               recentCount={a.recentCount}
               isActive={a.isActive}
+              onClick={() => navigate(`/enumerator/${a.code}`)}
             />
           ))}
         </div>
