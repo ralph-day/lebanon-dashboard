@@ -46,7 +46,7 @@ function parseExcel(filePath) {
   const queryAllRules = sheet('Query_All_Rules');
   const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'], { header: 1 });
 
-  const overviewRow = dashboardSheet[4] || [];
+  const overviewRow = dashboardSheet.find(row => row && typeof row[4] === 'number' && row[4] > 100 && typeof row[7] === 'number') || dashboardSheet.find(row => row && typeof row[1] === 'number' && row[1] > 0) || dashboardSheet[4] || [];
   const overview = {
     totalLocations: overviewRow[1] || 0,
     totalTarget: overviewRow[4] || 0,
