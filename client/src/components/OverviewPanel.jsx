@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import AnomalyAlerts from './AnomalyAlerts'
 import { useNavigate } from 'react-router-dom'
@@ -37,6 +38,81 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
         <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full whitespace-nowrap">
           +{recentCount} today
         </span>
+      )}
+    </div>
+  )
+}
+
+function DailyProgress({ assignments, qaRows, navigate }) {
+  const [offset, setOffset] = useState(0) // 0 = today, -1 = yesterday, etc.
+
+  const targetDate = new Date()
+  targetDate.setDate(targetDate.getDate() + offset)
+  const dayStart = new Date(targetDate); dayStart.setHours(0, 0, 0, 0)
+  const dayEnd   = new Date(targetDate); dayEnd.setHours(23, 59, 59, 999)
+
+  const label = offset === 0 ? 'Today' : offset === -1 ? 'Yesterday'
+    : targetDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
+  // Compute per-enumerator stats for selected day from qaRows
+  const statsByCode = {}
+  qaRows.forEach(r => {
+    if (!r.submissionDate) return
+    const ts = new Date(r.submissionDate).getTime()
+    if (ts < dayStart.getTime() || ts > dayEnd.getTime()) return
+    // match to assignment by name containing code
+    const assignment = assignments.find(a => r.name.includes(`(${a.code})`))
+    if (!assignment) return
+    if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, total: 0 }
+    statsByCode[assignment.code].total++
+    if (r.status === 'Accepted') statsByCode[assignment.code].accepted++
+    else statsByCode[assignment.code].rejected++
+  })
+
+  const rows = assignments
+    .map(a => ({ ...a, dayAccepted: statsByCode[a.code]?.accepted || 0, dayRejected: statsByCode[a.code]?.rejected || 0, dayTotal: statsByCode[a.code]?.total || 0 }))
+    .filter(a => a.dayTotal > 0)
+    .sort((a, b) => b.dayAccepted - a.dayAccepted)
+
+  const totalAccepted = rows.reduce((s, a) => s + a.dayAccepted, 0)
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-5">
+      {/* Header with date navigator */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-slate-800">Progress by Enumerator</h3>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setOffset(o => o - 1)} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center text-sm">←</button>
+          <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${offset === 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{label}</span>
+          <button onClick={() => setOffset(o => Math.min(o + 1, 0))} disabled={offset === 0} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center text-sm disabled:opacity-30">→</button>
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-4">No submissions recorded for {label.toLowerCase()}</p>
+      ) : (
+        <>
+          <div className="space-y-2.5">
+            {rows.map(a => (
+              <div key={a.code} className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg px-2 py-1.5 transition-colors" onClick={() => navigate(`/enumerator/${a.code}`)}>
+                <span className="text-sm font-medium text-slate-700 w-36 shrink-0 truncate">{a.name}</span>
+                <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{a.code}</span>
+                <div className="flex-1 bg-slate-100 rounded-full h-2">
+                  <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${a.totalTarget > 0 ? Math.min(a.completed / a.totalTarget * 100, 100) : 0}%` }} />
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-sm font-bold text-emerald-600">+{a.dayAccepted}</span>
+                  <span className="text-xs text-slate-400">accepted</span>
+                  {a.dayRejected > 0 && <span className="text-xs text-red-400 ml-1">({a.dayRejected} rejected)</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-400">
+            <span>Total accepted: <span className="font-semibold text-slate-600">{totalAccepted}</span></span>
+            <span>{rows.length} enumerator{rows.length !== 1 ? 's' : ''} active</span>
+          </div>
+        </>
       )}
     </div>
   )
@@ -112,43 +188,8 @@ export default function OverviewPanel({ data }) {
         </div>
       </div>
 
-      {/* ── Today's Progress ──────────────────────────────────────────────── */}
-      {assignments.some(a => a.todayTotal > 0) && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Today's Progress by Enumerator</h3>
-          <div className="space-y-2.5">
-            {[...assignments]
-              .filter(a => a.todayTotal > 0)
-              .sort((a, b) => b.todayAccepted - a.todayAccepted)
-              .map(a => (
-                <div
-                  key={a.code}
-                  className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg px-2 py-1 transition-colors"
-                  onClick={() => navigate(`/enumerator/${a.code}`)}
-                >
-                  <span className="text-sm font-medium text-slate-700 w-36 shrink-0 truncate">{a.name}</span>
-                  <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{a.code}</span>
-                  <div className="flex-1 bg-slate-100 rounded-full h-2">
-                    <div
-                      className="bg-blue-500 h-2 rounded-full transition-all"
-                      style={{ width: `${a.totalTarget > 0 ? Math.min(a.completed / a.totalTarget * 100, 100) : 0}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-sm font-bold text-emerald-600">+{a.todayAccepted}</span>
-                    <span className="text-xs text-slate-400">accepted today</span>
-                    {a.todayTotal !== a.todayAccepted && (
-                      <span className="text-xs text-red-400 ml-1">({a.todayTotal - a.todayAccepted} rejected)</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
-            Total accepted today: <span className="font-semibold text-slate-600">{assignments.reduce((s, a) => s + a.todayAccepted, 0)}</span>
-          </div>
-        </div>
-      )}
+      {/* ── Daily Progress ────────────────────────────────────────────────── */}
+      <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
 
       {/* ── Big numbers ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

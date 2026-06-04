@@ -375,7 +375,7 @@ function parseExcel(filePath) {
 
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
-    qa: { rows: qaRows.slice(0, 50), pass: qaPass, review: qaReview, fail: qaFail },
+    qa: { rows: qaRows.slice(0, 1000), pass: qaPass, review: qaReview, fail: qaFail },
     sectionTimings, natTotals, genderTotals,
   };
 }

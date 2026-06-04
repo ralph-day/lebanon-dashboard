@@ -306,7 +306,7 @@ function parseExcel(filePath) {
     };
   }).sort((a, b) => b.critical.length - a.critical.length || b.totalIssues - a.totalIssues);
 
-  return { overview, locations, enumerators, assignments, activeEnumerators, anomalies, qa: { rows: qaRows.slice(0, 50), pass: qaPass, review: qaReview, fail: qaFail }, sectionTimings, natTotals, genderTotals };
+  return { overview, locations, enumerators, assignments, activeEnumerators, anomalies, qa: { rows: qaRows.slice(0, 1000), pass: qaPass, review: qaReview, fail: qaFail }, sectionTimings, natTotals, genderTotals };
 }
 
 app.get('/api/data', (_req, res) => {
