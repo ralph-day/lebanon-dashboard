@@ -278,7 +278,9 @@ function parseExcel(filePath) {
   const activeEnumerators = Object.entries(recentByName).map(([name, v]) => ({ name, ...v }));
 
   // ── Today's submissions per enumerator ────────────────────────────────────
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  // Lebanon = UTC+3
+  const todayLb = new Date(Date.now() + 3 * 3600000); todayLb.setUTCHours(0,0,0,0);
+  const todayStart = new Date(todayLb.getTime() - 3 * 3600000);
   const todayByName = {};
   qaRows.forEach(r => {
     if (!r.submissionDate) return;

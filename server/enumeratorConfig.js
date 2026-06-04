@@ -94,7 +94,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Burj el-Barajne Camp', target: 64, deadline: '2026-06-05' },
+      { name: 'Burj el-Barajne Camp', target: 32, deadline: '2026-06-05' },
     ],
   },
   {
@@ -105,7 +105,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Burj El Barajneh Camp', target: 64, deadline: '2026-06-05' },
+      { name: 'Burj El Barajneh Camp', target: 32, deadline: '2026-06-05' },
     ],
   },
   {

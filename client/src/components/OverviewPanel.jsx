@@ -46,10 +46,13 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
 function DailyProgress({ assignments, qaRows, navigate }) {
   const [offset, setOffset] = useState(0) // 0 = today, -1 = yesterday, etc.
 
-  const targetDate = new Date()
-  targetDate.setDate(targetDate.getDate() + offset)
-  const dayStart = new Date(targetDate); dayStart.setHours(0, 0, 0, 0)
-  const dayEnd   = new Date(targetDate); dayEnd.setHours(23, 59, 59, 999)
+  // All times in Lebanon UTC+3
+  const LEBANON_OFFSET_MS = 3 * 60 * 60 * 1000
+  const lbNow = new Date(Date.now() + LEBANON_OFFSET_MS)
+  lbNow.setUTCDate(lbNow.getUTCDate() + offset)
+  const lbDay = new Date(lbNow); lbDay.setUTCHours(0, 0, 0, 0)
+  const dayStart = new Date(lbDay.getTime() - LEBANON_OFFSET_MS)   // midnight LB → UTC
+  const dayEnd   = new Date(lbDay.getTime() - LEBANON_OFFSET_MS + 86400000 - 1)
 
   const label = offset === 0 ? 'Today' : offset === -1 ? 'Yesterday'
     : targetDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
