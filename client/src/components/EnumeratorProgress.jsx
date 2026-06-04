@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function deadlineStatus(deadlineStr) {
   if (!deadlineStr) return { label: 'TBD', cls: 'bg-slate-100 text-slate-500', daysLeft: null }
@@ -23,6 +24,7 @@ function ProgressBar({ pct }) {
 }
 
 export default function EnumeratorProgress({ assignments = [] }) {
+  const navigate = useNavigate()
   const [filterEnum, setFilterEnum] = useState('All')
   const [filterLocality, setFilterLocality] = useState('All')
   const [expandedEnum, setExpandedEnum] = useState(null)
@@ -100,7 +102,7 @@ export default function EnumeratorProgress({ assignments = [] }) {
                   {/* Name + code */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-slate-800 text-sm">{a.name}</span>
+                      <button onClick={(e) => { e.stopPropagation(); navigate(`/enumerator/${a.code}`) }} className="font-semibold text-slate-800 text-sm hover:text-blue-600 transition-colors">{a.name}</button>
                       <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{a.code}</span>
                       {a.isActive && (
                         <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">

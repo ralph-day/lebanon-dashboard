@@ -2,6 +2,18 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import EnumeratorProfile from './pages/EnumeratorProfile'
+
+function EnumeratorProfileWrapper({ onLogout }) {
+  const [data, setData] = useState(null)
+  useEffect(() => {
+    fetch('/api/data', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setData(d))
+      .catch(() => {})
+  }, [])
+  return <EnumeratorProfile data={data} />
+}
 
 function App() {
   const [user, setUser] = useState(undefined) // undefined = loading
@@ -28,6 +40,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />} />
+        <Route path="/enumerator/:code" element={user ? <EnumeratorProfileWrapper onLogout={() => setUser(null)} /> : <Navigate to="/login" />} />
         <Route path="/*" element={user ? <Dashboard user={user} onLogout={() => setUser(null)} /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>

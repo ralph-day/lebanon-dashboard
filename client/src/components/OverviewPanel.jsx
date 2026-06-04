@@ -1,5 +1,6 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import AnomalyAlerts from './AnomalyAlerts'
+import { useNavigate } from 'react-router-dom'
 
 const NAT_COLORS = { Palestinian: '#3b82f6', Lebanese: '#10b981', Syrian: '#f59e0b' }
 
@@ -26,7 +27,7 @@ function ActiveBadge({ name, lastSeen, recentCount, isActive }) {
     <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${isActive ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
       <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-slate-800 truncate">{name.split('(')[0].trim()}</p>
+        <button onClick={() => navigate(`/enumerator/${a.code}`)} className="text-sm font-semibold text-slate-800 truncate hover:text-blue-600 transition-colors text-left w-full">{name.split('(')[0].trim()}</button>
         <p className="text-xs text-slate-400">{timeLabel}</p>
       </div>
       {isActive && (
@@ -39,6 +40,7 @@ function ActiveBadge({ name, lastSeen, recentCount, isActive }) {
 }
 
 export default function OverviewPanel({ data }) {
+  const navigate = useNavigate()
   const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [] } = data
 
   const totalCompleted = overview.totalTarget - overview.remaining
