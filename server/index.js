@@ -6,6 +6,8 @@ const { google } = require('googleapis');
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
+const { LOCATION_MAP, REGION_ORDER } = require('./locationConfig');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -145,26 +147,36 @@ function parseExcel(filePath) {
     totalCompleted: (overviewRow[4] || 0) - (overviewRow[7] || 0),
   };
 
-  // Location tracker
-  const locations = tracker.map(r => ({
-    location: r.location || r.loc_4 || '',
-    region: r.loc_2 || '',
-    district: r.loc_3 || '',
-    target: r.target || 0,
-    completed: r.Completed || 0,
-    accepted: r.Accepted || 0,
-    remaining: r['Actual Remaining'] || 0,
-    pctComplete: r.Pct_Complete || 0,
-    status: r.Status || '',
-    palestinian: r.Palestinian || 0,
-    lebanese: r.Lebanese || 0,
-    syrian: r.Syrian || 0,
-    rejectedGTS: r['Rejected by GTS'] || 0,
-    rejectedNationality: r['Rejected because of nationality'] || 0,
-    men: r.man || 0,
-    women: r.woman || 0,
-    locationOn: r.LocationOn || 0,
-  }));
+  // Location tracker — enriched with proper names
+  const locations = tracker.map(r => {
+    const code = r.location || r.loc_4 || '';
+    const cfg = LOCATION_MAP[code] || {};
+    const regionIdx = REGION_ORDER.indexOf(cfg.region || '');
+    return {
+      code,
+      location: cfg.name || code.replace(/_/g, ' '),
+      region: cfg.region || (r.loc_2 || '').replace(/_/g, ' '),
+      district: cfg.district || (r.loc_3 || '').replace(/_/g, ' '),
+      type: cfg.type || 'Lebanese',
+      target: r.target || 0,
+      completed: r.Completed || 0,
+      accepted: r.Accepted || 0,
+      remaining: r['Actual Remaining'] || 0,
+      pctComplete: r.Pct_Complete || 0,
+      status: r.Status || '',
+      palestinian: r.Palestinian || 0,
+      lebanese: r.Lebanese || 0,
+      syrian: r.Syrian || 0,
+      rejectedGTS: r['Rejected by GTS'] || 0,
+      rejectedNationality: r['Rejected because of nationality'] || 0,
+      men: r.man || 0,
+      women: r.woman || 0,
+      locationOn: r.LocationOn || 0,
+      lat: cfg.lat || null,
+      lng: cfg.lng || null,
+      regionOrder: regionIdx >= 0 ? regionIdx : 99,
+    };
+  }).sort((a, b) => a.regionOrder - b.regionOrder || a.location.localeCompare(b.location));
 
   // Enumerators
   const enumerators = enumSummary.map(r => ({
@@ -243,14 +255,102 @@ function parseExcel(filePath) {
     return acc;
   }, { men: 0, women: 0 });
 
+  // ── Active enumerators (last 4 hours) ────────────────────────────────────
+  const now = Date.now();
+  const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+  const recentByName = {};
+  qaRows.forEach(r => {
+    if (!r.submissionDate) return;
+    const ts = new Date(r.submissionDate).getTime();
+    if (now - ts <= FOUR_HOURS_MS) {
+      if (!recentByName[r.name]) recentByName[r.name] = { count: 0, lastSeen: null };
+      recentByName[r.name].count++;
+      if (!recentByName[r.name].lastSeen || ts > new Date(recentByName[r.name].lastSeen).getTime()) {
+        recentByName[r.name].lastSeen = r.submissionDate;
+      }
+    }
+  });
+  const activeEnumerators = Object.entries(recentByName).map(([name, v]) => ({ name, ...v }));
+
+  // ── Enumerator assignments ────────────────────────────────────────────────
+  const enumCompletedMap = {};
+  enumerators.forEach(e => { enumCompletedMap[e.name] = e.totalSurveys; });
+
+  const phoneByName = {};
+  ENUMERATOR_ASSIGNMENTS.forEach(e => {
+    const fullName = Object.keys(enumCompletedMap).find(n => n.includes(`(${e.code})`)) || e.name;
+    phoneByName[fullName] = e.phone || null;
+  });
+
+  const assignments = ENUMERATOR_ASSIGNMENTS.map(e => {
+    const fullName = Object.keys(enumCompletedMap).find(n => n.includes(`(${e.code})`)) || e.name;
+    const completed = enumCompletedMap[fullName] || 0;
+    const totalTarget = e.locations.reduce((s, l) => s + l.target, 0);
+    const isActive = !!recentByName[fullName];
+    const lastSeen = enumerators.find(en => en.name.includes(`(${e.code})`))?.lastSubmission || null;
+    return {
+      code: e.code, name: e.name, fullName, entity: e.entity,
+      governorate: e.governorate, locations: e.locations,
+      totalTarget, completed, remaining: Math.max(0, totalTarget - completed),
+      pct: totalTarget > 0 ? +(completed / totalTarget * 100).toFixed(1) : 0,
+      isActive, lastSeen, recentCount: recentByName[fullName]?.count || 0,
+    };
+  });
+
+  // ── Anomalies (active enumerators only) ───────────────────────────────────
+  const activeNames = new Set(Object.keys(recentByName));
+  const anomalyMap = {};
+  const addAnomaly = (name, severity, type, detail, submissionDate) => {
+    if (!activeNames.has(name)) return;
+    if (!anomalyMap[name]) anomalyMap[name] = { name, phone: phoneByName[name] || null, critical: [], warnings: [] };
+    const entry = { type, detail, submissionDate };
+    if (severity === 'critical') anomalyMap[name].critical.push(entry);
+    else anomalyMap[name].warnings.push(entry);
+  };
+
+  qaRows.filter(r => r.qaStatus === '❌ FAIL').forEach(r => {
+    const flagList = [r.tooFast, r.belowRange, r.missingGPS].filter(f => f && f.startsWith('✗')).join(', ');
+    addAnomaly(r.name, 'critical', 'Failed Survey', `Rejected — ${flagList || `${r.totalFlags} flag(s)`}`, r.submissionDate);
+  });
+  qaRows.filter(r => r.tooFast === '✗ Too Fast').forEach(r => {
+    addAnomaly(r.name, 'warning', 'Too Fast', `Completed in ${parseFloat(r.fullTime || 0).toFixed(1)} min — below minimum`, r.submissionDate);
+  });
+  qaRows.filter(r => r.missingGPS === '✗ Missing GPS').forEach(r => {
+    addAnomaly(r.name, 'warning', 'Missing GPS', 'No location data recorded', r.submissionDate);
+  });
+
+  const queryAllRules = sheet('Query_All_Rules');
+  queryAllRules.forEach(r => {
+    const score = Number(r.Suspicion_Score) || 0;
+    if (score === 0) return;
+    const name = r.NameCode || '';
+    const submissionDate = r.SubmissionDate ? (typeof r.SubmissionDate === 'number' ? new Date((r.SubmissionDate - 25569) * 86400 * 1000).toISOString() : String(r.SubmissionDate)) : null;
+    const flagDetails = [];
+    const sectionMap = { FLAG_StraightLine_Trust: 'Trust', FLAG_StraightLine_Perception: 'Perception', FLAG_StraightLine_Expect: 'Expectations' };
+    Object.entries(sectionMap).forEach(([col, label]) => {
+      const val = String(r[col] || '');
+      if (val.startsWith('✗')) {
+        const m = val.match(/\((\S+) repeated (\d+)x\)/);
+        flagDetails.push(m ? `Gave same answer (${m[1]}) ${m[2]}× in ${label}` : `Straightlining in ${label}`);
+      }
+    });
+    const extreme = String(r.FLAG_HighExtremeRate || '');
+    if (extreme.startsWith('✗')) { const pct = extreme.match(/(\d+)%/)?.[1]; flagDetails.push(`${pct || 'High'}% extreme answers`); }
+    const level = String(r.Suspicion_Level || '');
+    const detail = flagDetails.length > 0 ? `[${level.replace(/[^a-zA-Z\s]/g, '').trim()}] ${flagDetails.join(' · ')}` : `Suspicion score ${score}`;
+    addAnomaly(name, score >= 3 ? 'critical' : 'warning', 'Suspicious Pattern', detail, submissionDate);
+  });
+
+  const anomalies = Object.values(anomalyMap).map(a => {
+    const allItems = [...a.critical, ...a.warnings];
+    const latestTs = allItems.reduce((max, item) => { const ts = item.submissionDate ? new Date(item.submissionDate).getTime() : 0; return ts > max ? ts : max; }, 0);
+    return { ...a, totalIssues: a.critical.length + a.warnings.length, latestAt: latestTs ? new Date(latestTs).toISOString() : null };
+  }).sort((a, b) => b.critical.length - a.critical.length || b.totalIssues - a.totalIssues);
+
   return {
-    overview,
-    locations,
-    enumerators,
+    overview, locations, enumerators, assignments, activeEnumerators, anomalies,
     qa: { rows: qaRows.slice(0, 50), pass: qaPass, review: qaReview, fail: qaFail },
-    sectionTimings,
-    natTotals,
-    genderTotals,
+    sectionTimings, natTotals, genderTotals,
   };
 }
 
