@@ -88,6 +88,17 @@ export default function AnomalyAlerts({ anomalies = [] }) {
                   <p className="text-xs text-slate-400 mt-0.5">Latest issue: {timeAgo(a.latestAt)}</p>
                 </div>
 
+                {/* Phone CTA */}
+                {a.phone && (
+                  <a
+                    href={`tel:+961${a.phone}`}
+                    onClick={e => e.stopPropagation()}
+                    className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition-colors shrink-0"
+                  >
+                    📞 {a.phone}
+                  </a>
+                )}
+
                 {/* Expand + dismiss */}
                 <button
                   onClick={() => setExpanded(isExpanded ? null : a.name)}
