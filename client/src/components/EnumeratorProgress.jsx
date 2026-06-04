@@ -109,6 +109,11 @@ export default function EnumeratorProgress({ assignments = [] }) {
                           Active · +{a.recentCount} last 4h
                         </span>
                       )}
+                    {a.todayAccepted > 0 && (
+                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                          +{a.todayAccepted} today
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{a.governorate} · {a.locations.length} location{a.locations.length > 1 ? 's' : ''}</p>
                   </div>

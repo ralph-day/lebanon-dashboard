@@ -112,6 +112,44 @@ export default function OverviewPanel({ data }) {
         </div>
       </div>
 
+      {/* ── Today's Progress ──────────────────────────────────────────────── */}
+      {assignments.some(a => a.todayTotal > 0) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-semibold text-slate-800 mb-4">Today's Progress by Enumerator</h3>
+          <div className="space-y-2.5">
+            {[...assignments]
+              .filter(a => a.todayTotal > 0)
+              .sort((a, b) => b.todayAccepted - a.todayAccepted)
+              .map(a => (
+                <div
+                  key={a.code}
+                  className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg px-2 py-1 transition-colors"
+                  onClick={() => navigate(`/enumerator/${a.code}`)}
+                >
+                  <span className="text-sm font-medium text-slate-700 w-36 shrink-0 truncate">{a.name}</span>
+                  <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{a.code}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${a.totalTarget > 0 ? Math.min(a.completed / a.totalTarget * 100, 100) : 0}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-sm font-bold text-emerald-600">+{a.todayAccepted}</span>
+                    <span className="text-xs text-slate-400">accepted today</span>
+                    {a.todayTotal !== a.todayAccepted && (
+                      <span className="text-xs text-red-400 ml-1">({a.todayTotal - a.todayAccepted} rejected)</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
+            Total accepted today: <span className="font-semibold text-slate-600">{assignments.reduce((s, a) => s + a.todayAccepted, 0)}</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Big numbers ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="Total Surveys" value={totalCompleted.toLocaleString()} sub={`Target: ${overview.totalTarget.toLocaleString()}`} color="blue" />

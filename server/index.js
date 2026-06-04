@@ -277,6 +277,20 @@ function parseExcel(filePath) {
   });
   const activeEnumerators = Object.entries(recentByName).map(([name, v]) => ({ name, ...v }));
 
+  // ── Today's submissions per enumerator ────────────────────────────────────
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const todayByName = {};
+  qaRows.forEach(r => {
+    if (!r.submissionDate) return;
+    const ts = new Date(r.submissionDate).getTime();
+    if (ts >= todayStart.getTime()) {
+      if (!todayByName[r.name]) todayByName[r.name] = { accepted: 0, rejected: 0, total: 0 };
+      todayByName[r.name].total++;
+      if (r.status === 'Accepted') todayByName[r.name].accepted++;
+      else todayByName[r.name].rejected++;
+    }
+  });
+
   // ── Enumerator assignments ────────────────────────────────────────────────
   const enumCompletedMap = {};
   enumerators.forEach(e => { enumCompletedMap[e.name] = e.totalSurveys; });
@@ -299,6 +313,8 @@ function parseExcel(filePath) {
       totalTarget, completed, remaining: Math.max(0, totalTarget - completed),
       pct: totalTarget > 0 ? +(completed / totalTarget * 100).toFixed(1) : 0,
       isActive, lastSeen, recentCount: recentByName[fullName]?.count || 0,
+      todayAccepted: todayByName[fullName]?.accepted || 0,
+      todayTotal: todayByName[fullName]?.total || 0,
     };
   });
 
