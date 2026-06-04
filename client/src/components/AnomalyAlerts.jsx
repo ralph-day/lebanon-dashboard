@@ -4,8 +4,8 @@ function timeAgo(isoStr) {
   if (!isoStr) return '—'
   const mins = Math.floor((Date.now() - new Date(isoStr).getTime()) / 60000)
   if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  return `${hrs}h ${mins % 60}m ago`
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ${mins % 60}m ago`
+  return new Date(isoStr).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function SeverityIcon({ type }) {

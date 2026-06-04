@@ -219,7 +219,8 @@ function parseExcel(filePath) {
   const activeNames = new Set(Object.keys(recentByName)); // only active (last 4h)
 
   const addAnomaly = (name, severity, type, detail, submissionDate, instanceId) => {
-    if (!activeNames.has(name)) return; // skip inactive enumerators
+    if (!activeNames.has(name)) return;
+    if (submissionDate) { const ts = new Date(submissionDate).getTime(); if (now - ts > FOUR_HOURS_MS) return; }
     if (!anomalyMap[name]) anomalyMap[name] = { name, phone: phoneByName[name] || null, critical: [], warnings: [] };
     const entry = { type, detail, submissionDate, instanceId };
     if (severity === 'critical') anomalyMap[name].critical.push(entry);

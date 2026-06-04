@@ -302,6 +302,11 @@ function parseExcel(filePath) {
   const anomalyMap = {};
   const addAnomaly = (name, severity, type, detail, submissionDate) => {
     if (!activeNames.has(name)) return;
+    // Only show issues from the last 4 hours
+    if (submissionDate) {
+      const ts = new Date(submissionDate).getTime();
+      if (now - ts > FOUR_HOURS_MS) return;
+    }
     if (!anomalyMap[name]) anomalyMap[name] = { name, phone: phoneByName[name] || null, critical: [], warnings: [] };
     const entry = { type, detail, submissionDate };
     if (severity === 'critical') anomalyMap[name].critical.push(entry);
