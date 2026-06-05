@@ -46,16 +46,21 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
 function DailyProgress({ assignments, qaRows, navigate }) {
   const [offset, setOffset] = useState(0) // 0 = today, -1 = yesterday, etc.
 
-  // All times in Lebanon UTC+3
+  // Day = 8 AM Lebanon (UTC+3) to 8 AM next day
   const LEBANON_OFFSET_MS = 3 * 60 * 60 * 1000
+  const DAY_START_HOUR = 8 // 8 AM Lebanon
   const lbNow = new Date(Date.now() + LEBANON_OFFSET_MS)
-  lbNow.setUTCDate(lbNow.getUTCDate() + offset)
-  const lbDay = new Date(lbNow); lbDay.setUTCHours(0, 0, 0, 0)
-  const dayStart = new Date(lbDay.getTime() - LEBANON_OFFSET_MS)   // midnight LB → UTC
-  const dayEnd   = new Date(lbDay.getTime() - LEBANON_OFFSET_MS + 86400000 - 1)
+  // If before 8 AM Lebanon, we're still in "yesterday's" working day
+  const lbHour = lbNow.getUTCHours()
+  const effectiveOffset = offset + (lbHour < DAY_START_HOUR ? -1 : 0)
+  const lbDay = new Date(lbNow)
+  lbDay.setUTCDate(lbDay.getUTCDate() + effectiveOffset)
+  lbDay.setUTCHours(DAY_START_HOUR, 0, 0, 0)
+  const dayStart = new Date(lbDay.getTime() - LEBANON_OFFSET_MS)        // 8 AM LB → UTC
+  const dayEnd   = new Date(lbDay.getTime() - LEBANON_OFFSET_MS + 86400000 - 1) // next 8 AM
 
   const label = offset === 0 ? 'Today' : offset === -1 ? 'Yesterday'
-    : targetDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    : lbDay.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 
   // Compute per-enumerator stats for selected day from qaRows
   const statsByCode = {}

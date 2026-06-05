@@ -282,7 +282,11 @@ function parseExcel(filePath) {
 
   // ── Today's submissions per enumerator ────────────────────────────────────
   // Lebanon = UTC+3
-  const todayLb = new Date(Date.now() + 3 * 3600000); todayLb.setUTCHours(0,0,0,0);
+  // Working day starts at 8 AM Lebanon (UTC+3)
+  const todayLb = new Date(Date.now() + 3 * 3600000);
+  const lbHour = todayLb.getUTCHours();
+  if (lbHour < 8) todayLb.setUTCDate(todayLb.getUTCDate() - 1); // before 8 AM = still yesterday's day
+  todayLb.setUTCHours(8, 0, 0, 0);
   const todayStart = new Date(todayLb.getTime() - 3 * 3600000);
   const todayByName = {};
   qaRows.forEach(r => {

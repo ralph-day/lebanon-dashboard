@@ -175,7 +175,9 @@ function parseExcel(filePath) {
 
   // ── Today's submissions ───────────────────────────────────────────────────
   // Lebanon = UTC+3
-  const todayLb = new Date(Date.now() + 3 * 3600000); todayLb.setUTCHours(0,0,0,0);
+  const todayLb = new Date(Date.now() + 3 * 3600000);
+  if (todayLb.getUTCHours() < 8) todayLb.setUTCDate(todayLb.getUTCDate() - 1);
+  todayLb.setUTCHours(8, 0, 0, 0);
   const todayStart = new Date(todayLb.getTime() - 3 * 3600000);
   const todayByName = {};
   qaRows.forEach(r => {
