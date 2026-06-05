@@ -144,13 +144,14 @@ export default function LocationPanel({ locations }) {
       {/* District-grouped table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-          <div className="col-span-4">District / Location</div>
-          <div className="col-span-1 text-center">Target</div>
-          <div className="col-span-1 text-center">Accepted</div>
-          <div className="col-span-1 text-center">Remaining</div>
-          <div className="col-span-3">Progress</div>
-          <div className="col-span-2">Status</div>
+        <div className="grid grid-cols-13 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr'}}>
+          <div>District / Location</div>
+          <div className="text-center">Target</div>
+          <div className="text-center">Accepted</div>
+          <div className="text-center">Remaining</div>
+          <div className="text-center text-red-400">Rejected</div>
+          <div>Progress</div>
+          <div className="text-center">Status</div>
         </div>
 
         {districtRows.length === 0 && (
@@ -159,14 +160,16 @@ export default function LocationPanel({ locations }) {
 
         {districtRows.map(({ key, group, region, locations, target, accepted, remaining, pct, hasPalestinian }) => {
           const isExpanded = expandedDistricts.has(key)
+          const rejected = locations.reduce((s, l) => s + (l.rejectedGTS || 0) + (l.rejectedNationality || 0), 0)
+          const gridStyle = {gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr'}
           return (
             <div key={key} className="border-b border-slate-100 last:border-0">
-              {/* District row — clickable */}
-              <button
-                onClick={() => toggleDistrict(key)}
-                className="w-full grid grid-cols-12 gap-2 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+              {/* District row */}
+              <button onClick={() => toggleDistrict(key)}
+                className="w-full grid gap-2 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                style={gridStyle}
               >
-                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className={`text-slate-400 text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -176,11 +179,14 @@ export default function LocationPanel({ locations }) {
                     <span className="text-xs text-slate-400">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
                   </div>
                 </div>
-                <div className="col-span-1 text-center self-center font-medium text-slate-700">{target}</div>
-                <div className="col-span-1 text-center self-center font-semibold text-emerald-600">{accepted}</div>
-                <div className="col-span-1 text-center self-center text-slate-500">{remaining}</div>
-                <div className="col-span-3 self-center"><ProgressBar pct={pct} /></div>
-                <div className="col-span-2 self-center">
+                <div className="text-center self-center font-medium text-slate-700">{target}</div>
+                <div className="text-center self-center font-semibold text-emerald-600">{accepted}</div>
+                <div className="text-center self-center text-slate-500">{remaining}</div>
+                <div className="text-center self-center">
+                  {rejected > 0 ? <span className="text-sm font-semibold text-red-500">{rejected}</span> : <span className="text-slate-300 text-sm">—</span>}
+                </div>
+                <div className="self-center"><ProgressBar pct={pct} /></div>
+                <div className="self-center text-center">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     pct >= 1 ? 'bg-blue-100 text-blue-700' :
                     pct >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
@@ -196,30 +202,34 @@ export default function LocationPanel({ locations }) {
               {/* Sub-locality rows */}
               {isExpanded && (
                 <div className="bg-slate-50 border-t border-slate-100">
-                  {/* Sub-header */}
-                  <div className="grid grid-cols-12 gap-2 px-4 py-1.5 border-b border-slate-200 text-xs text-slate-400 uppercase tracking-wide">
-                    <div className="col-span-4 pl-6">Location</div>
-                    <div className="col-span-1 text-center">Target</div>
-                    <div className="col-span-1 text-center">Accepted</div>
-                    <div className="col-span-1 text-center">Remaining</div>
-                    <div className="col-span-3">Progress</div>
-                    <div className="col-span-2">Status</div>
+                  <div className="grid gap-2 px-4 py-1.5 border-b border-slate-200 text-xs text-slate-400 uppercase tracking-wide" style={gridStyle}>
+                    <div className="pl-6">Location</div>
+                    <div className="text-center">Target</div>
+                    <div className="text-center">Accepted</div>
+                    <div className="text-center">Remaining</div>
+                    <div className="text-center text-red-300">Rejected</div>
+                    <div>Progress</div>
+                    <div className="text-center">Status</div>
                   </div>
-                  {locations.map((loc, i) => (
-                    <div key={i} className={`grid grid-cols-12 gap-2 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white transition-colors ${loc.type === 'Palestinian' ? 'bg-purple-50/30' : ''}`}>
-                      <div className="col-span-4 pl-6 flex items-center gap-2 min-w-0">
-                        <span className="text-sm text-slate-700 truncate">{loc.location}</span>
-                        {loc.type === 'Palestinian' && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full shrink-0">Palestinian</span>}
+                  {locations.map((loc, i) => {
+                    const locRejected = (loc.rejectedGTS || 0) + (loc.rejectedNationality || 0)
+                    return (
+                      <div key={i} className={`grid gap-2 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white transition-colors ${loc.type === 'Palestinian' ? 'bg-purple-50/30' : ''}`} style={gridStyle}>
+                        <div className="pl-6 flex items-center gap-2 min-w-0">
+                          <span className="text-sm text-slate-700 truncate">{loc.location}</span>
+                          {loc.type === 'Palestinian' && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full shrink-0">Palestinian</span>}
+                        </div>
+                        <div className="text-center text-sm text-slate-600">{loc.target}</div>
+                        <div className="text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>
+                        <div className="text-center text-sm text-slate-500">{loc.remaining}</div>
+                        <div className="text-center text-sm self-center">
+                          {locRejected > 0 ? <span className="font-semibold text-red-500">{locRejected}</span> : <span className="text-slate-300">—</span>}
+                        </div>
+                        <div className="self-center"><ProgressBar pct={loc.pctComplete} /></div>
+                        <div className="self-center text-center"><StatusBadge status={loc.status} /></div>
                       </div>
-                      <div className="col-span-1 text-center text-sm text-slate-600">{loc.target}</div>
-                      <div className="col-span-1 text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>
-                      <div className="col-span-1 text-center text-sm text-slate-500">{loc.remaining}</div>
-                      <div className="col-span-3 self-center"><ProgressBar pct={loc.pctComplete} /></div>
-                      <div className="col-span-2 self-center"><StatusBadge status={loc.status} /></div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )
+                  })}
             </div>
           )
         })}
