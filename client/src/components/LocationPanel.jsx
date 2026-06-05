@@ -230,6 +230,8 @@ export default function LocationPanel({ locations }) {
                       </div>
                     )
                   })}
+                </div>
+              )}
             </div>
           )
         })}
