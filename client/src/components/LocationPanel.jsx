@@ -1,279 +1,235 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import LebanonMap from './LebanonMap'
 
 const REGION_ORDER = ['Beirut', 'Mount Lebanon', 'North', 'South', 'Bekaa', 'Akkar']
-
-const STATUS_STYLE = {
-  'On Track':   'bg-emerald-100 text-emerald-700',
-  'In Progress':'bg-yellow-100 text-yellow-700',
-  'Started':    'bg-orange-100 text-orange-700',
-  'Not Started':'bg-slate-100 text-slate-500',
-  'Completed':  'bg-blue-100 text-blue-700',
-}
-
-function getStatusLabel(status) {
-  if (!status) return 'Not Started'
-  return status.replace(/[^\w\s]/g, '').trim() || 'Not Started'
-}
+const GROUP_ORDER  = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'El Minieh-Dennie', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar']
 
 function ProgressBar({ pct }) {
   const w = Math.min(Math.round((pct || 0) * 100), 100)
   const color = w >= 90 ? 'bg-emerald-500' : w >= 50 ? 'bg-blue-500' : w > 0 ? 'bg-amber-400' : 'bg-slate-200'
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 bg-slate-100 rounded-full h-2">
-        <div className={`${color} h-2 rounded-full transition-all`} style={{ width: `${w}%` }} />
+      <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+        <div className={`${color} h-1.5 rounded-full transition-all`} style={{ width: `${w}%` }} />
       </div>
-      <span className="text-xs text-slate-500 w-8 text-right">{w}%</span>
+      <span className="text-xs text-slate-500 w-8 text-right shrink-0">{w}%</span>
     </div>
   )
 }
 
-function TypeBadge({ type }) {
-  if (type === 'Palestinian') {
-    return <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">Palestinian Camp</span>
+function StatusBadge({ status }) {
+  const s = (status || '').replace(/[^\w\s]/g, '').trim()
+  const map = {
+    'On Track':    'bg-emerald-100 text-emerald-700',
+    'In Progress': 'bg-yellow-100 text-yellow-700',
+    'Started':     'bg-orange-100 text-orange-700',
+    'Not Started': 'bg-slate-100 text-slate-500',
+    'Completed':   'bg-blue-100 text-blue-700',
   }
-  return null
+  const cls = Object.entries(map).find(([k]) => s.includes(k))?.[1] || 'bg-slate-100 text-slate-500'
+  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{s || 'Unknown'}</span>
 }
 
 export default function LocationPanel({ locations }) {
-  const [search, setSearch] = useState('')
   const [filterRegion, setFilterRegion] = useState('All')
-  const [filterDistrict, setFilterDistrict] = useState('All')
-  const [filterType, setFilterType] = useState('All')
-  const [sortBy, setSortBy] = useState('accepted')
-  const [sortDir, setSortDir] = useState('desc')
-  const [showMap, setShowMap] = useState(true)
+  const [filterType, setFilterType]     = useState('All')
+  const [search, setSearch]             = useState('')
+  const [showMap, setShowMap]           = useState(false)
+  const [expandedDistricts, setExpandedDistricts] = useState(new Set())
+  const [sortBy, setSortBy]             = useState('accepted') // accepted | region
+  const [sortDir, setSortDir]           = useState('desc')
 
-  // Get unique regions in defined order
-  const presentRegions = REGION_ORDER.filter(r => locations.some(l => l.region === r))
-  const regions = ['All', ...presentRegions]
+  const toggleDistrict = (key) => setExpandedDistricts(prev => {
+    const next = new Set(prev)
+    next.has(key) ? next.delete(key) : next.add(key)
+    return next
+  })
 
-  // Get districts for the selected region
-  const presentDistricts = [...new Set(
-    locations
-      .filter(l => filterRegion === 'All' || l.region === filterRegion)
-      .map(l => l.district)
-      .filter(Boolean)
-  )].sort()
-  const districts = ['All', ...presentDistricts]
+  const expandAll = () => setExpandedDistricts(new Set(Object.keys(grouped)))
+  const collapseAll = () => setExpandedDistricts(new Set())
 
-  const filtered = locations
-    .filter(l => {
-      const q = search.toLowerCase()
-      const matchSearch = !q || l.location.toLowerCase().includes(q) || l.district.toLowerCase().includes(q)
-      const matchRegion = filterRegion === 'All' || l.region === filterRegion
-      const matchDistrict = filterDistrict === 'All' || l.district === filterDistrict
-      const matchType = filterType === 'All' || l.type === filterType
-      return matchSearch && matchRegion && matchDistrict && matchType
-    })
-    .sort((a, b) => {
-      let av, bv
-      if (sortBy === 'region') {
-        av = (REGION_ORDER.indexOf(a.region) * 1000) + a.location
-        bv = (REGION_ORDER.indexOf(b.region) * 1000) + b.location
-        return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
-      }
-      av = a[sortBy] ?? 0
-      bv = b[sortBy] ?? 0
-      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av)
-      return sortDir === 'asc' ? av - bv : bv - av
-    })
+  // Filter
+  const filtered = locations.filter(l => {
+    const q = search.toLowerCase()
+    return (filterRegion === 'All' || l.region === filterRegion) &&
+           (filterType   === 'All' || l.type   === filterType) &&
+           (!q || l.location.toLowerCase().includes(q) || l.district.toLowerCase().includes(q))
+  })
 
-  const toggleSort = (col) => {
-    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortBy(col); setSortDir(col === 'pctComplete' ? 'desc' : 'asc') }
-  }
-
-  const th = (label, col) => (
-    <th
-      className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 cursor-pointer hover:text-slate-700 whitespace-nowrap select-none"
-      onClick={() => toggleSort(col)}
-    >
-      {label}{sortBy === col ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
-    </th>
-  )
-
-  // Summary stats
-  const totalTarget = filtered.reduce((s, l) => s + l.target, 0)
-  const totalAccepted = filtered.reduce((s, l) => s + l.accepted, 0)
-  const palestinianCount = filtered.filter(l => l.type === 'Palestinian').length
-  const lebaneseCount = filtered.filter(l => l.type === 'Lebanese').length
-
-  // When sorting by accepted, flatten to single "All" group; otherwise group by region
-  const isSortingByCompletion = sortBy === 'accepted' || sortBy === 'pctComplete'
-  const grouped = {}
-  if (isSortingByCompletion) {
-    grouped['All Regions'] = filtered
-  } else {
+  // Group by region → district
+  const grouped = useMemo(() => {
+    const g = {}
     filtered.forEach(l => {
-      if (!grouped[l.region]) grouped[l.region] = []
-      grouped[l.region].push(l)
+      const grp = l.group || l.district || 'Other'
+      if (!g[grp]) g[grp] = { group: grp, region: l.region || '', locations: [] }
+      g[grp].locations.push(l)
     })
-  }
-  const orderedRegions = isSortingByCompletion
-    ? ['All Regions']
-    : REGION_ORDER.filter(r => grouped[r])
+    return g
+  }, [filtered])
+
+  // Aggregate district-level stats
+  const districtRows = useMemo(() => {
+    return Object.entries(grouped).map(([key, { group, region, locations }]) => {
+      const target   = locations.reduce((s, l) => s + (l.target || 0), 0)
+      const accepted = locations.reduce((s, l) => s + (l.accepted || 0), 0)
+      const remaining= locations.reduce((s, l) => s + (l.remaining || 0), 0)
+      const pct      = target > 0 ? accepted / target : 0
+      const hasPalestinian = locations.some(l => l.type === 'Palestinian')
+      const groupOrder = GROUP_ORDER.indexOf(group)
+      return { key, group, region, locations, target, accepted, remaining, pct, hasPalestinian, groupOrder }
+    }).sort((a, b) => {
+      if (sortBy === 'accepted') return sortDir === 'desc' ? b.accepted - a.accepted : a.accepted - b.accepted
+      return (a.groupOrder - b.groupOrder) || a.group.localeCompare(b.group)
+    })
+  }, [grouped, sortBy, sortDir])
+
+  const regions = ['All', ...REGION_ORDER.filter(r => locations.some(l => l.region === r))]
+  const totalTarget   = filtered.reduce((s, l) => s + (l.target || 0), 0)
+  const totalAccepted = filtered.reduce((s, l) => s + (l.accepted || 0), 0)
 
   return (
     <div className="space-y-4">
+
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <input
-          type="text"
-          placeholder="Search location…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-        />
-        <select
-          value={filterRegion}
-          onChange={e => { setFilterRegion(e.target.value); setFilterDistrict('All') }}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
+      <div className="flex flex-wrap gap-2 items-center">
+        <input type="text" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" />
+
+        <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
           {regions.map(r => <option key={r}>{r}</option>)}
         </select>
 
-        <select
-          value={filterDistrict}
-          onChange={e => setFilterDistrict(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
-          {districts.map(d => <option key={d}>{d}</option>)}
-        </select>
-
-        <select
-          value={filterType}
-          onChange={e => setFilterType(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-        >
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option>All</option>
           <option>Lebanese</option>
           <option>Palestinian</option>
         </select>
 
-        {/* Sort by completion toggle */}
-        <button
-          onClick={() => {
-            if (sortBy === 'accepted') {
-              setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-            } else {
-              setSortBy('accepted')
-              setSortDir('desc')
-            }
-          }}
-          className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${
-            sortBy === 'accepted'
-              ? 'bg-blue-600 text-white border-blue-600'
-              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-          }`}
-        >
+        <button onClick={() => { setSortBy('accepted'); setSortDir(d => d === 'desc' ? 'asc' : 'desc') }}
+          className={`text-xs px-3 py-2 rounded-lg border transition-colors ${sortBy === 'accepted' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
           Sort: Completed {sortBy === 'accepted' ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
         </button>
 
-        {/* Map toggle */}
-        <button
-          onClick={() => setShowMap(v => !v)}
-          className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${
-            showMap ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-          }`}
-        >
+        <button onClick={() => { setSortBy('region'); setSortDir('asc') }}
+          className={`text-xs px-3 py-2 rounded-lg border transition-colors ${sortBy === 'region' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+          Sort: Region
+        </button>
+
+        <button onClick={() => setShowMap(v => !v)}
+          className={`text-xs px-3 py-2 rounded-lg border transition-colors ${showMap ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
           🗺 {showMap ? 'Hide Map' : 'Show Map'}
         </button>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500 ml-1">
-          <span className="font-medium text-slate-700">{filtered.length} locations</span>
-          {lebaneseCount > 0 && <span>{lebaneseCount} Lebanese</span>}
-          {palestinianCount > 0 && <span className="text-purple-600">{palestinianCount} Palestinian camps</span>}
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={expandAll} className="text-xs text-blue-500 hover:underline">Expand all</button>
+          <span className="text-slate-300">|</span>
+          <button onClick={collapseAll} className="text-xs text-slate-400 hover:underline">Collapse all</button>
         </div>
+      </div>
+
+      {/* Summary bar */}
+      <div className="bg-white rounded-xl border border-slate-200 px-5 py-3 flex flex-wrap gap-6 text-sm">
+        <span className="text-slate-500">Showing: <strong className="text-slate-800">{districtRows.length} districts</strong> · {filtered.length} locations</span>
+        <span className="text-slate-500">Target: <strong className="text-slate-800">{totalTarget.toLocaleString()}</strong></span>
+        <span className="text-slate-500">Accepted: <strong className="text-emerald-600">{totalAccepted.toLocaleString()}</strong></span>
+        <span className="text-slate-500">Remaining: <strong className="text-amber-600">{(totalTarget - totalAccepted).toLocaleString()}</strong></span>
+        <span className="text-slate-500">Completion: <strong className="text-blue-600">{totalTarget > 0 ? Math.round(totalAccepted / totalTarget * 100) : 0}%</strong></span>
       </div>
 
       {/* Map */}
       {showMap && <LebanonMap locations={filtered} />}
 
-      {/* Summary bar */}
-      <div className="bg-white rounded-xl border border-slate-200 px-5 py-3 flex flex-wrap gap-6 text-sm">
-        <div><span className="text-slate-500">Showing target:</span> <span className="font-semibold text-slate-800">{totalTarget.toLocaleString()}</span></div>
-        <div><span className="text-slate-500">Accepted:</span> <span className="font-semibold text-emerald-600">{totalAccepted.toLocaleString()}</span></div>
-        <div><span className="text-slate-500">Remaining:</span> <span className="font-semibold text-amber-600">{(totalTarget - totalAccepted).toLocaleString()}</span></div>
-        <div><span className="text-slate-500">Completion:</span> <span className="font-semibold text-blue-600">{totalTarget > 0 ? Math.round(totalAccepted / totalTarget * 100) : 0}%</span></div>
+      {/* District-grouped table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {/* Header */}
+        <div className="grid grid-cols-12 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="col-span-4">District / Location</div>
+          <div className="col-span-1 text-center">Target</div>
+          <div className="col-span-1 text-center">Accepted</div>
+          <div className="col-span-1 text-center">Remaining</div>
+          <div className="col-span-3">Progress</div>
+          <div className="col-span-2">Status</div>
+        </div>
+
+        {districtRows.length === 0 && (
+          <div className="text-center py-12 text-slate-400 text-sm">No locations match your filters</div>
+        )}
+
+        {districtRows.map(({ key, group, region, locations, target, accepted, remaining, pct, hasPalestinian }) => {
+          const isExpanded = expandedDistricts.has(key)
+          return (
+            <div key={key} className="border-b border-slate-100 last:border-0">
+              {/* District row — clickable */}
+              <button
+                onClick={() => toggleDistrict(key)}
+                className="w-full grid grid-cols-12 gap-2 px-4 py-3 hover:bg-slate-50 transition-colors text-left group"
+              >
+                <div className="col-span-4 flex items-center gap-2 min-w-0">
+                  <span className={`text-slate-400 text-xs transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-slate-800 text-sm">{group}</span>
+                      {hasPalestinian && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full shrink-0">Camp</span>}
+                    </div>
+                    <span className="text-xs text-slate-400">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+                <div className="col-span-1 text-center self-center font-medium text-slate-700">{target}</div>
+                <div className="col-span-1 text-center self-center font-semibold text-emerald-600">{accepted}</div>
+                <div className="col-span-1 text-center self-center text-slate-500">{remaining}</div>
+                <div className="col-span-3 self-center"><ProgressBar pct={pct} /></div>
+                <div className="col-span-2 self-center">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    pct >= 1 ? 'bg-blue-100 text-blue-700' :
+                    pct >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
+                    pct >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                    pct > 0 ? 'bg-orange-100 text-orange-700' :
+                    'bg-slate-100 text-slate-500'
+                  }`}>
+                    {pct >= 1 ? 'Complete' : pct >= 0.9 ? 'On Track' : pct >= 0.5 ? 'In Progress' : pct > 0 ? 'Started' : 'Not Started'}
+                  </span>
+                </div>
+              </button>
+
+              {/* Sub-locality rows */}
+              {isExpanded && (
+                <div className="bg-slate-50 border-t border-slate-100">
+                  {/* Sub-header */}
+                  <div className="grid grid-cols-12 gap-2 px-4 py-1.5 border-b border-slate-200 text-xs text-slate-400 uppercase tracking-wide">
+                    <div className="col-span-4 pl-6">Location</div>
+                    <div className="col-span-1 text-center">Target</div>
+                    <div className="col-span-1 text-center">Accepted</div>
+                    <div className="col-span-1 text-center">Remaining</div>
+                    <div className="col-span-3">Progress</div>
+                    <div className="col-span-2">Status</div>
+                  </div>
+                  {locations.map((loc, i) => (
+                    <div key={i} className={`grid grid-cols-12 gap-2 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white transition-colors ${loc.type === 'Palestinian' ? 'bg-purple-50/30' : ''}`}>
+                      <div className="col-span-4 pl-6 flex items-center gap-2 min-w-0">
+                        <span className="text-sm text-slate-700 truncate">{loc.location}</span>
+                        {loc.type === 'Palestinian' && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full shrink-0">Palestinian</span>}
+                      </div>
+                      <div className="col-span-1 text-center text-sm text-slate-600">{loc.target}</div>
+                      <div className="col-span-1 text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>
+                      <div className="col-span-1 text-center text-sm text-slate-500">{loc.remaining}</div>
+                      <div className="col-span-3 self-center"><ProgressBar pct={loc.pctComplete} /></div>
+                      <div className="col-span-2 self-center"><StatusBadge status={loc.status} /></div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {/* Table — grouped by region */}
-      {orderedRegions.map(region => (
-        <div key={region} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          {/* Region header */}
-          <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-3">
-            <span className="text-sm font-semibold text-slate-700">
-              {region === 'All Regions' ? 'All Locations — sorted by completion' : region}
-            </span>
-            <span className="text-xs text-slate-400">{grouped[region].length} locations</span>
-            {region !== 'All Regions' && grouped[region].some(l => l.type === 'Palestinian') && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-600">
-                incl. Palestinian camps
-              </span>
-            )}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-100">
-                <tr>
-                  {th('Location', 'location')}
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2 whitespace-nowrap">District</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2 whitespace-nowrap">Nationality</th>
-                  {th('Target', 'target')}
-                  {th('Accepted', 'accepted')}
-                  {th('Remaining', 'remaining')}
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Progress</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2">Status</th>
-                  {th('Men', 'men')}
-                  {th('Women', 'women')}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {grouped[region].map((loc, i) => {
-                  const label = getStatusLabel(loc.status)
-                  const statusClass = Object.entries(STATUS_STYLE).find(([k]) => label.includes(k))?.[1] || 'bg-slate-100 text-slate-500'
-                  const isPalestinian = loc.type === 'Palestinian'
-                  return (
-                    <tr key={i} className={`hover:bg-slate-50 transition-colors ${isPalestinian ? 'bg-purple-50/30' : ''}`}>
-                      <td className="px-3 py-2.5 font-medium text-slate-800 whitespace-nowrap">
-                        {loc.location}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-500 text-xs">{loc.district}</td>
-                      <td className="px-3 py-2.5">
-                        {isPalestinian
-                          ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">Palestinian</span>
-                          : <span className="text-xs text-slate-400">Lebanese</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-slate-700 text-center">{loc.target}</td>
-                      <td className="px-3 py-2.5 text-emerald-600 font-medium text-center">{loc.accepted}</td>
-                      <td className="px-3 py-2.5 text-slate-500 text-center">{loc.remaining}</td>
-                      <td className="px-3 py-2.5 min-w-28"><ProgressBar pct={loc.pctComplete} /></td>
-                      <td className="px-3 py-2.5">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusClass}`}>{label}</span>
-                      </td>
-                      <td className="px-3 py-2.5 text-center text-blue-600">{loc.men || '—'}</td>
-                      <td className="px-3 py-2.5 text-center text-pink-500">{loc.women || '—'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-slate-400 text-sm">No locations match your filters</div>
-      )}
-
-      {/* Palestinian camp legend */}
-      <div className="text-xs text-slate-400 flex items-center gap-2 px-1">
+      {/* Legend */}
+      <p className="text-xs text-slate-400 flex items-center gap-2 px-1">
         <span className="w-2.5 h-2.5 rounded-full bg-purple-200 inline-block" />
         200 surveys reserved for Palestinian camps: Baddawi, Nahr el Bared, Burj el-Barajne, Shatila
-      </div>
+      </p>
     </div>
   )
 }

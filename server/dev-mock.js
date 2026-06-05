@@ -6,7 +6,7 @@ const session = require('express-session');
 const XLSX = require('xlsx');
 const path = require('path');
 const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
-const { LOCATION_MAP, REGION_ORDER } = require('./locationConfig');
+const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
 
 const app = express();
 const PORT = 3001;
@@ -58,8 +58,8 @@ function parseExcel(filePath) {
   const locations = tracker.map(r => {
     const code = r.location || '';
     const cfg = LOCATION_MAP[code] || {};
-    // Determine sort order by region
     const regionIdx = REGION_ORDER.indexOf(cfg.region || '');
+    const groupIdx  = GROUP_ORDER.indexOf(cfg.group || '');
     return {
       code,
       location: cfg.name || code.replace(/_/g, ' '),
@@ -83,7 +83,9 @@ function parseExcel(filePath) {
       locationOn: r.LocationOn || 0,
       lat: cfg.lat || null,
       lng: cfg.lng || null,
+      group: cfg.group || cfg.district || (r.loc_3 || '').replace(/_/g, ' '),
       regionOrder: regionIdx >= 0 ? regionIdx : 99,
+      groupOrder: groupIdx >= 0 ? groupIdx : 99,
     };
   }).sort((a, b) => a.regionOrder - b.regionOrder || a.location.localeCompare(b.location));
 
