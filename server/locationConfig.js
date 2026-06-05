@@ -1,14 +1,14 @@
 // Maps SurveyCTO location codes → proper display names, regions, districts, groups, coords
 // Source: FinalSampleSize sheet + field coordination
 
-const GROUP_ORDER = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'El Minieh-Dennie', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar'];
+const GROUP_ORDER = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'North', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar'];
 
 const LOCATION_MAP = {
   // ── Camps ──────────────────────────────────────────────────────────────────
   camp_burje:              { name: 'Burj el-Barajne Camp',   group: 'Camps',            region: 'Beirut',        district: 'Beirut',             type: 'Palestinian', target: 64, lat: 33.858, lng: 35.502 },
   camp_shatila:            { name: 'Shatila Camp',           group: 'Camps',            region: 'Beirut',        district: 'Beirut',             type: 'Palestinian', target: 36, lat: 33.874, lng: 35.494 },
-  beddawi_camp:            { name: 'Baddawi Camp',           group: 'Camps',            region: 'North',         district: 'El Minieh-Dennie',   type: 'Palestinian', target: 71, lat: 34.483, lng: 35.851 },
-  nahr_el_bared:           { name: 'Nahr el Bared Camp',     group: 'Camps',            region: 'North',         district: 'El Minieh-Dennie',   type: 'Palestinian', target: 29, lat: 34.490, lng: 35.960 },
+  beddawi_camp:            { name: 'Baddawi Camp',           group: 'Camps',            region: 'North',         district: 'North',   type: 'Palestinian', target: 71, lat: 34.483, lng: 35.851 },
+  nahr_el_bared:           { name: 'Nahr el Bared Camp',     group: 'Camps',            region: 'North',         district: 'North',   type: 'Palestinian', target: 29, lat: 34.490, lng: 35.960 },
 
   // ── Beirut ─────────────────────────────────────────────────────────────────
   mazraa:                  { name: 'Mazraa',                 group: 'Beirut',           region: 'Beirut',        district: 'Beirut',             type: 'Lebanese',    target: 20, lat: 33.876, lng: 35.506 },
@@ -41,8 +41,8 @@ const LOCATION_MAP = {
   batroun:                 { name: 'Batroun',                group: 'El Batroun',       region: 'North',         district: 'El Batroun',         type: 'Lebanese',    target: 22, lat: 34.254, lng: 35.658 },
 
   // ── El Minieh-Dennie ───────────────────────────────────────────────────────
-  Beddawi:                 { name: 'Beddaoui',               group: 'El Minieh-Dennie', region: 'North',         district: 'El Minieh-Dennie',   type: 'Lebanese',    target: 48, lat: 34.462, lng: 35.851 },
-  zouq_bhanninne:          { name: 'Zouq Bhannine',          group: 'El Minieh-Dennie', region: 'North',         district: 'El Minieh-Dennie',   type: 'Lebanese',    target: 22, lat: 34.432, lng: 35.848 },
+  Beddawi:                 { name: 'Beddaoui',               group: 'North', region: 'North',         district: 'North',   type: 'Lebanese',    target: 48, lat: 34.462, lng: 35.851 },
+  zouq_bhanninne:          { name: 'Zouq Bhannine',          group: 'North', region: 'North',         district: 'North',   type: 'Lebanese',    target: 22, lat: 34.432, lng: 35.848 },
 
   // ── Saida ──────────────────────────────────────────────────────────────────
   saida_el_oustani:        { name: 'Saida El-Oustani',       group: 'Saida',            region: 'South',         district: 'Saida',              type: 'Lebanese',    target: 14, lat: 33.560, lng: 35.365 },

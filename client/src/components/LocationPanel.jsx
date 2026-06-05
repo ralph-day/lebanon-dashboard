@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import LebanonMap from './LebanonMap'
 
 const REGION_ORDER = ['Beirut', 'Mount Lebanon', 'North', 'South', 'Bekaa', 'Akkar']
-const GROUP_ORDER  = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'El Minieh-Dennie', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar']
+const GROUP_ORDER  = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'North', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar']
 
 function ProgressBar({ pct }) {
   const w = Math.min(Math.round((pct || 0) * 100), 100)
