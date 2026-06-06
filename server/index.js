@@ -80,12 +80,21 @@ app.get('/auth/login', (req, res) => {
   // Generate CSRF state token to prevent login CSRF
   const state = crypto.randomBytes(16).toString('hex');
   req.session.oauthState = state;
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
-    state,
+  // Explicitly save the session before redirecting — ensures the cookie is
+  // written into the response before the browser follows the redirect to Google.
+  // Without this, MemoryStore may not flush the Set-Cookie header in time.
+  req.session.save((err) => {
+    if (err) {
+      console.error('[Auth] Session save error on login:', err);
+      return res.redirect((process.env.CLIENT_URL || 'http://localhost:5173') + '/login?error=session_error');
+    }
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+      state,
+    });
+    res.redirect(url);
   });
-  res.redirect(url);
 });
 
 app.get('/auth/callback', async (req, res) => {
