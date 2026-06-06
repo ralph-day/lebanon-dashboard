@@ -183,7 +183,7 @@ export default function QAPanel({ qa: initialQa }) {
                         {row.qaStatus}
                       </span>
                       {row.approvedByManager && (
-                        <span className="text-[10px] text-emerald-600 font-medium">Manager approved</span>
+                        <span className="text-[10px] bg-amber-100 text-amber-700 font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap">⚠ Previously Failed</span>
                       )}
                     </div>
                   </td>
