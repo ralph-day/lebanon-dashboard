@@ -83,6 +83,30 @@ function requireAuth(req, res, next) {
 let cache = { data: null, fetchedAt: null };
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
+// ── QA Approvals (persist to disk so overrides survive restarts) ──────────────
+const APPROVALS_PATH = path.join(__dirname, 'qa_approvals.json');
+let approvedIds = new Set();
+try {
+  if (fs.existsSync(APPROVALS_PATH)) {
+    const saved = JSON.parse(fs.readFileSync(APPROVALS_PATH, 'utf8'));
+    approvedIds = new Set(saved);
+    console.log(`Loaded ${approvedIds.size} QA approval overrides`);
+  }
+} catch (e) { console.error('Could not load approvals:', e.message); }
+
+function saveApprovals() {
+  try { fs.writeFileSync(APPROVALS_PATH, JSON.stringify([...approvedIds])); } catch (e) { console.error('Could not save approvals:', e.message); }
+}
+
+function applyApprovals(qaRows) {
+  return qaRows.map(r => {
+    if (approvedIds.has(r.id)) {
+      return { ...r, status: 'Accepted', qaStatus: '✅ PASS', approvedByManager: true };
+    }
+    return r;
+  });
+}
+
 async function getDriveAuth() {
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     const creds = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -135,6 +159,17 @@ function parseExcel(filePath) {
   const enumSummary = sheet('Enumerator_Summary');
   const qaDashboard = sheet('QA_Dashboard');
   const qaSections = sheet('QA_ByGroupSection');
+  const rawData = sheet('data');
+
+  // Per-location rejection counts from the raw data sheet
+  const rejByLoc = {};
+  rawData.forEach(r => {
+    const loc = r.loc_4 || r['Fixed Location'] || '';
+    const status = r.SurveyStatus_New || '';
+    if (!loc) return;
+    if (!rejByLoc[loc]) rejByLoc[loc] = 0;
+    if (status && status !== 'Accepted') rejByLoc[loc]++;
+  });
   const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'] || wb.Sheets[wb.SheetNames[0]], { header: 1 });
 
   // Parse overview from Dashboard sheet
@@ -174,8 +209,7 @@ function parseExcel(filePath) {
       palestinian: r.Palestinian || 0,
       lebanese: r.Lebanese || 0,
       syrian: r.Syrian || 0,
-      rejectedGTS: r['Rejected by GTS'] || 0,
-      rejectedNationality: r['Rejected because of nationality'] || 0,
+      rejected: rejByLoc[code] || 0,
       men: r.man || 0,
       women: r.woman || 0,
       locationOn: r.LocationOn || 0,
@@ -296,7 +330,7 @@ function parseExcel(filePath) {
       if (!todayByName[r.name]) todayByName[r.name] = { accepted: 0, rejected: 0, total: 0 };
       todayByName[r.name].total++;
       if (r.status === 'Accepted') todayByName[r.name].accepted++;
-      else todayByName[r.name].rejected++;
+      else if (r.status && r.status !== 'Accepted') todayByName[r.name].rejected++;
     }
   });
 
@@ -406,13 +440,37 @@ app.get('/api/data', requireAuth, async (req, res) => {
     await refreshCache();
   }
   if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
-  res.json({ ...cache.data, fetchedAt: cache.fetchedAt });
+  // Apply manager approval overrides to QA rows
+  const approvedRows = applyApprovals(cache.data.qa.rows);
+  const pass   = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
+  const review = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
+  const fail   = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
+  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail }, fetchedAt: cache.fetchedAt });
 });
 
 app.post('/api/refresh', requireAuth, async (req, res) => {
   await refreshCache();
   if (!cache.data) return res.status(503).json({ error: 'Refresh failed' });
   res.json({ ok: true, fetchedAt: cache.fetchedAt });
+});
+
+// Approve a failed survey (manager override)
+app.post('/api/qa/approve', requireAuth, (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Missing id' });
+  approvedIds.add(id);
+  saveApprovals();
+  console.log(`[QA Override] ${req.session.user.email} approved survey: ${id}`);
+  res.json({ ok: true, id });
+});
+
+// Undo an approval
+app.post('/api/qa/unapprove', requireAuth, (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'Missing id' });
+  approvedIds.delete(id);
+  saveApprovals();
+  res.json({ ok: true, id });
 });
 
 // Serve built client in production

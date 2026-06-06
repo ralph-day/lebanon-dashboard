@@ -160,7 +160,7 @@ export default function LocationPanel({ locations }) {
 
         {districtRows.map(({ key, group, region, locations, target, accepted, remaining, pct, hasPalestinian }) => {
           const isExpanded = expandedDistricts.has(key)
-          const rejected = locations.reduce((s, l) => s + (l.rejectedGTS || 0) + (l.rejectedNationality || 0), 0)
+          const rejected = locations.reduce((s, l) => s + (l.rejected || 0), 0)
           const gridStyle = {gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr'}
           return (
             <div key={key} className="border-b border-slate-100 last:border-0">
@@ -212,7 +212,7 @@ export default function LocationPanel({ locations }) {
                     <div className="text-center">Status</div>
                   </div>
                   {locations.map((loc, i) => {
-                    const locRejected = (loc.rejectedGTS || 0) + (loc.rejectedNationality || 0)
+                    const locRejected = loc.rejected || 0
                     return (
                       <div key={i} className={`grid gap-2 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white transition-colors ${loc.type === 'Palestinian' ? 'bg-purple-50/30' : ''}`} style={gridStyle}>
                         <div className="pl-6 flex items-center gap-2 min-w-0">

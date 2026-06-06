@@ -44,6 +44,17 @@ function parseExcel(filePath) {
   const qaDashboard = sheet('QA_Dashboard');
   const qaSections = sheet('QA_ByGroupSection');
   const queryAllRules = sheet('Query_All_Rules');
+  const rawData = sheet('data');
+
+  // Per-location rejection counts from the raw data sheet
+  const rejByLoc = {};
+  rawData.forEach(r => {
+    const loc = r.loc_4 || r['Fixed Location'] || '';
+    const status = r.SurveyStatus_New || '';
+    if (!loc) return;
+    if (!rejByLoc[loc]) rejByLoc[loc] = 0;
+    if (status && status !== 'Accepted') rejByLoc[loc]++;
+  });
   const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'], { header: 1 });
 
   const overviewRow = dashboardSheet.find(row => row && typeof row[4] === 'number' && row[4] > 100 && typeof row[7] === 'number') || dashboardSheet.find(row => row && typeof row[1] === 'number' && row[1] > 0) || dashboardSheet[4] || [];
@@ -76,8 +87,7 @@ function parseExcel(filePath) {
       palestinian: r.Palestinian || 0,
       lebanese: r.Lebanese || 0,
       syrian: r.Syrian || 0,
-      rejectedGTS: r['Rejected by GTS'] || 0,
-      rejectedNationality: r['Rejected because of nationality'] || 0,
+      rejected: rejByLoc[code] || 0,
       men: r.man || 0,
       women: r.woman || 0,
       locationOn: r.LocationOn || 0,
@@ -187,7 +197,7 @@ function parseExcel(filePath) {
       if (!todayByName[r.name]) todayByName[r.name] = { accepted: 0, rejected: 0, total: 0 };
       todayByName[r.name].total++;
       if (r.status === 'Accepted') todayByName[r.name].accepted++;
-      else todayByName[r.name].rejected++;
+      else if (r.status && r.status !== 'Accepted') todayByName[r.name].rejected++;
     }
   });
 

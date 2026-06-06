@@ -74,7 +74,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
     if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, total: 0 }
     statsByCode[assignment.code].total++
     if (r.status === 'Accepted') statsByCode[assignment.code].accepted++
-    else statsByCode[assignment.code].rejected++
+    else if (r.status && r.status !== 'Accepted') statsByCode[assignment.code].rejected++
   })
 
   const rows = assignments

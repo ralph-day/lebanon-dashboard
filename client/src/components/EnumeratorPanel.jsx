@@ -72,7 +72,6 @@ export default function EnumeratorPanel({ enumerators, sectionTimings }) {
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Missing GPS</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Quality</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Last Submission</th>
               </tr>
             </thead>
@@ -89,7 +88,6 @@ export default function EnumeratorPanel({ enumerators, sectionTimings }) {
                       ? <span className="text-red-500 font-medium">{e.missingGPS}</span>
                       : <span className="text-emerald-500">0</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-center"><QualityBadge pct={e.qualityPct} /></td>
                   <td className="px-3 py-2.5 text-center text-xs text-slate-400">
                     {e.lastSubmission && typeof e.lastSubmission === 'string' && e.lastSubmission.includes('-')
                       ? new Date(e.lastSubmission).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
