@@ -109,7 +109,7 @@ function TaskCard({ task, onStatusChange, onDelete }) {
 }
 
 // ── Import from Email modal ───────────────────────────────────────────────────
-function ImportEmailModal({ onClose, onImport }) {
+function ImportEmailModal({ onClose, onImport, onUnauth }) {
   const [emailText, setEmailText] = useState('')
   const [parsing, setParsing]     = useState(false)
   const [preview, setPreview]     = useState(null)
@@ -125,6 +125,7 @@ function ImportEmailModal({ onClose, onImport }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emailText }),
       })
+      if (res.status === 401) { onUnauth?.(); return; }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Parse failed')
       setPreview(data.tasks)
@@ -244,7 +245,7 @@ function ImportEmailModal({ onClose, onImport }) {
   )
 }
 
-export default function TaskBoard({ currentUser }) {
+export default function TaskBoard({ currentUser, onUnauth }) {
   const [tasks, setTasks]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [showForm, setShowForm]     = useState(false)
@@ -319,7 +320,7 @@ export default function TaskBoard({ currentUser }) {
   return (
     <div className="space-y-5">
 
-      {showImport && <ImportEmailModal onClose={() => setShowImport(false)} onImport={handleImport} />}
+      {showImport && <ImportEmailModal onClose={() => setShowImport(false)} onImport={handleImport} onUnauth={onUnauth} />}
 
       {/* Header */}
       <div className="flex items-center justify-between">

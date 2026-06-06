@@ -12,7 +12,7 @@ const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Da
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
 
-function TeamHub({ user, enumerators }) {
+function TeamHub({ user, enumerators, onUnauth }) {
   const [teamTab, setTeamTab] = useState('tasks')
   return (
     <div className="space-y-4">
@@ -24,13 +24,13 @@ function TeamHub({ user, enumerators }) {
           </button>
         ))}
       </div>
-      {teamTab === 'tasks'    && <TaskBoard currentUser={user} />}
+      {teamTab === 'tasks'    && <TaskBoard currentUser={user} onUnauth={onUnauth} />}
       {teamTab === 'payments' && <PaymentsPanel enumerators={enumerators} currentUser={user} />}
     </div>
   )
 }
 
-export default function Dashboard({ user, onLogout }) {
+export default function Dashboard({ user, onLogout, onUnauth }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -50,6 +50,7 @@ export default function Dashboard({ user, onLogout }) {
     if (manual) setRefreshing(true)
     try {
       const r = await fetch('/api/data', { credentials: 'include' })
+      if (r.status === 401) { onUnauth?.(); return; }
       if (!r.ok) throw new Error('Failed to load data')
       const json = await r.json()
       setData(json)
@@ -162,7 +163,7 @@ export default function Dashboard({ user, onLogout }) {
             {activeTab === 'Locations'     && <LocationPanel locations={data.locations} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
-            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} />}
+            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} onUnauth={onUnauth} />}
           </>
         )}
       </main>
