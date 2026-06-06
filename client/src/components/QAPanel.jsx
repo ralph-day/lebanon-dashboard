@@ -47,11 +47,12 @@ function FlagBadge({ value }) {
 }
 
 export default function QAPanel({ qa: initialQa, canApprove = false }) {
-  const [filter, setFilter]           = useState('All')
-  const [searchName, setSearchName]   = useState('')
+  const [filter, setFilter]               = useState('All')
+  const [searchName, setSearchName]       = useState('')
   const [searchDistrict, setSearchDistrict] = useState('All')
-  const [dateFrom, setDateFrom]       = useState('')
-  const [dateTo, setDateTo]           = useState('')
+  const [searchLocation, setSearchLocation] = useState('All')
+  const [dateFrom, setDateFrom]           = useState('')
+  const [dateTo, setDateTo]               = useState('')
   const [rows, setRows]               = useState(initialQa.rows)
   const [approving, setApproving]     = useState(null)
 
@@ -75,6 +76,13 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
   // Unique sorted districts from all rows
   const allDistricts = ['All', ...Array.from(new Set(rows.map(r => r.district).filter(Boolean))).sort()]
 
+  // Locations available for the selected district
+  const allLocations = searchDistrict === 'All'
+    ? []
+    : ['All', ...Array.from(new Set(
+        rows.filter(r => r.district === searchDistrict).map(r => r.locationName).filter(Boolean)
+      )).sort()]
+
   const filtered = rows.filter(r => {
     const matchFilter   = filter === 'All'
       || (filter === '__REJECTED__'
@@ -82,10 +90,11 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
           : r.qaStatus === filter)
     const matchName     = !searchName || r.name.toLowerCase().includes(searchName.toLowerCase())
     const matchDistrict = searchDistrict === 'All' || r.district === searchDistrict
+    const matchLocation = searchDistrict === 'All' || searchLocation === 'All' || r.locationName === searchLocation
     const ts = r.submissionDate ? new Date(r.submissionDate) : null
     const matchFrom = !dateFrom || (ts && ts >= new Date(dateFrom))
     const matchTo   = !dateTo   || (ts && ts <= new Date(dateTo + 'T23:59:59'))
-    return matchFilter && matchName && matchDistrict && matchFrom && matchTo
+    return matchFilter && matchName && matchDistrict && matchLocation && matchFrom && matchTo
   })
 
   async function handleApprove(row) {
@@ -193,12 +202,26 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
             <label className="text-xs text-slate-400 mb-1 block">District</label>
             <select
               value={searchDistrict}
-              onChange={e => setSearchDistrict(e.target.value)}
+              onChange={e => { setSearchDistrict(e.target.value); setSearchLocation('All') }}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {allDistricts.map(d => <option key={d}>{d}</option>)}
             </select>
           </div>
+
+          {/* Location sub-filter — only shown when a district is selected */}
+          {searchDistrict !== 'All' && allLocations.length > 1 && (
+            <div className="flex-1 min-w-[160px]">
+              <label className="text-xs text-slate-400 mb-1 block">Location</label>
+              <select
+                value={searchLocation}
+                onChange={e => setSearchLocation(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {allLocations.map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Date from */}
           <div className="flex-1 min-w-[140px]">
@@ -223,10 +246,10 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
           </div>
 
           {/* Clear filters */}
-          {(searchName || searchDistrict !== 'All' || dateFrom || dateTo) && (
+          {(searchName || searchDistrict !== 'All' || searchLocation !== 'All' || dateFrom || dateTo) && (
             <div className="flex items-end">
               <button
-                onClick={() => { setSearchName(''); setSearchDistrict('All'); setDateFrom(''); setDateTo('') }}
+                onClick={() => { setSearchName(''); setSearchDistrict('All'); setSearchLocation('All'); setDateFrom(''); setDateTo('') }}
                 className="text-xs text-slate-400 hover:text-red-500 border border-slate-200 rounded-lg px-3 py-2 transition-colors whitespace-nowrap"
               >
                 ✕ Clear
