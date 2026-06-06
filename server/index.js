@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
 const { google } = require('googleapis');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -28,6 +28,9 @@ const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 if (!DRIVE_FOLDER_ID) {
   console.error('[FATAL] DRIVE_FOLDER_ID environment variable is required');
   if (process.env.NODE_ENV === 'production') process.exit(1);
+}
+if (!process.env.GOOGLE_REDIRECT_URI) {
+  console.warn('[WARN] GOOGLE_REDIRECT_URI not set — OAuth callback will use http://localhost:3001 fallback (not safe in production)');
 }
 
 const ALLOWED_ORIGINS = [
@@ -201,19 +204,76 @@ async function fetchLatestExcel() {
   return { path: destPath, filename: file.name, modifiedTime: file.modifiedTime };
 }
 
-function parseExcel(filePath) {
-  const wb = XLSX.readFile(filePath);
+// ── ExcelJS helpers ───────────────────────────────────────────────────────────
+// Resolve cell values: unwraps formulas, rich text, Date objects
+function resolveCellValue(val) {
+  if (val === null || val === undefined) return null;
+  if (val instanceof Date) return val;
+  if (typeof val === 'object') {
+    if (val.result !== undefined) return resolveCellValue(val.result); // formula cell
+    if (Array.isArray(val.richText)) return val.richText.map(r => r.text || '').join(''); // rich text
+    if (val.error !== undefined) return null; // formula error (#REF! etc.)
+    if (val.text !== undefined) return val.text;
+  }
+  return val;
+}
 
-  const sheet = (name) => {
-    if (!wb.SheetNames.includes(name)) return [];
-    return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
-  };
+// Convert worksheet to array of plain objects (like xlsx sheet_to_json with defval)
+function wsToJson(ws, defval = null) {
+  if (!ws) return [];
+  const headers = {};
+  const rows = [];
+  ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
+    if (rowNum === 1) {
+      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        const v = resolveCellValue(cell.value);
+        if (v != null) headers[colNum] = String(v);
+      });
+      return;
+    }
+    const obj = {};
+    Object.entries(headers).forEach(([col, header]) => {
+      const v = resolveCellValue(row.getCell(Number(col)).value);
+      obj[header] = v != null ? v : defval;
+    });
+    rows.push(obj);
+  });
+  return rows;
+}
 
-  const tracker = sheet('Target_Tracker');
+// Convert worksheet to array of arrays (like xlsx sheet_to_json with header:1)
+function wsToArrays(ws) {
+  if (!ws) return [];
+  const rows = [];
+  ws.eachRow({ includeEmpty: true }, (row) => {
+    const arr = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+      arr[colNum - 1] = resolveCellValue(cell.value);
+    });
+    rows.push(arr);
+  });
+  return rows;
+}
+
+// Normalize any date value (JS Date, Excel serial, or string) to ISO string
+function toISO(val) {
+  if (!val) return null;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val.toISOString();
+  if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000).toISOString();
+  return String(val);
+}
+
+async function parseExcel(filePath) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(filePath);
+
+  const sheet = (name) => wsToJson(wb.getWorksheet(name));
+
+  const tracker     = sheet('Target_Tracker');
   const enumSummary = sheet('Enumerator_Summary');
   const qaDashboard = sheet('QA_Dashboard');
-  const qaSections = sheet('QA_ByGroupSection');
-  const rawData = sheet('data');
+  const qaSections  = sheet('QA_ByGroupSection');
+  const rawData     = sheet('data');
 
   // Per-location rejection counts from the raw data sheet
   const rejByLoc = {};
@@ -224,7 +284,10 @@ function parseExcel(filePath) {
     if (!rejByLoc[loc]) rejByLoc[loc] = 0;
     if (status && status !== 'accepted') rejByLoc[loc]++;
   });
-  const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'] || wb.Sheets[wb.SheetNames[0]], { header: 1 });
+
+  // Dashboard sheet as arrays (first sheet fallback)
+  const dashWs = wb.getWorksheet('Dashboard') || wb.worksheets[0];
+  const dashboardSheet = wsToArrays(dashWs);
 
   // Parse overview from Dashboard sheet
   // Find the values row dynamically (contains numbers for target/remaining)
@@ -285,7 +348,7 @@ function parseExcel(filePath) {
     tooSlow: r.Too_Slow || 0,
     appLeftOpen: r.App_Left_Open || 0,
     missingGPS: r.Missing_GPS || 0,
-    lastSubmission: r.Last_Submission ? (typeof r.Last_Submission === 'number' ? new Date((r.Last_Submission - 25569) * 86400 * 1000).toISOString() : String(r.Last_Submission)) : null,
+    lastSubmission: toISO(r.Last_Submission),
     qualityPct: r['Quality_%'] || null,
     phone: null, // filled in below after phoneByName is built
   }));
@@ -317,7 +380,7 @@ function parseExcel(filePath) {
     district:     extra.district || '',
     group:        extra.group || '',
     qaStatus: r.QA_Status || '',
-    submissionDate: r.SubmissionDate ? (typeof r.SubmissionDate === 'number' ? new Date((r.SubmissionDate - 25569) * 86400 * 1000).toISOString() : String(r.SubmissionDate)) : null,
+    submissionDate: toISO(r.SubmissionDate),
     appTime: r.apptimemint || 0,
     fullTime: r['Full Time All Sections'] || 0,
     tooFast: r.FLAG_TooFast || '',
@@ -473,7 +536,7 @@ function parseExcel(filePath) {
     const score = Number(r.Suspicion_Score) || 0;
     if (score === 0) return;
     const name = r.NameCode || '';
-    const submissionDate = r.SubmissionDate ? (typeof r.SubmissionDate === 'number' ? new Date((r.SubmissionDate - 25569) * 86400 * 1000).toISOString() : String(r.SubmissionDate)) : null;
+    const submissionDate = toISO(r.SubmissionDate);
     const flagDetails = [];
     const sectionMap = { FLAG_StraightLine_Trust: 'Trust', FLAG_StraightLine_Perception: 'Perception', FLAG_StraightLine_Expect: 'Expectations' };
     Object.entries(sectionMap).forEach(([col, label]) => {
@@ -506,7 +569,7 @@ function parseExcel(filePath) {
 async function refreshCache() {
   try {
     const { path: filePath, filename, modifiedTime } = await fetchLatestExcel();
-    const parsed = parseExcel(filePath);
+    const parsed = await parseExcel(filePath);
     cache = { data: { ...parsed, filename, modifiedTime }, fetchedAt: new Date().toISOString() };
     console.log(`[${new Date().toISOString()}] Data refreshed from: ${filename}`);
   } catch (err) {

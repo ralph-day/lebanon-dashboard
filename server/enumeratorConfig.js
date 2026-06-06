@@ -1,11 +1,30 @@
 // Operational assignments: enumerator → locations → targets → deadlines
 // Source: Field coordination sheet (Nisrine/Ralph)
+//
+// SECURITY: Phone numbers are read from the ENUMERATOR_PHONES env var when set.
+// Format: JSON object keyed by enumerator code, e.g.:
+//   ENUMERATOR_PHONES={"AZ01":"71797612","MK10":"81748316",...}
+// If env var is not set, the hardcoded values below are used as fallback.
+// In production, set ENUMERATOR_PHONES in Railway to keep numbers out of source files.
+
+const _phonesFromEnv = (() => {
+  try {
+    return process.env.ENUMERATOR_PHONES ? JSON.parse(process.env.ENUMERATOR_PHONES) : null;
+  } catch(e) {
+    console.warn('[Config] ENUMERATOR_PHONES env var is not valid JSON — using hardcoded fallback');
+    return null;
+  }
+})();
+
+function phone(code, fallback) {
+  return (_phonesFromEnv && _phonesFromEnv[code]) || fallback;
+}
 
 const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AZ01',
     name: 'Ahmad Zaabouty',
-    phone: '71797612',
+    phone: phone('AZ01', '71797612'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'Beirut',
@@ -16,7 +35,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'MK10',
     name: 'Majd Khatib',
-    phone: '81748316',
+    phone: phone('MK10', '81748316'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'Beirut',
@@ -27,7 +46,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AM06',
     name: 'Abed Mohamad',
-    phone: '71646552',
+    phone: phone('AM06', '71646552'),
     entity: 'Jafra',
     governorate: 'Beirut / Mount Lebanon',
     district: 'Beirut / Chouf',
@@ -42,7 +61,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'IM07',
     name: 'Iyad Mokdady',
-    phone: '71657053',
+    phone: phone('IM07', '71657053'),
     entity: 'Jafra',
     governorate: 'North',
     district: 'El Minieh-Dennie',
@@ -54,7 +73,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AA08',
     name: 'Abdullah Sayyed',
-    phone: '70859365',
+    phone: phone('AA08', '70859365'),
     entity: 'Jafra',
     governorate: 'North / Akkar',
     district: 'El Minieh-Dennie / Akkar',
@@ -67,7 +86,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'SS02',
     name: 'Samira Shaykha',
-    phone: '71300582',
+    phone: phone('SS02', '71300582'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'P Camp',
@@ -78,7 +97,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AM03',
     name: 'Aya Maarouf',
-    phone: '71529437',
+    phone: phone('AM03', '71529437'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'P Camp',
@@ -89,7 +108,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'HI04',
     name: 'Hanan Issa',
-    phone: '76642085',
+    phone: phone('HI04', '76642085'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'P Camp',
@@ -100,7 +119,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AW05',
     name: 'Aya Waariyeh',
-    phone: '81069984',
+    phone: phone('AW05', '81069984'),
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'P Camp',
@@ -111,7 +130,7 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'AH09',
     name: 'Ahmad Abdelhady',
-    phone: '70856946',
+    phone: phone('AH09', '70856946'),
     entity: 'Jafra',
     governorate: 'South',
     district: 'Saida',
