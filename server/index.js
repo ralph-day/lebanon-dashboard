@@ -235,19 +235,32 @@ function parseExcel(filePath) {
     qualityPct: r['Quality_%'] || null,
   }));
 
-  // Build instanceID → SurveyStatus_New lookup from the raw data sheet
+  // Build instanceID → { status, loc4, locationName, district, group } from data sheet
   const statusByInstance = {};
   rawData.forEach(r => {
     const id = r.instanceID || r['KEY'] || '';
-    const status = (r.SurveyStatus_New || '').trim();
-    if (id && status) statusByInstance[id] = status;
+    if (!id) return;
+    const loc4 = r.loc_4 || r['Fixed Location'] || '';
+    const cfg = LOCATION_MAP[loc4] || {};
+    statusByInstance[id] = {
+      status:       (r.SurveyStatus_New || '').trim(),
+      loc4,
+      locationName: cfg.name || loc4.replace(/_/g, ' '),
+      district:     cfg.district || (r.loc_3 || '').replace(/_/g, ' '),
+      group:        cfg.group || '',
+    };
   });
 
-  // QA flags summary — enrich with SurveyStatus_New from data sheet
-  const qaRows = qaDashboard.map(r => ({
+  // QA flags summary — enrich with SurveyStatus_New + location from data sheet
+  const qaRows = qaDashboard.map(r => {
+    const extra = statusByInstance[r.instanceID || ''] || {};
+    return {
     id: r.instanceID || '',
     name: r.NameCode || '',
-    status: statusByInstance[r.instanceID || ''] || (r.SurveyStatus_New || '').trim(),
+    status: extra.status || (r.SurveyStatus_New || '').trim(),
+    locationName: extra.locationName || '',
+    district:     extra.district || '',
+    group:        extra.group || '',
     qaStatus: r.QA_Status || '',
     submissionDate: r.SubmissionDate ? (typeof r.SubmissionDate === 'number' ? new Date((r.SubmissionDate - 25569) * 86400 * 1000).toISOString() : String(r.SubmissionDate)) : null,
     appTime: r.apptimemint || 0,
@@ -261,7 +274,7 @@ function parseExcel(filePath) {
     gap: r.GAP || '',
     timeRange: r['time range accepted'] || '',
     locationOn: r.LocationOn || '',
-  }));
+  }; });
 
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
   const qaReview = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;

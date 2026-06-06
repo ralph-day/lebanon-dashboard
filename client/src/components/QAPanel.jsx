@@ -47,10 +47,13 @@ function FlagBadge({ value }) {
 }
 
 export default function QAPanel({ qa: initialQa, canApprove = false }) {
-  const [filter, setFilter] = useState('All')
-  const [search, setSearch] = useState('')
-  const [rows, setRows] = useState(initialQa.rows)
-  const [approving, setApproving] = useState(null) // id being processed
+  const [filter, setFilter]           = useState('All')
+  const [searchName, setSearchName]   = useState('')
+  const [searchDistrict, setSearchDistrict] = useState('All')
+  const [dateFrom, setDateFrom]       = useState('')
+  const [dateTo, setDateTo]           = useState('')
+  const [rows, setRows]               = useState(initialQa.rows)
+  const [approving, setApproving]     = useState(null)
 
   const pass     = rows.filter(r => r.qaStatus === '✅ PASS').length
   const review   = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
@@ -69,11 +72,20 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
       bg: 'bg-red-50 border-red-300',         text: 'text-red-800',     activeBg: 'bg-red-700'     },
   ]
 
+  // Unique sorted districts from all rows
+  const allDistricts = ['All', ...Array.from(new Set(rows.map(r => r.district).filter(Boolean))).sort()]
+
   const filtered = rows.filter(r => {
-    const matchFilter = filter === 'All'
-      || (filter === '__REJECTED__' ? (r.status || '').trim().toLowerCase() !== 'accepted' : r.qaStatus === filter)
-    const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
-    return matchFilter && matchSearch
+    const matchFilter   = filter === 'All'
+      || (filter === '__REJECTED__'
+          ? ((r.status || '').trim().toLowerCase() !== 'accepted' && (r.status || '').trim() !== '')
+          : r.qaStatus === filter)
+    const matchName     = !searchName || r.name.toLowerCase().includes(searchName.toLowerCase())
+    const matchDistrict = searchDistrict === 'All' || r.district === searchDistrict
+    const ts = r.submissionDate ? new Date(r.submissionDate) : null
+    const matchFrom = !dateFrom || (ts && ts >= new Date(dateFrom))
+    const matchTo   = !dateTo   || (ts && ts <= new Date(dateTo + 'T23:59:59'))
+    return matchFilter && matchName && matchDistrict && matchFrom && matchTo
   })
 
   async function handleApprove(row) {
@@ -145,28 +157,83 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <input
-          type="text"
-          placeholder="Search enumerator…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-48"
-        />
-        <div className="flex flex-wrap gap-2">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+        {/* Status filter buttons */}
+        <div className="flex flex-wrap gap-2 items-center">
           {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL', '__REJECTED__'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`text-xs px-3 py-2 rounded-lg border transition-colors ${
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                 filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
               }`}
             >
               {f === '__REJECTED__' ? '🚫 Rejected' : f}
             </button>
           ))}
+          <span className="text-sm text-slate-400 ml-auto">{filtered.length} surveys</span>
         </div>
-        <span className="text-sm text-slate-400">{filtered.length} surveys</span>
+
+        {/* Search row */}
+        <div className="flex flex-wrap gap-2">
+          {/* Enumerator name */}
+          <div className="flex-1 min-w-[160px]">
+            <label className="text-xs text-slate-400 mb-1 block">Enumerator</label>
+            <input
+              type="text"
+              placeholder="Search name…"
+              value={searchName}
+              onChange={e => setSearchName(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* District */}
+          <div className="flex-1 min-w-[160px]">
+            <label className="text-xs text-slate-400 mb-1 block">District</label>
+            <select
+              value={searchDistrict}
+              onChange={e => setSearchDistrict(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {allDistricts.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+
+          {/* Date from */}
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs text-slate-400 mb-1 block">From date</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Date to */}
+          <div className="flex-1 min-w-[140px]">
+            <label className="text-xs text-slate-400 mb-1 block">To date</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Clear filters */}
+          {(searchName || searchDistrict !== 'All' || dateFrom || dateTo) && (
+            <div className="flex items-end">
+              <button
+                onClick={() => { setSearchName(''); setSearchDistrict('All'); setDateFrom(''); setDateTo('') }}
+                className="text-xs text-slate-400 hover:text-red-500 border border-slate-200 rounded-lg px-3 py-2 transition-colors whitespace-nowrap"
+              >
+                ✕ Clear
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Rejected view explanation banner */}
@@ -186,6 +253,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">Enumerator</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">District</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Date</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">App Time</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Survey Time</th>
@@ -197,7 +265,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={canApprove ? 8 : 7} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
+                <tr><td colSpan={canApprove ? 9 : 8} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
               )}
               {filtered.map((row, i) => (
                 <tr key={i} className={`hover:bg-slate-50 transition-colors ${
@@ -205,6 +273,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
                   row.totalFlags >= 2 ? 'bg-red-50/40' : ''
                 }`}>
                   <td className="px-4 py-2.5 font-medium text-slate-800 text-xs whitespace-nowrap">{row.name}</td>
+                  <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.district || '—'}</td>
                   <td className="px-3 py-2.5 text-xs text-slate-500 text-center whitespace-nowrap">
                     {row.submissionDate ? new Date(row.submissionDate).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }) : '—'}
                   </td>
