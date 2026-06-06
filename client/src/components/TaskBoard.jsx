@@ -1,45 +1,111 @@
 import { useState, useEffect } from 'react'
 
 const TEAM = ['Nisrine Khoory', 'Moe Issa', 'Ahmad Zaazou', 'Ralph Baydoun', 'Unassigned']
-const PRIORITIES = { high: { label: 'High', color: 'bg-red-100 text-red-700 border-red-200' }, medium: { label: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' }, low: { label: 'Low', color: 'bg-slate-100 text-slate-600 border-slate-200' } }
-const COLUMNS = [
-  { key: 'todo',        label: 'To Do',       color: 'bg-slate-100', header: 'bg-slate-200 text-slate-700' },
-  { key: 'inprogress',  label: 'In Progress',  color: 'bg-blue-50',   header: 'bg-blue-200 text-blue-800'  },
-  { key: 'done',        label: 'Done',         color: 'bg-emerald-50',header: 'bg-emerald-200 text-emerald-800' },
+
+const PRIORITIES = {
+  high:   { label: 'High',   color: 'bg-red-100 text-red-700 border-red-200' },
+  medium: { label: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  low:    { label: 'Low',    color: 'bg-slate-100 text-slate-600 border-slate-200' },
+}
+
+// Task types specific to this Lebanon Emergency Response Perception Study project
+const TASK_TYPES = [
+  { key: 'data_quality',     label: 'Data Quality',      color: 'bg-red-50 text-red-600 border-red-200',        dot: 'bg-red-400' },
+  { key: 'field_ops',        label: 'Field Operations',  color: 'bg-orange-50 text-orange-600 border-orange-200', dot: 'bg-orange-400' },
+  { key: 'enumerator',       label: 'Enumerator Issue',  color: 'bg-amber-50 text-amber-700 border-amber-200',   dot: 'bg-amber-400' },
+  { key: 'coordination',     label: 'Coordination',      color: 'bg-blue-50 text-blue-600 border-blue-200',      dot: 'bg-blue-400' },
+  { key: 'payment',          label: 'Payment',           color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-400' },
+  { key: 'reporting',        label: 'Reporting',         color: 'bg-violet-50 text-violet-600 border-violet-200', dot: 'bg-violet-400' },
+  { key: 'training',         label: 'Training',          color: 'bg-sky-50 text-sky-600 border-sky-200',         dot: 'bg-sky-400' },
+  { key: 'technical',        label: 'Technical',         color: 'bg-slate-100 text-slate-600 border-slate-300',  dot: 'bg-slate-400' },
+  { key: 'general',          label: 'General',           color: 'bg-gray-100 text-gray-500 border-gray-200',     dot: 'bg-gray-400' },
 ]
+const TYPE_MAP = Object.fromEntries(TASK_TYPES.map(t => [t.key, t]))
+
+const COLUMNS = [
+  { key: 'todo',       label: 'To Do',       color: 'bg-slate-100', header: 'bg-slate-200 text-slate-700' },
+  { key: 'inprogress', label: 'In Progress', color: 'bg-blue-50',   header: 'bg-blue-200 text-blue-800'  },
+  { key: 'done',       label: 'Done',        color: 'bg-emerald-50',header: 'bg-emerald-200 text-emerald-800' },
+]
+
+// Render description: lines starting with - or • become bullet points
+function Description({ text }) {
+  if (!text) return null
+  const lines = text.split('\n').filter(l => l.trim())
+  return (
+    <div className="text-xs text-slate-500 space-y-0.5 border-t border-slate-100 pt-2 mt-1">
+      {lines.map((line, i) => {
+        const isBullet = /^[-•*]/.test(line.trim())
+        const content  = isBullet ? line.trim().replace(/^[-•*]\s*/, '') : line
+        return isBullet
+          ? <div key={i} className="flex items-start gap-1.5"><span className="text-slate-300 mt-0.5 shrink-0">•</span><span>{content}</span></div>
+          : <p key={i}>{content}</p>
+      })}
+    </div>
+  )
+}
+
+function TypeBadge({ typeKey }) {
+  if (!typeKey) return null
+  const t = TYPE_MAP[typeKey]
+  if (!t) return null
+  return (
+    <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${t.color}`}>{t.label}</span>
+  )
+}
 
 function TaskCard({ task, onStatusChange, onDelete }) {
   const pri = PRIORITIES[task.priority] || PRIORITIES.medium
   const overdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
+  const [expanded, setExpanded] = useState(false)
+  const hasDesc = !!task.description?.trim()
+
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 p-3 shadow-sm space-y-2 ${overdue ? 'border-red-300' : ''}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-slate-800 leading-snug flex-1">{task.title}</p>
-        <button onClick={() => onDelete(task.id)} className="text-slate-200 hover:text-red-400 transition-colors text-xs shrink-0 mt-0.5">✕</button>
-      </div>
+    <div className={`bg-white rounded-xl border shadow-sm space-y-2 ${overdue ? 'border-red-300' : 'border-slate-200'}`}>
+      <div className="p-3 space-y-2">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-2">
+          <button
+            onClick={() => hasDesc && setExpanded(v => !v)}
+            className={`text-sm font-medium text-slate-800 leading-snug flex-1 text-left ${hasDesc ? 'hover:text-blue-600 cursor-pointer' : ''}`}
+          >
+            {task.title}
+            {hasDesc && (
+              <span className="ml-1 text-slate-300 text-[10px]">{expanded ? '▲' : '▼'}</span>
+            )}
+          </button>
+          <button onClick={() => onDelete(task.id)} className="text-slate-200 hover:text-red-400 transition-colors text-xs shrink-0 mt-0.5">✕</button>
+        </div>
 
-      {task.linkedEntity && (
-        <p className="text-xs text-blue-500 truncate">🔗 {task.linkedEntity}</p>
-      )}
+        {/* Description (expandable) */}
+        {hasDesc && expanded && <Description text={task.description} />}
 
-      <div className="flex flex-wrap gap-1.5 items-center">
-        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${pri.color}`}>{pri.label}</span>
-        {task.assignee && task.assignee !== 'Unassigned' && (
-          <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full">
-            👤 {task.assignee.split(' ')[0]}
-          </span>
+        {/* Linked entity */}
+        {task.linkedEntity && (
+          <p className="text-xs text-blue-500 truncate">🔗 {task.linkedEntity}</p>
         )}
-        {task.dueDate && (
-          <span className={`text-[11px] px-1.5 py-0.5 rounded-full border ${overdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-            📅 {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
-          </span>
-        )}
-      </div>
 
-      <p className="text-[10px] text-slate-400">By {task.createdBy} · {new Date(task.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</p>
+        {/* Badges */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <TypeBadge typeKey={task.type} />
+          <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${pri.color}`}>{pri.label}</span>
+          {task.assignee && task.assignee !== 'Unassigned' && (
+            <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full">
+              👤 {task.assignee.split(' ')[0]}
+            </span>
+          )}
+          {task.dueDate && (
+            <span className={`text-[11px] px-1.5 py-0.5 rounded-full border ${overdue ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+              📅 {new Date(task.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
+            </span>
+          )}
+        </div>
+
+        <p className="text-[10px] text-slate-400">By {task.createdBy} · {new Date(task.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</p>
+      </div>
 
       {/* Move buttons */}
-      <div className="flex gap-1 pt-1 border-t border-slate-100">
+      <div className="flex gap-1 px-3 pb-2 border-t border-slate-100 pt-2">
         {COLUMNS.filter(c => c.key !== task.status).map(c => (
           <button key={c.key} onClick={() => onStatusChange(task.id, c.key)}
             className="flex-1 text-[11px] text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded px-1 py-0.5 transition-colors border border-transparent hover:border-blue-200">
@@ -52,11 +118,15 @@ function TaskCard({ task, onStatusChange, onDelete }) {
 }
 
 export default function TaskBoard({ currentUser }) {
-  const [tasks, setTasks]     = useState([])
-  const [loading, setLoading] = useState(true)
+  const [tasks, setTasks]       = useState([])
+  const [loading, setLoading]   = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm]       = useState({ title: '', assignee: 'Unassigned', priority: 'medium', dueDate: '', linkedEntity: '' })
-  const [saving, setSaving]   = useState(false)
+  const [filterType, setFilterType] = useState('all')
+  const [form, setForm] = useState({
+    title: '', description: '', type: 'general',
+    assignee: 'Unassigned', priority: 'medium', dueDate: '', linkedEntity: '',
+  })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetch('/api/tasks', { credentials: 'include' })
@@ -75,7 +145,7 @@ export default function TaskBoard({ currentUser }) {
       })
       const task = await res.json()
       setTasks(prev => [task, ...prev])
-      setForm({ title: '', assignee: 'Unassigned', priority: 'medium', dueDate: '', linkedEntity: '' })
+      setForm({ title: '', description: '', type: 'general', assignee: 'Unassigned', priority: 'medium', dueDate: '', linkedEntity: '' })
       setShowForm(false)
     } finally { setSaving(false) }
   }
@@ -95,9 +165,14 @@ export default function TaskBoard({ currentUser }) {
     setTasks(prev => prev.filter(t => t.id !== id))
   }
 
-  const todoCount      = tasks.filter(t => t.status === 'todo').length
-  const inProgressCount= tasks.filter(t => t.status === 'inprogress').length
-  const doneCount      = tasks.filter(t => t.status === 'done').length
+  const filteredTasks = filterType === 'all' ? tasks : tasks.filter(t => t.type === filterType)
+
+  const todoCount       = tasks.filter(t => t.status === 'todo').length
+  const inProgressCount = tasks.filter(t => t.status === 'inprogress').length
+  const doneCount       = tasks.filter(t => t.status === 'done').length
+
+  // Only show type filters that have at least one task
+  const activeTypes = TASK_TYPES.filter(tp => tasks.some(t => t.type === tp.key))
 
   return (
     <div className="space-y-5">
@@ -116,10 +191,36 @@ export default function TaskBoard({ currentUser }) {
         </button>
       </div>
 
+      {/* Type filter chips — only shown when there are typed tasks */}
+      {activeTypes.length > 0 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            onClick={() => setFilterType('all')}
+            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${filterType === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+          >
+            All ({tasks.length})
+          </button>
+          {activeTypes.map(tp => {
+            const count = tasks.filter(t => t.type === tp.key).length
+            return (
+              <button key={tp.key}
+                onClick={() => setFilterType(filterType === tp.key ? 'all' : tp.key)}
+                className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors flex items-center gap-1.5 ${filterType === tp.key ? `${tp.color} font-bold` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${tp.dot}`} />
+                {tp.label} ({count})
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* New task form */}
       {showForm && (
         <form onSubmit={handleCreate} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
           <p className="text-sm font-semibold text-slate-700">New Task</p>
+
+          {/* Title */}
           <input
             required
             placeholder="Task title…"
@@ -127,7 +228,28 @@ export default function TaskBoard({ currentUser }) {
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+
+          {/* Description */}
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Description / Notes <span className="text-slate-300">(start lines with - for bullet points)</span></label>
+            <textarea
+              rows={3}
+              placeholder={"- Key point one\n- Key point two\nOr just plain text…"}
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+            />
+          </div>
+
+          {/* Fields grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Type</label>
+              <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {TASK_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+            </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Assign to</label>
               <select value={form.assignee} onChange={e => setForm(f => ({ ...f, assignee: e.target.value }))}
@@ -151,10 +273,11 @@ export default function TaskBoard({ currentUser }) {
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Link (optional)</label>
-              <input placeholder="e.g. HI04, Bchamoun…" value={form.linkedEntity} onChange={e => setForm(f => ({ ...f, linkedEntity: e.target.value }))}
+              <input placeholder="e.g. AZ01, Bchamoun…" value={form.linkedEntity} onChange={e => setForm(f => ({ ...f, linkedEntity: e.target.value }))}
                 className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
+
           <div className="flex justify-end">
             <button type="submit" disabled={saving || !form.title.trim()}
               className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors font-medium">
@@ -164,12 +287,13 @@ export default function TaskBoard({ currentUser }) {
         </form>
       )}
 
+      {/* Kanban columns */}
       {loading ? (
         <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {COLUMNS.map(col => {
-            const colTasks = tasks.filter(t => t.status === col.key)
+            const colTasks = filteredTasks.filter(t => t.status === col.key)
             return (
               <div key={col.key} className={`${col.color} rounded-xl p-3 space-y-3 min-h-[200px]`}>
                 <div className={`${col.header} rounded-lg px-3 py-1.5 flex items-center justify-between`}>
