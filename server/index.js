@@ -786,7 +786,7 @@ app.post('/api/tasks/parse-email', requireAuth, emailParseLimit, async (req, res
     const enumContext = ENUMERATOR_ASSIGNMENTS.map(e => `${e.name} (${e.code})`).join(', ');
 
     const message = await client.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 2048,
       // System role carries the instructions — user role carries ONLY the email content
       // This separation limits prompt injection: even if the email says "ignore instructions",
@@ -830,9 +830,10 @@ Each object must have exactly these keys: title, description, type, priority, as
     const parsedTasks = JSON.parse(match[0]);
     res.json({ tasks: parsedTasks });
   } catch (err) {
-    // Log full error server-side, return generic message to client
-    console.error('parse-email error:', err);
-    res.status(500).json({ error: 'Failed to parse email — please try again' });
+    // Log full error server-side
+    console.error('parse-email error:', err?.status, err?.message, err?.error);
+    const msg = err?.message || 'Failed to parse email — please try again';
+    res.status(500).json({ error: msg });
   }
 });
 
