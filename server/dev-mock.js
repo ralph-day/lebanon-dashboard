@@ -113,10 +113,18 @@ function parseExcel(filePath) {
     qualityPct: r['Quality_%'] || null,
   }));
 
+  // Build instanceID → SurveyStatus_New lookup from the raw data sheet
+  const statusByInstance = {};
+  rawData.forEach(r => {
+    const id = r.instanceID || r['KEY'] || '';
+    const status = (r.SurveyStatus_New || '').trim();
+    if (id && status) statusByInstance[id] = status;
+  });
+
   const qaRows = qaDashboard.map(r => ({
     id: r.instanceID || '',
     name: r.NameCode || '',
-    status: r.SurveyStatus_New || '',
+    status: statusByInstance[r.instanceID || ''] || (r.SurveyStatus_New || '').trim(),
     qaStatus: r.QA_Status || '',
     submissionDate: r.SubmissionDate ? (typeof r.SubmissionDate === 'number' ? new Date((r.SubmissionDate - 25569) * 86400 * 1000).toISOString() : String(r.SubmissionDate)) : null,
     appTime: r.apptimemint || 0,
