@@ -577,21 +577,7 @@ async function refreshCache() {
   }
 }
 
-// ── API routes ────────────────────────────────────────────────────────────────
-app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
-  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
-    await refreshCache();
-  }
-  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
-  // Apply manager approval overrides to QA rows
-  const approvedRows = applyApprovals(cache.data.qa.rows);
-  const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
-  const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
-  const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
-  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
-});
-
+// ── Rate limiters (defined before routes that use them) ───────────────────────
 const refreshLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 6,
@@ -599,13 +585,26 @@ const refreshLimit = rateLimit({
   message: { error: 'Too many refresh requests — please wait' },
 });
 
-// Also rate-limit /api/data to prevent hammering the cold-cache Drive download path
 const dataLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   keyGenerator: (req) => req.session.user?.email || ipKeyGenerator(req.ip),
   message: { error: 'Too many data requests — please wait' },
-  skip: () => !!cache.data, // only apply when cache is cold
+  skip: () => !!cache.data, // only applies on cold-cache misses
+});
+
+// ── API routes ────────────────────────────────────────────────────────────────
+app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
+  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
+    await refreshCache();
+  }
+  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+  const approvedRows = applyApprovals(cache.data.qa.rows);
+  const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
+  const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
+  const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
+  const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
+  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
 app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
