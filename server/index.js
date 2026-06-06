@@ -23,6 +23,7 @@ if (missing.length > 0) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Trust Railway/Heroku reverse proxy for secure cookies + correct IP
 const PORT = process.env.PORT || 3001;
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 if (!DRIVE_FOLDER_ID) {
