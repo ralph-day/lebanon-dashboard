@@ -46,7 +46,7 @@ function FlagBadge({ value }) {
   )
 }
 
-export default function QAPanel({ qa: initialQa }) {
+export default function QAPanel({ qa: initialQa, canApprove = false }) {
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState(initialQa.rows)
@@ -192,12 +192,12 @@ export default function QAPanel({ qa: initialQa }) {
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Flags</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">{filter === '__REJECTED__' ? 'Rejection Reason' : 'Status'}</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Issues</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Action</th>
+                {canApprove && <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
+                <tr><td colSpan={canApprove ? 8 : 7} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
               )}
               {filtered.map((row, i) => (
                 <tr key={i} className={`hover:bg-slate-50 transition-colors ${
@@ -241,28 +241,30 @@ export default function QAPanel({ qa: initialQa }) {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-center">
-                    {row.approvedByManager ? (
-                      <button
-                        onClick={() => handleUnapprove(row)}
-                        disabled={approving === row.id}
-                        className="text-xs text-slate-400 hover:text-red-500 underline transition-colors disabled:opacity-40 whitespace-nowrap"
-                      >
-                        {approving === row.id ? '…' : 'Undo'}
-                      </button>
-                    ) : row.qaStatus === '❌ FAIL' ? (
-                      <button
-                        onClick={() => handleApprove(row)}
-                        disabled={approving === row.id || !row.id}
-                        title={!row.id ? 'No survey ID — cannot approve' : 'Mark as Accepted'}
-                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 whitespace-nowrap font-medium"
-                      >
-                        {approving === row.id ? 'Approving…' : '✓ Approve'}
-                      </button>
-                    ) : (
-                      <span className="text-slate-200 text-xs">—</span>
-                    )}
-                  </td>
+                  {canApprove && (
+                    <td className="px-3 py-2.5 text-center">
+                      {row.approvedByManager ? (
+                        <button
+                          onClick={() => handleUnapprove(row)}
+                          disabled={approving === row.id}
+                          className="text-xs text-slate-400 hover:text-red-500 underline transition-colors disabled:opacity-40 whitespace-nowrap"
+                        >
+                          {approving === row.id ? '…' : 'Undo'}
+                        </button>
+                      ) : row.qaStatus === '❌ FAIL' ? (
+                        <button
+                          onClick={() => handleApprove(row)}
+                          disabled={approving === row.id || !row.id}
+                          title={!row.id ? 'No survey ID — cannot approve' : 'Mark as Accepted'}
+                          className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40 whitespace-nowrap font-medium"
+                        >
+                          {approving === row.id ? 'Approving…' : '✓ Approve'}
+                        </button>
+                      ) : (
+                        <span className="text-slate-200 text-xs">—</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

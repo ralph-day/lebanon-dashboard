@@ -6,15 +6,14 @@ import EnumeratorProgress from '../components/EnumeratorProgress'
 import QAPanel from '../components/QAPanel'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
-const ALL_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
+const TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 
 export default function Dashboard({ user, onLogout }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const canViewQA = user?.email === QA_ALLOWED_EMAIL
-  const TABS = canViewQA ? ALL_TABS : ALL_TABS.filter(t => t !== 'Data Quality')
+  const canApproveQA = user?.email === QA_ALLOWED_EMAIL
   const [activeTab, setActiveTab] = useState('Overview')
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000)
   const [refreshing, setRefreshing] = useState(false)
@@ -134,7 +133,7 @@ export default function Dashboard({ user, onLogout }) {
             {activeTab === 'Field Progress' && <EnumeratorProgress assignments={data.assignments || []} />}
             {activeTab === 'Locations' && <LocationPanel locations={data.locations} />}
             {activeTab === 'Enumerators' && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} />}
-            {activeTab === 'Data Quality' && <QAPanel qa={data.qa} />}
+            {activeTab === 'Data Quality' && <QAPanel qa={data.qa} canApprove={canApproveQA} />}
           </>
         )}
       </main>
