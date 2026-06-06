@@ -5,11 +5,30 @@ import EnumeratorPanel from '../components/EnumeratorPanel'
 import EnumeratorProgress from '../components/EnumeratorProgress'
 import QAPanel from '../components/QAPanel'
 import TaskBoard from '../components/TaskBoard'
+import PaymentsPanel from '../components/PaymentsPanel'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
 const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
+
+function TeamHub({ user, enumerators }) {
+  const [teamTab, setTeamTab] = useState('tasks')
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-slate-200 pb-0">
+        {[['tasks', '📋 Task Board'], ['payments', '💰 Payments']].map(([key, label]) => (
+          <button key={key} onClick={() => setTeamTab(key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${teamTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {teamTab === 'tasks'    && <TaskBoard currentUser={user} />}
+      {teamTab === 'payments' && <PaymentsPanel enumerators={enumerators} currentUser={user} />}
+    </div>
+  )
+}
 
 export default function Dashboard({ user, onLogout }) {
   const [data, setData] = useState(null)
@@ -143,7 +162,7 @@ export default function Dashboard({ user, onLogout }) {
             {activeTab === 'Locations'     && <LocationPanel locations={data.locations} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
-            {activeTab === 'Team'          && <TaskBoard currentUser={user} />}
+            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} />}
           </>
         )}
       </main>

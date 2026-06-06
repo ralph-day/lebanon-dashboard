@@ -554,6 +554,48 @@ app.delete('/api/tasks/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Payments ─────────────────────────────────────────────────────────────────
+const PAYMENTS_PATH = path.join(__dirname, 'payments.json');
+let payments = { enumerators: [], coordination: [] };
+try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) {}
+function savePayments() { try { fs.writeFileSync(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) {} }
+
+// GET all payments
+app.get('/api/payments', requireAuth, (req, res) => res.json(payments));
+
+// PATCH enumerator payment record (upsert by code)
+app.patch('/api/payments/enumerator/:code', requireAuth, (req, res) => {
+  const { code } = req.params;
+  const idx = payments.enumerators.findIndex(e => e.code === code);
+  const update = { ...req.body, code, updatedAt: new Date().toISOString() };
+  if (idx === -1) { payments.enumerators.push(update); }
+  else { payments.enumerators[idx] = { ...payments.enumerators[idx], ...update }; }
+  savePayments();
+  res.json(update);
+});
+
+// Coordination: POST create, PATCH update, DELETE remove
+app.post('/api/payments/coordination', requireAuth, (req, res) => {
+  const entry = { id: Date.now().toString(), ...req.body, createdAt: new Date().toISOString() };
+  payments.coordination.push(entry);
+  savePayments();
+  res.json(entry);
+});
+
+app.patch('/api/payments/coordination/:id', requireAuth, (req, res) => {
+  const idx = payments.coordination.findIndex(e => e.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  payments.coordination[idx] = { ...payments.coordination[idx], ...req.body, updatedAt: new Date().toISOString() };
+  savePayments();
+  res.json(payments.coordination[idx]);
+});
+
+app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
+  payments.coordination = payments.coordination.filter(e => e.id !== req.params.id);
+  savePayments();
+  res.json({ ok: true });
+});
+
 // Serve built client in production
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, '../client/dist');
