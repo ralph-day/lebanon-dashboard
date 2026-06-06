@@ -168,7 +168,7 @@ function parseExcel(filePath) {
     const status = (r.SurveyStatus_New || '').trim().toLowerCase();
     if (!loc) return;
     if (!rejByLoc[loc]) rejByLoc[loc] = 0;
-    if (status.includes('reject')) rejByLoc[loc]++;
+    if (status && status !== 'accepted') rejByLoc[loc]++;
   });
   const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'] || wb.Sheets[wb.SheetNames[0]], { header: 1 });
 
@@ -266,7 +266,7 @@ function parseExcel(filePath) {
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
   const qaReview = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  const qaRejected = qaRows.filter(r => (r.status || '').trim().toLowerCase().includes('reject')).length;
+  const qaRejected = qaRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
 
   // Section timing averages per enumerator
   const sectionFields = ['time_demo', 'time_priorities', 'time_mutualaid', 'time_access_trust', 'time_expectations', 'time_info', 'time_future'];
@@ -340,7 +340,7 @@ function parseExcel(filePath) {
       todayByName[r.name].total++;
       const st = (r.status || '').trim().toLowerCase();
       if (st === 'accepted') todayByName[r.name].accepted++;
-      else if (st.includes('reject')) todayByName[r.name].rejected++;
+      else if (st && st !== 'accepted') todayByName[r.name].rejected++;
     }
   });
 
@@ -455,7 +455,7 @@ app.get('/api/data', requireAuth, async (req, res) => {
   const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
   const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  const rejected = approvedRows.filter(r => (r.status || '').trim().toLowerCase().includes('reject')).length;
+  const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
   res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
