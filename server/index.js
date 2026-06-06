@@ -571,25 +571,37 @@ app.post('/api/tasks/parse-email', requireAuth, async (req, res) => {
 
     const message = await client.messages.create({
       model: 'claude-opus-4-5',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `You are helping manage a Lebanon Emergency Response survey project. Extract actionable tasks from this client email.
+        content: `You are the task manager for a Lebanon Emergency Response Perception Study field survey project. Your job is to read a client or supervisor email and convert every single actionable point into a structured task — without losing a single word of meaning, context, or nuance.
 
-Known enumerators: ${enumContext}
+RULES — follow these strictly:
+1. Every distinct issue, instruction, flag, or follow-up in the email becomes its own task. Do NOT merge separate issues into one task even if they are about the same enumerator.
+2. The description must preserve the FULL original wording from the email for that issue. Do not paraphrase, summarize, or shorten. Quote the source text verbatim as the first bullet, then add any implied action as a second bullet.
+3. If the email uses conditional or escalation language ("if this continues", "may need to look into", "particularly"), include that exact language in the description — it signals urgency or a pending decision.
+4. If the email names a specific enumerator, link the task to their code. If no code is known, leave linkedEntity as empty string but still name them in the title.
+5. If the email mentions something to watch, confirm, or wait on (not yet an action), still create a task with type "coordination" or "general" so it is not forgotten.
+6. Assign each task to the most relevant team member based on context:
+   - Field/enumerator issues → Nisrine Khoory (field coordinator)
+   - Data/quality issues → Moe Issa (info mgmt)
+   - Technical/dashboard → Ralph Baydoun
+   - Unassigned only if truly unclear
+7. Priority rules:
+   - high: explicit urgency, pattern affecting data integrity, escalation risk, or "particularly" flagged
+   - medium: needs follow-up but not immediately critical
+   - low: informational, waiting for confirmation, or no clear deadline
+8. Type must be one of exactly: data_quality, field_ops, enumerator, coordination, payment, reporting, training, technical, general
 
-For each distinct action item in the email, return a JSON array of tasks. Each task:
-- title: short action title (max 10 words)
-- description: the specific issue/instruction as bullet points (use - prefix per point)
-- type: one of: data_quality, field_ops, enumerator, coordination, payment, reporting, training, technical, general
-- priority: high, medium, or low (based on urgency in email)
-- assignee: best match from team [Nisrine Khoory, Moe Issa, Ahmad Zaazou, Ralph Baydoun, Unassigned]
-- linkedEntity: enumerator code if mentioned (e.g. AZ01), or empty string
+Known enumerators on this project: ${enumContext}
 
-Return ONLY a valid JSON array, no explanation. Example:
-[{"title":"Follow up with Enumerator 1","description":"- High use of neutral/don't know answers\\n- Same answer pattern on follow-up questions","type":"enumerator","priority":"high","assignee":"Nisrine Khoory","linkedEntity":""}]
+Return ONLY a valid JSON array. No explanation, no markdown, no wrapper — just the raw JSON array.
+Each object must have exactly these keys: title, description, type, priority, assignee, linkedEntity
 
-Email:
+Example of correct description format (verbatim quote + action):
+"- \\"Quite unusual pattern with several questions being answered exactly the same for all interviews and very high use of don't know or don't want to answers.\\"\\n- Discuss with enumerator — it is very unlikely everyone has the exact same opinion on so many questions.\\n- ⚠ Escalation warning: if this continues, may need to investigate further."
+
+Email to parse:
 ${emailText}`
       }]
     });
