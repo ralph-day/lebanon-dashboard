@@ -129,8 +129,11 @@ app.get('/auth/me', (req, res) => {
 });
 
 app.post('/auth/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ ok: true });
+  req.session.destroy(err => {
+    if (err) console.error('[Auth] Logout destroy error:', err);
+    res.clearCookie('connect.sid');
+    res.json({ ok: true });
+  });
 });
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
@@ -571,12 +574,15 @@ async function parseExcel(filePath) {
 
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
-    qa: { rows: qaRows.slice(0, 1000), pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
+    qa: { rows: qaRows, pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
     sectionTimings, natTotals, genderTotals,
   };
 }
 
+let _refreshing = false;
 async function refreshCache() {
+  if (_refreshing) return; // prevent concurrent refreshes corrupting tmp_data.xlsx
+  _refreshing = true;
   try {
     const { path: filePath, filename, modifiedTime } = await fetchLatestExcel();
     const parsed = await parseExcel(filePath);
@@ -584,6 +590,8 @@ async function refreshCache() {
     console.log(`[${new Date().toISOString()}] Data refreshed from: ${filename}`);
   } catch (err) {
     console.error('Cache refresh error:', err.message);
+  } finally {
+    _refreshing = false;
   }
 }
 
@@ -663,7 +671,7 @@ app.post('/api/qa/unapprove', requireAuth, requireQAApprover, (req, res) => {
 // ── Notes (inline annotations) ───────────────────────────────────────────────
 const NOTES_PATH = path.join(__dirname, 'notes.json');
 let notes = [];
-try { if (fs.existsSync(NOTES_PATH)) notes = JSON.parse(fs.readFileSync(NOTES_PATH, 'utf8')); } catch(e) {}
+try { if (fs.existsSync(NOTES_PATH)) notes = JSON.parse(fs.readFileSync(NOTES_PATH, 'utf8')); } catch(e) { console.error('Could not load notes:', e.message); }
 function saveNotes() { try { atomicWrite(NOTES_PATH, JSON.stringify(notes, null, 2)); } catch(e) { console.error('Could not save notes:', e.message); } }
 
 app.get('/api/notes', requireAuth, (req, res) => res.json(notes));
@@ -693,7 +701,7 @@ app.delete('/api/notes/:id', requireAuth, (req, res) => {
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 const TASKS_PATH = path.join(__dirname, 'tasks.json');
 let tasks = [];
-try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) {}
+try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) { console.error('Could not load tasks:', e.message); }
 function saveTasks() { try { atomicWrite(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) { console.error('Could not save tasks:', e.message); } }
 
 app.get('/api/tasks', requireAuth, (req, res) => res.json(tasks));
@@ -748,8 +756,7 @@ app.delete('/api/tasks/:id', requireAuth, (req, res) => {
   const task = tasks.find(t => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   // Only the creator or a QA approver (team admin) can delete
-  const isCreator  = task.createdBy === (req.session.user.name || req.session.user.email) ||
-                     task.creatorEmail === req.session.user.email;
+  const isCreator  = task.creatorEmail === req.session.user.email;
   const isApprover = QA_APPROVER_EMAILS.includes(req.session.user.email);
   if (!isCreator && !isApprover) return res.status(403).json({ error: 'Not authorized to delete this task' });
   tasks = tasks.filter(t => t.id !== req.params.id);
@@ -840,7 +847,7 @@ Each object must have exactly these keys: title, description, type, priority, as
 // ── Payments ─────────────────────────────────────────────────────────────────
 const PAYMENTS_PATH = path.join(__dirname, 'payments.json');
 let payments = { enumerators: [], coordination: [] };
-try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) {}
+try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) { console.error('Could not load payments:', e.message); }
 function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
 
 // GET all payments

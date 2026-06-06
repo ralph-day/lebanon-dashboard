@@ -259,7 +259,10 @@ export default function TaskBoard({ currentUser, onUnauth }) {
 
   useEffect(() => {
     fetch('/api/tasks', { credentials: 'include' })
-      .then(r => r.json()).then(setTasks).finally(() => setLoading(false))
+      .then(r => { if (r.status === 401) { onUnauth?.(); return []; } return r.ok ? r.json() : []; })
+      .then(setTasks)
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   async function handleCreate(e) {
@@ -272,6 +275,7 @@ export default function TaskBoard({ currentUser, onUnauth }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
+      if (!res.ok) return
       const task = await res.json()
       setTasks(prev => [task, ...prev])
       setForm({ title: '', description: '', type: 'general', assignee: 'Unassigned', priority: 'medium', dueDate: '', linkedEntity: '' })
@@ -285,12 +289,14 @@ export default function TaskBoard({ currentUser, onUnauth }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     })
+    if (!res.ok) return
     const updated = await res.json()
     setTasks(prev => prev.map(t => t.id === id ? updated : t))
   }
 
   async function handleDelete(id) {
-    await fetch(`/api/tasks/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) return
     setTasks(prev => prev.filter(t => t.id !== id))
   }
 
@@ -302,6 +308,7 @@ export default function TaskBoard({ currentUser, onUnauth }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...t, status: 'todo' }),
       })
+      if (!res.ok) continue
       created.push(await res.json())
     }
     setTasks(prev => [...created, ...prev])

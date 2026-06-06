@@ -82,6 +82,7 @@ export default function PaymentsPanel({ enumerators = [], currentUser }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
+    if (!res.ok) return
     const updated = await res.json()
     setPayments(prev => {
       const list = prev.enumerators.filter(e => e.code !== code)
@@ -98,6 +99,7 @@ export default function PaymentsPanel({ enumerators = [], currentUser }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(coordForm),
       })
+      if (!res.ok) return
       const entry = await res.json()
       setPayments(prev => ({ ...prev, coordination: [...prev.coordination, entry] }))
       setCoordForm({ name: '', role: '', amount: '', period: '', notes: '' })
@@ -111,13 +113,15 @@ export default function PaymentsPanel({ enumerators = [], currentUser }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
+    if (!res.ok) return
     const updated = await res.json()
     setPayments(prev => ({ ...prev, coordination: prev.coordination.map(e => e.id === id ? updated : e) }))
   }
 
   async function deleteCoord(id) {
     if (!confirm('Delete this payment record?')) return
-    await fetch(`/api/payments/coordination/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await fetch(`/api/payments/coordination/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) return
     setPayments(prev => ({ ...prev, coordination: prev.coordination.filter(e => e.id !== id) }))
   }
 
