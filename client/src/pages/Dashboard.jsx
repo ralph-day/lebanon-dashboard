@@ -7,14 +7,17 @@ import QAPanel from '../components/QAPanel'
 import TaskBoard from '../components/TaskBoard'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
-const TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality', 'Team']
+const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
+const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
 
 export default function Dashboard({ user, onLogout }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const canApproveQA = user?.email === QA_ALLOWED_EMAIL
+  const canApproveQA  = user?.email === QA_ALLOWED_EMAIL
+  const canAccessTeam = TEAM_ALLOWED_EMAILS.includes(user?.email)
+  const TABS = canAccessTeam ? [...BASE_TABS, 'Team'] : BASE_TABS
   const [activeTab, setActiveTab] = useState('Overview')
   const [notes, setNotes]         = useState([])
 

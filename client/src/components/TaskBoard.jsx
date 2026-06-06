@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const TEAM = ['Nisrine Khoory', 'Ahmad Zaazou', 'Ralph Baydoun', 'Unassigned']
+const TEAM = ['Nisrine Khoory', 'Moe Issa', 'Ahmad Zaazou', 'Ralph Baydoun', 'Unassigned']
 const PRIORITIES = { high: { label: 'High', color: 'bg-red-100 text-red-700 border-red-200' }, medium: { label: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' }, low: { label: 'Low', color: 'bg-slate-100 text-slate-600 border-slate-200' } }
 const COLUMNS = [
   { key: 'todo',        label: 'To Do',       color: 'bg-slate-100', header: 'bg-slate-200 text-slate-700' },
