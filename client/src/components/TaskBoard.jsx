@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 
 const TEAM = ['Nisrine Khoory', 'Moe Issa', 'Ahmad Zaazou', 'Ralph Baydoun', 'Unassigned']
 
@@ -108,10 +108,147 @@ function TaskCard({ task, onStatusChange, onDelete }) {
   )
 }
 
+// ── Import from Email modal ───────────────────────────────────────────────────
+function ImportEmailModal({ onClose, onImport }) {
+  const [emailText, setEmailText] = useState('')
+  const [parsing, setParsing]     = useState(false)
+  const [preview, setPreview]     = useState(null)
+  const [error, setError]         = useState(null)
+  const [selected, setSelected]   = useState(new Set())
+
+  async function handleParse() {
+    if (!emailText.trim()) return
+    setParsing(true); setError(null); setPreview(null)
+    try {
+      const res = await fetch('/api/tasks/parse-email', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailText }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Parse failed')
+      setPreview(data.tasks)
+      setSelected(new Set(data.tasks.map((_, i) => i)))
+    } catch (e) {
+      setError(e.message)
+    } finally { setParsing(false) }
+  }
+
+  function toggleSelect(i) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-slate-800">📧 Import Tasks from Email</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Paste a client or supervisor email — Claude will extract action items as tasks</p>
+          </div>
+          <button onClick={onClose} className="text-slate-300 hover:text-slate-600 text-lg">✕</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {!preview ? (
+            <>
+              <textarea
+                autoFocus
+                rows={10}
+                placeholder="Paste the email here…"
+                value={emailText}
+                onChange={e => setEmailText(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y font-mono"
+              />
+              {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+              <div className="flex justify-end">
+                <button onClick={handleParse} disabled={parsing || !emailText.trim()}
+                  className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium flex items-center gap-2">
+                  {parsing
+                    ? <><span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Analysing…</>
+                    : '✨ Extract Tasks'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-slate-700">{preview.length} task{preview.length !== 1 ? 's' : ''} found — select which to create:</p>
+                <button onClick={() => setPreview(null)} className="text-xs text-slate-400 hover:underline">← Paste different email</button>
+              </div>
+
+              <div className="space-y-3">
+                {preview.map((t, i) => {
+                  const tp   = TYPE_MAP[t.type] || TYPE_MAP.general
+                  const pri  = PRIORITIES[t.priority] || PRIORITIES.medium
+                  const sel  = selected.has(i)
+                  return (
+                    <div key={i}
+                      onClick={() => toggleSelect(i)}
+                      className={`rounded-xl border p-3 cursor-pointer transition-all ${sel ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white opacity-60'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${sel ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                          {sel && <span className="text-white text-[10px] font-bold">✓</span>}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <p className="text-sm font-semibold text-slate-800">{t.title}</p>
+                          {t.description && (
+                            <div className="text-xs text-slate-500 space-y-0.5">
+                              {t.description.split('\n').filter(l => l.trim()).map((line, j) => {
+                                const isBullet = /^[-•]/.test(line.trim())
+                                return isBullet
+                                  ? <div key={j} className="flex gap-1.5"><span className="text-slate-300">•</span><span>{line.replace(/^[-•]\s*/, '')}</span></div>
+                                  : <p key={j}>{line}</p>
+                              })}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${tp.color}`}>{tp.label}</span>
+                            <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full border ${pri.color}`}>{pri.label}</span>
+                            {t.assignee && t.assignee !== 'Unassigned' && (
+                              <span className="text-[11px] bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-full">
+                                👤 {t.assignee.split(' ')[0]}
+                              </span>
+                            )}
+                            {t.linkedEntity && (
+                              <span className="text-[11px] bg-blue-50 text-blue-600 border border-blue-200 px-1.5 py-0.5 rounded-full">🔗 {t.linkedEntity}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {error && <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+
+              <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                <p className="text-xs text-slate-400">{selected.size} of {preview.length} selected</p>
+                <button
+                  disabled={selected.size === 0}
+                  onClick={() => onImport(preview.filter((_, i) => selected.has(i)))}
+                  className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-40 font-medium">
+                  Create {selected.size} Task{selected.size !== 1 ? 's' : ''}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function TaskBoard({ currentUser }) {
-  const [tasks, setTasks]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  const [tasks, setTasks]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [showForm, setShowForm]     = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [filterType, setFilterType] = useState('all')
   const [form, setForm] = useState({
     title: '', description: '', type: 'general',
@@ -156,6 +293,20 @@ export default function TaskBoard({ currentUser }) {
     setTasks(prev => prev.filter(t => t.id !== id))
   }
 
+  async function handleImport(importedTasks) {
+    const created = []
+    for (const t of importedTasks) {
+      const res = await fetch('/api/tasks', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...t, status: 'todo' }),
+      })
+      created.push(await res.json())
+    }
+    setTasks(prev => [...created, ...prev])
+    setShowImport(false)
+  }
+
   const filteredTasks = filterType === 'all' ? tasks : tasks.filter(t => t.type === filterType)
 
   const todoCount       = tasks.filter(t => t.status === 'todo').length
@@ -168,18 +319,28 @@ export default function TaskBoard({ currentUser }) {
   return (
     <div className="space-y-5">
 
+      {showImport && <ImportEmailModal onClose={() => setShowImport(false)} onImport={handleImport} />}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-800">Team Task Board</h2>
           <p className="text-xs text-slate-400 mt-0.5">{todoCount} to do · {inProgressCount} in progress · {doneCount} done</p>
         </div>
-        <button
-          onClick={() => setShowForm(v => !v)}
-          className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-        >
-          {showForm ? '✕ Cancel' : '+ New Task'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowImport(true); setShowForm(false) }}
+            className="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg transition-colors font-medium flex items-center gap-1.5"
+          >
+            📧 Import from Email
+          </button>
+          <button
+            onClick={() => setShowForm(v => !v)}
+            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+          >
+            {showForm ? '✕ Cancel' : '+ New Task'}
+          </button>
+        </div>
       </div>
 
       {/* Type filter chips — only shown when there are typed tasks */}

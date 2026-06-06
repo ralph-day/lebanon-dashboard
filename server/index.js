@@ -7,6 +7,7 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
+const Anthropic = require('@anthropic-ai/sdk');
 const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
 
 const app = express();
@@ -552,6 +553,57 @@ app.delete('/api/tasks/:id', requireAuth, (req, res) => {
   tasks = tasks.filter(t => t.id !== req.params.id);
   saveTasks();
   res.json({ ok: true });
+});
+
+// ── Email → Tasks parser ──────────────────────────────────────────────────────
+app.post('/api/tasks/parse-email', requireAuth, async (req, res) => {
+  const { emailText } = req.body;
+  if (!emailText?.trim()) return res.status(400).json({ error: 'No email text provided' });
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+
+  try {
+    const client = new Anthropic({ apiKey });
+
+    // Build context about enumerator codes
+    const enumContext = ENUMERATOR_ASSIGNMENTS.map(e => `${e.name} (${e.code})`).join(', ');
+
+    const message = await client.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: `You are helping manage a Lebanon Emergency Response survey project. Extract actionable tasks from this client email.
+
+Known enumerators: ${enumContext}
+
+For each distinct action item in the email, return a JSON array of tasks. Each task:
+- title: short action title (max 10 words)
+- description: the specific issue/instruction as bullet points (use - prefix per point)
+- type: one of: data_quality, field_ops, enumerator, coordination, payment, reporting, training, technical, general
+- priority: high, medium, or low (based on urgency in email)
+- assignee: best match from team [Nisrine Khoory, Moe Issa, Ahmad Zaazou, Ralph Baydoun, Unassigned]
+- linkedEntity: enumerator code if mentioned (e.g. AZ01), or empty string
+
+Return ONLY a valid JSON array, no explanation. Example:
+[{"title":"Follow up with Enumerator 1","description":"- High use of neutral/don't know answers\\n- Same answer pattern on follow-up questions","type":"enumerator","priority":"high","assignee":"Nisrine Khoory","linkedEntity":""}]
+
+Email:
+${emailText}`
+      }]
+    });
+
+    const raw = message.content[0].text.trim();
+    // Extract JSON array from response
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (!match) return res.status(500).json({ error: 'Could not parse AI response', raw });
+    const tasks = JSON.parse(match[0]);
+    res.json({ tasks });
+  } catch (err) {
+    console.error('parse-email error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Payments ─────────────────────────────────────────────────────────────────
