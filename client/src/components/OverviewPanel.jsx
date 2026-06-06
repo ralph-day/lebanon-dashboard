@@ -92,7 +92,14 @@ function DailyProgress({ assignments, qaRows, navigate }) {
         <h3 className="text-sm font-semibold text-slate-800">Progress by Enumerator</h3>
         <div className="flex items-center gap-2">
           <button onClick={() => setOffset(o => o - 1)} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center text-sm">←</button>
-          <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${offset === 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{label}</span>
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${offset === 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{label}</span>
+            {rows.length > 0 && (
+              <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+                {totalAccepted} accepted
+              </span>
+            )}
+          </div>
           <button onClick={() => setOffset(o => Math.min(o + 1, 0))} disabled={offset === 0} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center text-sm disabled:opacity-30">→</button>
         </div>
       </div>
