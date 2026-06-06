@@ -13,10 +13,11 @@ const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
 const Anthropic = require('@anthropic-ai/sdk');
 const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
 
-// ── Startup validation — fail fast if critical env vars are missing ────────────
+// ── Startup validation — fail fast regardless of NODE_ENV ─────────────────────
 const REQUIRED_ENV = ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
 const missing = REQUIRED_ENV.filter(k => !process.env[k]);
-if (missing.length > 0 && process.env.NODE_ENV === 'production') {
+if (missing.length > 0) {
+  // Always fatal — a missing SESSION_SECRET is unsafe in any environment
   console.error(`[FATAL] Missing required environment variables: ${missing.join(', ')}`);
   process.exit(1);
 }
@@ -44,7 +45,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '50kb' })); // cap body size
 app.use(session({
-  secret: process.env.SESSION_SECRET || (process.env.NODE_ENV !== 'production' ? 'dev-only-secret-do-not-use-in-prod' : (() => { throw new Error('SESSION_SECRET required'); })()),
+  secret: process.env.SESSION_SECRET, // always required — startup check above ensures it is set
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -140,8 +141,15 @@ try {
   }
 } catch (e) { console.error('Could not load approvals:', e.message); }
 
+// Atomic write: write to .tmp then rename — prevents corruption on crash
+function atomicWrite(filePath, data) {
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, filePath);
+}
+
 function saveApprovals() {
-  try { fs.writeFileSync(APPROVALS_PATH, JSON.stringify([...approvedIds])); } catch (e) { console.error('Could not save approvals:', e.message); }
+  try { atomicWrite(APPROVALS_PATH, JSON.stringify([...approvedIds])); } catch (e) { console.error('Could not save approvals:', e.message); }
 }
 
 function applyApprovals(qaRows) {
@@ -507,7 +515,7 @@ async function refreshCache() {
 }
 
 // ── API routes ────────────────────────────────────────────────────────────────
-app.get('/api/data', requireAuth, async (req, res) => {
+app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
     await refreshCache();
   }
@@ -526,6 +534,15 @@ const refreshLimit = rateLimit({
   max: 6,
   keyGenerator: (req) => req.session.user?.email || ipKeyGenerator(req.ip),
   message: { error: 'Too many refresh requests — please wait' },
+});
+
+// Also rate-limit /api/data to prevent hammering the cold-cache Drive download path
+const dataLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: (req) => req.session.user?.email || ipKeyGenerator(req.ip),
+  message: { error: 'Too many data requests — please wait' },
+  skip: () => !!cache.data, // only apply when cache is cold
 });
 
 app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
@@ -550,6 +567,11 @@ function requireQAApprover(req, res, next) {
 app.post('/api/qa/approve', requireAuth, requireQAApprover, (req, res) => {
   const { id } = req.body;
   if (!id || typeof id !== 'string') return res.status(400).json({ error: 'Missing id' });
+  // Validate ID exists in current cached data — prevents pre-approving phantom IDs
+  const knownIds = new Set((cache.data?.qa.rows || []).map(r => r.id));
+  if (knownIds.size > 0 && !knownIds.has(id)) {
+    return res.status(400).json({ error: 'Survey ID not found in current dataset' });
+  }
   approvedIds.add(id);
   saveApprovals();
   console.log(`[QA Override] ${req.session.user.email} approved survey: ${id}`);
@@ -570,14 +592,14 @@ app.post('/api/qa/unapprove', requireAuth, requireQAApprover, (req, res) => {
 const NOTES_PATH = path.join(__dirname, 'notes.json');
 let notes = [];
 try { if (fs.existsSync(NOTES_PATH)) notes = JSON.parse(fs.readFileSync(NOTES_PATH, 'utf8')); } catch(e) {}
-function saveNotes() { try { fs.writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2)); } catch(e) {} }
+function saveNotes() { try { atomicWrite(NOTES_PATH, JSON.stringify(notes, null, 2)); } catch(e) { console.error('Could not save notes:', e.message); } }
 
 app.get('/api/notes', requireAuth, (req, res) => res.json(notes));
 
 app.post('/api/notes', requireAuth, (req, res) => {
   const { entityType, entityId, entityLabel, text } = req.body;
   if (!text?.trim()) return res.status(400).json({ error: 'Text required' });
-  const note = { id: Date.now().toString(), entityType, entityId, entityLabel, text: text.trim(), author: req.session.user.name || req.session.user.email, createdAt: new Date().toISOString() };
+  const note = { id: Date.now().toString(), entityType, entityId, entityLabel, text: text.trim(), author: req.session.user.name || req.session.user.email, authorEmail: req.session.user.email, createdAt: new Date().toISOString() };
   notes.unshift(note);
   saveNotes();
   res.json(note);
@@ -587,7 +609,8 @@ app.delete('/api/notes/:id', requireAuth, (req, res) => {
   const note = notes.find(n => n.id === req.params.id);
   if (!note) return res.status(404).json({ error: 'Not found' });
   // Only the author or a QA approver can delete a note
-  const isAuthor = note.author === (req.session.user.name || req.session.user.email);
+  // Use email for ownership — not display name (names can collide or be changed)
+  const isAuthor = note.authorEmail === req.session.user.email;
   const isApprover = QA_APPROVER_EMAILS.includes(req.session.user.email);
   if (!isAuthor && !isApprover) return res.status(403).json({ error: 'Not authorized to delete this note' });
   notes = notes.filter(n => n.id !== req.params.id);
@@ -599,7 +622,7 @@ app.delete('/api/notes/:id', requireAuth, (req, res) => {
 const TASKS_PATH = path.join(__dirname, 'tasks.json');
 let tasks = [];
 try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) {}
-function saveTasks() { try { fs.writeFileSync(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) {} }
+function saveTasks() { try { atomicWrite(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) { console.error('Could not save tasks:', e.message); } }
 
 app.get('/api/tasks', requireAuth, (req, res) => res.json(tasks));
 
@@ -619,6 +642,7 @@ app.post('/api/tasks', requireAuth, (req, res) => {
     dueDate: dueDate || null,
     linkedEntity: (linkedEntity || '').substring(0, 100) || null,
     createdBy: req.session.user.name || req.session.user.email,
+    creatorEmail: req.session.user.email,
     createdAt: new Date().toISOString(),
   };
   tasks.unshift(task);
@@ -649,6 +673,13 @@ app.patch('/api/tasks/:id', requireAuth, (req, res) => {
 });
 
 app.delete('/api/tasks/:id', requireAuth, (req, res) => {
+  const task = tasks.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  // Only the creator or a QA approver (team admin) can delete
+  const isCreator  = task.createdBy === (req.session.user.name || req.session.user.email) ||
+                     task.creatorEmail === req.session.user.email;
+  const isApprover = QA_APPROVER_EMAILS.includes(req.session.user.email);
+  if (!isCreator && !isApprover) return res.status(403).json({ error: 'Not authorized to delete this task' });
   tasks = tasks.filter(t => t.id !== req.params.id);
   saveTasks();
   res.json({ ok: true });
@@ -737,7 +768,7 @@ Each object must have exactly these keys: title, description, type, priority, as
 const PAYMENTS_PATH = path.join(__dirname, 'payments.json');
 let payments = { enumerators: [], coordination: [] };
 try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) {}
-function savePayments() { try { fs.writeFileSync(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) {} }
+function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
 
 // GET all payments
 app.get('/api/payments', requireAuth, (req, res) => res.json(payments));
@@ -793,6 +824,10 @@ app.patch('/api/payments/coordination/:id', requireAuth, (req, res) => {
 });
 
 app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
+  const entry = payments.coordination.find(e => e.id === req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  const isApprover = QA_APPROVER_EMAILS.includes(req.session.user.email);
+  if (!isApprover) return res.status(403).json({ error: 'Only team admins can delete payment records' });
   payments.coordination = payments.coordination.filter(e => e.id !== req.params.id);
   savePayments();
   res.json({ ok: true });
