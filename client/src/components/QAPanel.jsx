@@ -6,6 +6,28 @@ const QA_STYLE = {
   '❌ FAIL': 'bg-red-100 text-red-700',
 }
 
+// Human-readable labels for SurveyStatus_New rejection codes
+const REJECTION_LABELS = {
+  'too_short':                    { label: 'Too Short',                color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  'wrong_nationality':            { label: 'Wrong Nationality',        color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  'itp':                          { label: 'In The Pipeline',          color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  'too_close':                    { label: 'Too Close (GPS)',          color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+  'testing':                      { label: 'Test Submission',          color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  'respondent is not displaced':  { label: 'Not Displaced',            color: 'bg-red-100 text-red-700 border-red-200' },
+}
+
+function RejectionBadge({ status }) {
+  if (!status) return null
+  const key = status.trim().toLowerCase()
+  if (key === 'accepted') return null
+  const cfg = REJECTION_LABELS[key] || { label: status, color: 'bg-red-100 text-red-700 border-red-200' }
+  return (
+    <span className={`inline-block border text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${cfg.color}`}>
+      🚫 {cfg.label}
+    </span>
+  )
+}
+
 const FLAG_ICON = {
   '✗ Too Fast': '⚡ Too Fast',
   '✗ Too Slow': '🐢 Too Slow',
@@ -145,6 +167,16 @@ export default function QAPanel({ qa: initialQa }) {
         <span className="text-sm text-slate-400 self-center">{filtered.length} surveys</span>
       </div>
 
+      {/* Rejected view explanation banner */}
+      {filter === '__REJECTED__' && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+          <span className="text-lg leading-none mt-0.5">🚫</span>
+          <div>
+            <span className="font-semibold">Rejected surveys</span> — these were excluded based on the <code className="bg-red-100 px-1 rounded text-xs">SurveyStatus_New</code> column in the data sheet. The reason (Too Short, Wrong Nationality, etc.) is the rejection cause. The QA grade shown below it reflects the QA system separately.
+          </div>
+        </div>
+      )}
+
       {/* QA table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -156,7 +188,7 @@ export default function QAPanel({ qa: initialQa }) {
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">App Time</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Survey Time</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Flags</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Status</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">{filter === '__REJECTED__' ? 'Rejection Reason' : 'Status'}</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Issues</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Action</th>
               </tr>
@@ -183,9 +215,13 @@ export default function QAPanel({ qa: initialQa }) {
                   </td>
                   <td className="px-3 py-2.5 text-center">
                     <div className="flex flex-col items-center gap-0.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${QA_STYLE[row.qaStatus] || 'bg-slate-100 text-slate-500'}`}>
-                        {row.qaStatus}
-                      </span>
+                      {filter === '__REJECTED__'
+                        ? <RejectionBadge status={row.status} />
+                        : <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${QA_STYLE[row.qaStatus] || 'bg-slate-100 text-slate-500'}`}>{row.qaStatus}</span>
+                      }
+                      {filter === '__REJECTED__' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${QA_STYLE[row.qaStatus] || 'bg-slate-100 text-slate-500'}`}>{row.qaStatus}</span>
+                      )}
                       {row.approvedByManager && (
                         <span className="text-[10px] bg-amber-100 text-amber-700 font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap">⚠ Previously Failed</span>
                       )}
