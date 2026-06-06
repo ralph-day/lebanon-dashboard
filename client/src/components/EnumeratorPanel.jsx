@@ -32,11 +32,10 @@ function SectionCell({ value, min }) {
 // ── Enumerator detail subpage ─────────────────────────────────────────────────
 function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack }) {
   const myRows = qaRows.filter(r => r.name === e.name)
-  const last50 = myRows.slice(-50)
-  const pass   = last50.filter(r => r.qaStatus === '✅ PASS').length
-  const review = last50.filter(r => r.qaStatus === '⚠️ REVIEW').length
-  const fail   = last50.filter(r => r.qaStatus === '❌ FAIL').length
-  const total50 = last50.length || 1
+  const pass   = myRows.filter(r => r.qaStatus === '✅ PASS').length
+  const review = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
+  const fail   = myRows.filter(r => r.qaStatus === '❌ FAIL').length
+  const total50 = myRows.length || 1
 
   // Recent 15 survey durations for bar chart
   const recentDurations = myRows
@@ -133,7 +132,7 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {/* Survey Quality last 50 */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Survey Quality (last {last50.length})</h3>
+          <h3 className="text-sm font-semibold text-slate-700 mb-4">Survey Quality ({myRows.length} surveys)</h3>
           <div className="flex gap-6 mb-4">
             {[
               { label: 'Pass', value: pass, color: 'text-emerald-600', icon: '✅' },
