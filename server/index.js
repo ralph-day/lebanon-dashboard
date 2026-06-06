@@ -233,6 +233,7 @@ function parseExcel(filePath) {
     missingGPS: r.Missing_GPS || 0,
     lastSubmission: r.Last_Submission ? (typeof r.Last_Submission === 'number' ? new Date((r.Last_Submission - 25569) * 86400 * 1000).toISOString() : String(r.Last_Submission)) : null,
     qualityPct: r['Quality_%'] || null,
+    phone: null, // filled in below after phoneByName is built
   }));
 
   // Build instanceID → { status, loc4, locationName, district, group } from data sheet
@@ -366,6 +367,8 @@ function parseExcel(filePath) {
     const fullName = Object.keys(enumCompletedMap).find(n => n.includes(`(${e.code})`)) || e.name;
     phoneByName[fullName] = e.phone || null;
   });
+  // Backfill phone into enumerators list
+  enumerators.forEach(e => { e.phone = phoneByName[e.name] || null; });
 
   const assignments = ENUMERATOR_ASSIGNMENTS.map(e => {
     const fullName = Object.keys(enumCompletedMap).find(n => n.includes(`(${e.code})`)) || e.name;
