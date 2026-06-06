@@ -95,7 +95,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
           <div className="flex items-center gap-2">
             <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${offset === 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{label}</span>
             {rows.length > 0 && (
-              <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+              <span className="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-lg border border-orange-200">
                 {totalAccepted} accepted
               </span>
             )}
