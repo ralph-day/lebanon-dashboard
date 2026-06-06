@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const TEAM = ['Nisrine Khoory', 'Moe Issa', 'Ahmad Zaazou', 'Ralph Baydoun', 'Unassigned']
 
@@ -57,7 +57,6 @@ function TypeBadge({ typeKey }) {
 function TaskCard({ task, onStatusChange, onDelete }) {
   const pri = PRIORITIES[task.priority] || PRIORITIES.medium
   const overdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done'
-  const [expanded, setExpanded] = useState(false)
   const hasDesc = !!task.description?.trim()
 
   return (
@@ -65,20 +64,12 @@ function TaskCard({ task, onStatusChange, onDelete }) {
       <div className="p-3 space-y-2">
         {/* Title row */}
         <div className="flex items-start justify-between gap-2">
-          <button
-            onClick={() => hasDesc && setExpanded(v => !v)}
-            className={`text-sm font-medium text-slate-800 leading-snug flex-1 text-left ${hasDesc ? 'hover:text-blue-600 cursor-pointer' : ''}`}
-          >
-            {task.title}
-            {hasDesc && (
-              <span className="ml-1 text-slate-300 text-[10px]">{expanded ? '▲' : '▼'}</span>
-            )}
-          </button>
+          <p className="text-sm font-medium text-slate-800 leading-snug flex-1">{task.title}</p>
           <button onClick={() => onDelete(task.id)} className="text-slate-200 hover:text-red-400 transition-colors text-xs shrink-0 mt-0.5">✕</button>
         </div>
 
-        {/* Description (expandable) */}
-        {hasDesc && expanded && <Description text={task.description} />}
+        {/* Description — always visible */}
+        {hasDesc && <Description text={task.description} />}
 
         {/* Linked entity */}
         {task.linkedEntity && (
