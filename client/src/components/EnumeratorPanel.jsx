@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import NotesBubble from './NotesBubble'
 
 const SECTIONS = [
   { key: 'time_demo', label: 'Demographics', min: 3 },
@@ -27,7 +28,7 @@ function SectionCell({ value, min }) {
   )
 }
 
-export default function EnumeratorPanel({ enumerators, sectionTimings }) {
+export default function EnumeratorPanel({ enumerators, sectionTimings, notes = [], onNoteAdded, onNoteDeleted }) {
   const sorted = [...enumerators].sort((a, b) => b.totalSurveys - a.totalSurveys)
 
   // Build chart data: surveys per enumerator
@@ -73,6 +74,7 @@ export default function EnumeratorPanel({ enumerators, sectionTimings }) {
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Missing GPS</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Last Submission</th>
+                <th className="px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -92,6 +94,9 @@ export default function EnumeratorPanel({ enumerators, sectionTimings }) {
                     {e.lastSubmission && typeof e.lastSubmission === 'string' && e.lastSubmission.includes('-')
                       ? new Date(e.lastSubmission).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
                       : e.lastSubmission ? String(e.lastSubmission).substring(0, 16) : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <NotesBubble entityType="enumerator" entityId={e.name} entityLabel={e.name} allNotes={notes} onNoteAdded={onNoteAdded} onNoteDeleted={onNoteDeleted} />
                   </td>
                 </tr>
               ))}

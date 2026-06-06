@@ -4,9 +4,10 @@ import LocationPanel from '../components/LocationPanel'
 import EnumeratorPanel from '../components/EnumeratorPanel'
 import EnumeratorProgress from '../components/EnumeratorProgress'
 import QAPanel from '../components/QAPanel'
+import TaskBoard from '../components/TaskBoard'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
-const TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
+const TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality', 'Team']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 
 export default function Dashboard({ user, onLogout }) {
@@ -15,6 +16,11 @@ export default function Dashboard({ user, onLogout }) {
   const [error, setError] = useState(null)
   const canApproveQA = user?.email === QA_ALLOWED_EMAIL
   const [activeTab, setActiveTab] = useState('Overview')
+  const [notes, setNotes]         = useState([])
+
+  useEffect(() => {
+    fetch('/api/notes', { credentials: 'include' }).then(r => r.json()).then(setNotes).catch(() => {})
+  }, [])
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL / 1000)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -129,11 +135,12 @@ export default function Dashboard({ user, onLogout }) {
 
         {data && !loading && (
           <>
-            {activeTab === 'Overview' && <OverviewPanel data={data} />}
-            {activeTab === 'Field Progress' && <EnumeratorProgress assignments={data.assignments || []} />}
-            {activeTab === 'Locations' && <LocationPanel locations={data.locations} />}
-            {activeTab === 'Enumerators' && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} />}
-            {activeTab === 'Data Quality' && <QAPanel qa={data.qa} canApprove={canApproveQA} />}
+            {activeTab === 'Overview'      && <OverviewPanel data={data} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Field Progress'&& <EnumeratorProgress assignments={data.assignments || []} />}
+            {activeTab === 'Locations'     && <LocationPanel locations={data.locations} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Team'          && <TaskBoard currentUser={user} />}
           </>
         )}
       </main>

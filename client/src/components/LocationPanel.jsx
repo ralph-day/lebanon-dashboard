@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import LebanonMap from './LebanonMap'
+import NotesBubble from './NotesBubble'
 
 const REGION_ORDER = ['Beirut', 'Mount Lebanon', 'North', 'South', 'Bekaa', 'Akkar']
 const GROUP_ORDER  = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'North', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar']
@@ -30,7 +31,7 @@ function StatusBadge({ status }) {
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{s || 'Unknown'}</span>
 }
 
-export default function LocationPanel({ locations }) {
+export default function LocationPanel({ locations, notes = [], onNoteAdded, onNoteDeleted }) {
   const [filterRegion, setFilterRegion] = useState('All')
   const [filterType, setFilterType]     = useState('All')
   const [search, setSearch]             = useState('')
@@ -218,6 +219,7 @@ export default function LocationPanel({ locations }) {
                         <div className="pl-6 flex items-center gap-2 min-w-0">
                           <span className="text-sm text-slate-700 truncate">{loc.location}</span>
                           {loc.type === 'Palestinian' && <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full shrink-0">Palestinian</span>}
+                          <NotesBubble entityType="location" entityId={loc.code} entityLabel={loc.location} allNotes={notes} onNoteAdded={onNoteAdded} onNoteDeleted={onNoteDeleted} />
                         </div>
                         <div className="text-center text-sm text-slate-600">{loc.target}</div>
                         <div className="text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>

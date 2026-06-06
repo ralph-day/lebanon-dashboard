@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import NotesBubble from './NotesBubble'
 
 const QA_STYLE = {
   '✅ PASS': 'bg-emerald-100 text-emerald-700',
@@ -46,7 +47,7 @@ function FlagBadge({ value }) {
   )
 }
 
-export default function QAPanel({ qa: initialQa, canApprove = false }) {
+export default function QAPanel({ qa: initialQa, canApprove = false, notes = [], onNoteAdded, onNoteDeleted }) {
   const [filter, setFilter]               = useState('All')
   const [searchName, setSearchName]       = useState('')
   const [searchDistrict, setSearchDistrict] = useState('All')
@@ -322,16 +323,19 @@ export default function QAPanel({ qa: initialQa, canApprove = false }) {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-xs">
-                    <FlagBadge value={row.tooFast} />
-                    <FlagBadge value={row.tooSlow} />
-                    <FlagBadge value={row.appLeftOpen} />
-                    <FlagBadge value={row.belowRange} />
-                    <FlagBadge value={row.missingGPS} />
-                    {row.gap && row.gap !== 'OK' && (
-                      <span className="inline-block bg-orange-50 border border-orange-200 text-orange-600 text-xs px-1.5 py-0.5 rounded mr-1 mb-1">
-                        {row.gap}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap gap-1 items-center">
+                      <FlagBadge value={row.tooFast} />
+                      <FlagBadge value={row.tooSlow} />
+                      <FlagBadge value={row.appLeftOpen} />
+                      <FlagBadge value={row.belowRange} />
+                      <FlagBadge value={row.missingGPS} />
+                      {row.gap && row.gap !== 'OK' && (
+                        <span className="inline-block bg-orange-50 border border-orange-200 text-orange-600 text-xs px-1.5 py-0.5 rounded">
+                          {row.gap}
+                        </span>
+                      )}
+                      {row.id && <NotesBubble entityType="survey" entityId={row.id} entityLabel={`${row.name} · ${row.submissionDate ? new Date(row.submissionDate).toLocaleDateString('en-GB') : ''}`} allNotes={notes} onNoteAdded={onNoteAdded} onNoteDeleted={onNoteDeleted} />}
+                    </div>
                   </td>
                   {canApprove && (
                     <td className="px-3 py-2.5 text-center">

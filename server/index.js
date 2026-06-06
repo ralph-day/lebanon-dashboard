@@ -497,6 +497,60 @@ app.post('/api/qa/unapprove', requireAuth, (req, res) => {
   res.json({ ok: true, id });
 });
 
+// ── Notes (inline annotations) ───────────────────────────────────────────────
+const NOTES_PATH = path.join(__dirname, 'notes.json');
+let notes = [];
+try { if (fs.existsSync(NOTES_PATH)) notes = JSON.parse(fs.readFileSync(NOTES_PATH, 'utf8')); } catch(e) {}
+function saveNotes() { try { fs.writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2)); } catch(e) {} }
+
+app.get('/api/notes', requireAuth, (req, res) => res.json(notes));
+
+app.post('/api/notes', requireAuth, (req, res) => {
+  const { entityType, entityId, entityLabel, text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'Text required' });
+  const note = { id: Date.now().toString(), entityType, entityId, entityLabel, text: text.trim(), author: req.session.user.name || req.session.user.email, createdAt: new Date().toISOString() };
+  notes.unshift(note);
+  saveNotes();
+  res.json(note);
+});
+
+app.delete('/api/notes/:id', requireAuth, (req, res) => {
+  notes = notes.filter(n => n.id !== req.params.id);
+  saveNotes();
+  res.json({ ok: true });
+});
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+const TASKS_PATH = path.join(__dirname, 'tasks.json');
+let tasks = [];
+try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) {}
+function saveTasks() { try { fs.writeFileSync(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) {} }
+
+app.get('/api/tasks', requireAuth, (req, res) => res.json(tasks));
+
+app.post('/api/tasks', requireAuth, (req, res) => {
+  const { title, assignee, priority, dueDate, linkedEntity } = req.body;
+  if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
+  const task = { id: Date.now().toString(), title: title.trim(), assignee: assignee || '', priority: priority || 'medium', status: 'todo', dueDate: dueDate || null, linkedEntity: linkedEntity || null, createdBy: req.session.user.name || req.session.user.email, createdAt: new Date().toISOString() };
+  tasks.unshift(task);
+  saveTasks();
+  res.json(task);
+});
+
+app.patch('/api/tasks/:id', requireAuth, (req, res) => {
+  const idx = tasks.findIndex(t => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  tasks[idx] = { ...tasks[idx], ...req.body };
+  saveTasks();
+  res.json(tasks[idx]);
+});
+
+app.delete('/api/tasks/:id', requireAuth, (req, res) => {
+  tasks = tasks.filter(t => t.id !== req.params.id);
+  saveTasks();
+  res.json({ ok: true });
+});
+
 // Serve built client in production
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, '../client/dist');
