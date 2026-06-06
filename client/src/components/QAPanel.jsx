@@ -30,22 +30,26 @@ export default function QAPanel({ qa: initialQa }) {
   const [rows, setRows] = useState(initialQa.rows)
   const [approving, setApproving] = useState(null) // id being processed
 
-  const pass   = rows.filter(r => r.qaStatus === '✅ PASS').length
-  const review = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
-  const fail   = rows.filter(r => r.qaStatus === '❌ FAIL').length
-  const total  = rows.length
+  const pass     = rows.filter(r => r.qaStatus === '✅ PASS').length
+  const review   = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
+  const fail     = rows.filter(r => r.qaStatus === '❌ FAIL').length
+  const rejected = rows.filter(r => r.status && r.status !== 'Accepted').length
+  const total    = rows.length
 
   const statCards = [
-    { label: 'Pass',   icon: '✅', key: '✅ PASS',    value: pass,   pct: total ? Math.round((pass / total) * 100) : 0,
-      bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', activeBg: 'bg-emerald-500', activeText: 'text-white' },
-    { label: 'Review', icon: '⚠️', key: '⚠️ REVIEW', value: review, pct: total ? Math.round((review / total) * 100) : 0,
-      bg: 'bg-yellow-50 border-yellow-200',   text: 'text-yellow-700', activeBg: 'bg-yellow-500',  activeText: 'text-white' },
-    { label: 'Fail',   icon: '❌', key: '❌ FAIL',    value: fail,   pct: total ? Math.round((fail / total) * 100) : 0,
-      bg: 'bg-red-50 border-red-200',         text: 'text-red-700',    activeBg: 'bg-red-500',     activeText: 'text-white' },
+    { label: 'Pass',             icon: '✅', key: '✅ PASS',    value: pass,     pct: total ? Math.round((pass / total) * 100) : 0,
+      bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', activeBg: 'bg-emerald-500' },
+    { label: 'Review',           icon: '⚠️', key: '⚠️ REVIEW', value: review,   pct: total ? Math.round((review / total) * 100) : 0,
+      bg: 'bg-yellow-50 border-yellow-200',   text: 'text-yellow-700',  activeBg: 'bg-yellow-500'  },
+    { label: 'Review Immediately', icon: '🚨', key: '❌ FAIL',  value: fail,     pct: total ? Math.round((fail / total) * 100) : 0,
+      bg: 'bg-red-50 border-red-200',         text: 'text-red-700',     activeBg: 'bg-red-600'     },
+    { label: 'Rejected',         icon: '🚫', key: '__REJECTED__',        value: rejected, pct: total ? Math.round((rejected / total) * 100) : 0,
+      bg: 'bg-red-50 border-red-300',         text: 'text-red-800',     activeBg: 'bg-red-700'     },
   ]
 
   const filtered = rows.filter(r => {
-    const matchFilter = filter === 'All' || r.qaStatus === filter
+    const matchFilter = filter === 'All'
+      || (filter === '__REJECTED__' ? (r.status && r.status !== 'Accepted') : r.qaStatus === filter)
     const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
     return matchFilter && matchSearch
   })
@@ -98,7 +102,7 @@ export default function QAPanel({ qa: initialQa }) {
     <div className="space-y-5">
 
       {/* Clickable summary cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {statCards.map(c => {
           const isActive = filter === c.key
           return (
@@ -106,13 +110,13 @@ export default function QAPanel({ qa: initialQa }) {
               key={c.key}
               onClick={() => setFilter(isActive ? 'All' : c.key)}
               className={`rounded-xl border p-4 text-center transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
-                isActive ? `${c.activeBg} border-transparent ${c.activeText} shadow-md` : `${c.bg} ${c.text} hover:shadow-sm`
+                isActive ? `${c.activeBg} border-transparent shadow-md` : `${c.bg} ${c.text} hover:shadow-sm`
               }`}
             >
               <p className={`text-3xl font-bold ${isActive ? 'text-white' : ''}`}>{c.value}</p>
               <p className={`text-sm font-medium mt-0.5 ${isActive ? 'text-white' : ''}`}>{c.icon} {c.label}</p>
               <p className={`text-xs mt-0.5 ${isActive ? 'text-white/70' : 'opacity-60'}`}>{c.pct}% of total</p>
-              {isActive && <p className="text-xs mt-1.5 text-white/80 font-medium">Click to clear filter ✕</p>}
+              {isActive && <p className="text-xs mt-1.5 text-white/80 font-medium">Click to clear ✕</p>}
             </button>
           )
         })}
@@ -127,7 +131,7 @@ export default function QAPanel({ qa: initialQa }) {
           onChange={e => setSearch(e.target.value)}
           className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
         />
-        {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL'].map(f => (
+        {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL', '__REJECTED__'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -135,7 +139,7 @@ export default function QAPanel({ qa: initialQa }) {
               filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
             }`}
           >
-            {f}
+            {f === '__REJECTED__' ? '🚫 Rejected' : f}
           </button>
         ))}
         <span className="text-sm text-slate-400 self-center">{filtered.length} surveys</span>

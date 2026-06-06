@@ -258,6 +258,7 @@ function parseExcel(filePath) {
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
   const qaReview = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
+  const qaRejected = qaRows.filter(r => r.status && r.status !== 'Accepted').length;
 
   // Section timing averages per enumerator
   const sectionFields = ['time_demo', 'time_priorities', 'time_mutualaid', 'time_access_trust', 'time_expectations', 'time_info', 'time_future'];
@@ -418,7 +419,7 @@ function parseExcel(filePath) {
 
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
-    qa: { rows: qaRows.slice(0, 1000), pass: qaPass, review: qaReview, fail: qaFail },
+    qa: { rows: qaRows.slice(0, 1000), pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
     sectionTimings, natTotals, genderTotals,
   };
 }
@@ -442,10 +443,11 @@ app.get('/api/data', requireAuth, async (req, res) => {
   if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
   // Apply manager approval overrides to QA rows
   const approvedRows = applyApprovals(cache.data.qa.rows);
-  const pass   = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
-  const review = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
-  const fail   = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail }, fetchedAt: cache.fetchedAt });
+  const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
+  const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
+  const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
+  const rejected = approvedRows.filter(r => r.status && r.status !== 'Accepted').length;
+  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
 app.post('/api/refresh', requireAuth, async (req, res) => {
