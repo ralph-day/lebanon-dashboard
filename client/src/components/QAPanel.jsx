@@ -145,26 +145,28 @@ export default function QAPanel({ qa: initialQa }) {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-wrap gap-2 items-center">
         <input
           type="text"
           placeholder="Search enumerator…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+          className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-48"
         />
-        {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL', '__REJECTED__'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`text-xs px-3 py-2 rounded-lg border transition-colors ${
-              filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {f === '__REJECTED__' ? '🚫 Rejected' : f}
-          </button>
-        ))}
-        <span className="text-sm text-slate-400 self-center">{filtered.length} surveys</span>
+        <div className="flex flex-wrap gap-2">
+          {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL', '__REJECTED__'].map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`text-xs px-3 py-2 rounded-lg border transition-colors ${
+                filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {f === '__REJECTED__' ? '🚫 Rejected' : f}
+            </button>
+          ))}
+        </div>
+        <span className="text-sm text-slate-400">{filtered.length} surveys</span>
       </div>
 
       {/* Rejected view explanation banner */}
@@ -179,16 +181,16 @@ export default function QAPanel({ qa: initialQa }) {
 
       {/* QA table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto -mx-0">
+          <table className="w-full text-sm" style={{ minWidth: '700px' }}>
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Date</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">App Time</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Survey Time</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">Enumerator</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Date</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">App Time</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Survey Time</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Flags</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">{filter === '__REJECTED__' ? 'Rejection Reason' : 'Status'}</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">{filter === '__REJECTED__' ? 'Rejection Reason' : 'Status'}</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Issues</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Action</th>
               </tr>
