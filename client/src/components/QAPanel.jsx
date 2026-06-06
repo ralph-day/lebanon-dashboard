@@ -33,7 +33,7 @@ export default function QAPanel({ qa: initialQa }) {
   const pass     = rows.filter(r => r.qaStatus === '✅ PASS').length
   const review   = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
   const fail     = rows.filter(r => r.qaStatus === '❌ FAIL').length
-  const rejected = rows.filter(r => r.status && r.status !== 'Accepted').length
+  const rejected = rows.filter(r => (r.status || '').trim().toLowerCase().includes('reject')).length
   const total    = rows.length
 
   const statCards = [
@@ -49,7 +49,7 @@ export default function QAPanel({ qa: initialQa }) {
 
   const filtered = rows.filter(r => {
     const matchFilter = filter === 'All'
-      || (filter === '__REJECTED__' ? (r.status && r.status !== 'Accepted') : r.qaStatus === filter)
+      || (filter === '__REJECTED__' ? (r.status || '').trim().toLowerCase().includes('reject') : r.qaStatus === filter)
     const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase())
     return matchFilter && matchSearch
   })

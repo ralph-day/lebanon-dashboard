@@ -53,7 +53,7 @@ function parseExcel(filePath) {
     const status = r.SurveyStatus_New || '';
     if (!loc) return;
     if (!rejByLoc[loc]) rejByLoc[loc] = 0;
-    if (status && status !== 'Accepted') rejByLoc[loc]++;
+    if (status.trim().toLowerCase().includes('reject')) rejByLoc[loc]++;
   });
   const dashboardSheet = XLSX.utils.sheet_to_json(wb.Sheets['Dashboard'], { header: 1 });
 
@@ -196,8 +196,9 @@ function parseExcel(filePath) {
     if (ts >= todayStart.getTime()) {
       if (!todayByName[r.name]) todayByName[r.name] = { accepted: 0, rejected: 0, total: 0 };
       todayByName[r.name].total++;
-      if (r.status === 'Accepted') todayByName[r.name].accepted++;
-      else if (r.status && r.status !== 'Accepted') todayByName[r.name].rejected++;
+      const st = (r.status || '').trim().toLowerCase();
+      if (st === 'accepted') todayByName[r.name].accepted++;
+      else if (st.includes('reject')) todayByName[r.name].rejected++;
     }
   });
 
