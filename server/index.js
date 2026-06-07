@@ -153,8 +153,16 @@ function requireAuth(req, res, next) {
 let cache = { data: null, fetchedAt: null };
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
+// ── Persistent data directory ─────────────────────────────────────────────────
+// On Railway: add a Volume mounted at /app/data and set DATA_DIR=/app/data
+// Locally: falls back to server/ directory (next to index.js)
+const DATA_DIR = process.env.DATA_DIR
+  ? (fs.mkdirSync(process.env.DATA_DIR, { recursive: true }), process.env.DATA_DIR)
+  : __dirname;
+console.log(`[data] Using data directory: ${DATA_DIR}`);
+
 // ── QA Approvals (persist to disk so overrides survive restarts) ──────────────
-const APPROVALS_PATH = path.join(__dirname, 'qa_approvals.json');
+const APPROVALS_PATH = path.join(DATA_DIR, 'qa_approvals.json');
 let approvedIds = new Set();
 try {
   if (fs.existsSync(APPROVALS_PATH)) {
@@ -592,7 +600,7 @@ async function parseExcel(filePath) {
 // Setup: sign up at green-api.com, create an instance, scan QR with your WhatsApp.
 // Add GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN to Railway env vars.
 
-const NOTIFICATIONS_PATH = path.join(__dirname, 'notifications.json');
+const NOTIFICATIONS_PATH = path.join(DATA_DIR, 'notifications.json');
 let sentAlerts = new Set();
 try {
   if (fs.existsSync(NOTIFICATIONS_PATH)) {
@@ -820,7 +828,7 @@ app.post('/api/qa/unapprove', requireAuth, requireQAApprover, (req, res) => {
 });
 
 // ── Notes (inline annotations) ───────────────────────────────────────────────
-const NOTES_PATH = path.join(__dirname, 'notes.json');
+const NOTES_PATH = path.join(DATA_DIR, 'notes.json');
 let notes = [];
 try { if (fs.existsSync(NOTES_PATH)) notes = JSON.parse(fs.readFileSync(NOTES_PATH, 'utf8')); } catch(e) { console.error('Could not load notes:', e.message); }
 function saveNotes() { try { atomicWrite(NOTES_PATH, JSON.stringify(notes, null, 2)); } catch(e) { console.error('Could not save notes:', e.message); } }
@@ -850,7 +858,7 @@ app.delete('/api/notes/:id', requireAuth, (req, res) => {
 });
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
-const TASKS_PATH = path.join(__dirname, 'tasks.json');
+const TASKS_PATH = path.join(DATA_DIR, 'tasks.json');
 let tasks = [];
 try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) { console.error('Could not load tasks:', e.message); }
 function saveTasks() { try { atomicWrite(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) { console.error('Could not save tasks:', e.message); } }
@@ -996,7 +1004,7 @@ Each object must have exactly these keys: title, description, type, priority, as
 });
 
 // ── Payments ─────────────────────────────────────────────────────────────────
-const PAYMENTS_PATH = path.join(__dirname, 'payments.json');
+const PAYMENTS_PATH = path.join(DATA_DIR, 'payments.json');
 let payments = { enumerators: [], coordination: [] };
 try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) { console.error('Could not load payments:', e.message); }
 function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
@@ -1067,7 +1075,7 @@ app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
 });
 
 // ── Location meta (responsible enumerators) ──────────────────────────────────
-const LOC_META_PATH = path.join(__dirname, 'location_meta.json');
+const LOC_META_PATH = path.join(DATA_DIR, 'location_meta.json');
 let locationMeta = {};
 try { if (fs.existsSync(LOC_META_PATH)) locationMeta = JSON.parse(fs.readFileSync(LOC_META_PATH, 'utf8')); } catch(e) { console.error('Could not load location_meta:', e.message); }
 function saveLocationMeta() { try { atomicWrite(LOC_META_PATH, JSON.stringify(locationMeta, null, 2)); } catch(e) { console.error('Could not save location_meta:', e.message); } }
