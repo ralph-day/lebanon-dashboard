@@ -282,6 +282,8 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Status</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Surveys</th>
+                <th className="text-center text-xs font-semibold text-emerald-600 uppercase tracking-wide px-3 py-2.5">Accepted</th>
+                <th className="text-center text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Rejected</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Avg (min)</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
@@ -307,6 +309,19 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                     {(() => { const s = enumStatus(e); return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${s.cls}`}>{s.label}</span> })()}
                   </td>
                   <td className="px-3 py-2.5 text-center text-blue-600 font-semibold">{e.totalSurveys}</td>
+                  {(() => {
+                    const rows = qaRows.filter(r => r.name === e.name)
+                    const acc = rows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
+                    const rej = rows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
+                    return (
+                      <>
+                        <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{acc || <span className="text-slate-300">—</span>}</td>
+                        <td className="px-3 py-2.5 text-center font-semibold">
+                          {rej > 0 ? <span className="text-red-500">{rej}</span> : <span className="text-slate-300">—</span>}
+                        </td>
+                      </>
+                    )
+                  })()}
                   <td className="px-3 py-2.5 text-center text-slate-600">{e.avgDuration != null ? parseFloat(e.avgDuration).toFixed(1) : '—'}</td>
                   <td className="px-3 py-2.5 text-center text-slate-500">{e.minDuration != null ? parseFloat(e.minDuration).toFixed(1) : '—'}</td>
                   <td className="px-3 py-2.5 text-center text-slate-500">{e.maxDuration != null ? parseFloat(e.maxDuration).toFixed(1) : '—'}</td>
