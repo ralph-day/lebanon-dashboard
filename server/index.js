@@ -586,6 +586,130 @@ async function parseExcel(filePath) {
   };
 }
 
+// ── WhatsApp Notifications via Green API ─────────────────────────────────────
+// Setup: sign up at green-api.com, create an instance, scan QR with your WhatsApp.
+// Add GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN to Railway env vars.
+
+const NOTIFICATIONS_PATH = path.join(__dirname, 'notifications.json');
+let sentAlerts = new Set();
+try {
+  if (fs.existsSync(NOTIFICATIONS_PATH)) {
+    const saved = JSON.parse(fs.readFileSync(NOTIFICATIONS_PATH, 'utf8'));
+    sentAlerts = new Set(saved);
+    console.log(`Loaded ${sentAlerts.size} sent alert keys`);
+  }
+} catch(e) { console.error('Could not load notifications:', e.message); }
+
+function saveNotifications() {
+  try { atomicWrite(NOTIFICATIONS_PATH, JSON.stringify([...sentAlerts])); } catch(e) { console.error('Could not save notifications:', e.message); }
+}
+
+// Format phone for Green API: strip leading zeros/+ and append @c.us
+function toWaId(phone) {
+  const digits = String(phone).replace(/\D/g, '');
+  // If already starts with country code (961...) use as-is, else prepend 961
+  const full = digits.startsWith('961') ? digits : `961${digits}`;
+  return `${full}@c.us`;
+}
+
+async function sendWhatsApp(phone, message) {
+  const instanceId = process.env.GREENAPI_INSTANCE_ID;
+  const apiToken   = process.env.GREENAPI_API_TOKEN;
+  if (!instanceId || !apiToken) return; // silently skip if not configured
+  const chatId = toWaId(phone);
+  const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatId, message }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`[WhatsApp] Failed to send to ${chatId}: ${err}`);
+    } else {
+      console.log(`[WhatsApp] Sent to ${chatId}`);
+    }
+  } catch(e) {
+    console.error(`[WhatsApp] Network error sending to ${chatId}:`, e.message);
+  }
+}
+
+// Arabic flag type translations
+const AR_TYPE = {
+  'Failed Survey':     'استبيان مرفوض',
+  'Too Fast':          'سرعة مفرطة في الإجابة',
+  'Missing GPS':       'بيانات الموقع (GPS) مفقودة',
+  'Suspicious Pattern':'نمط إجابات مشبوه',
+};
+
+function buildEnumeratorMessage(anomaly) {
+  const firstName = anomaly.name.split(' ')[0];
+  const lines = [
+    `⚠️ تنبيه - مراقبة جودة الاستبيانات`,
+    ``,
+    `مرحباً ${firstName}،`,
+    ``,
+    `تم رصد المشكلات التالية في استبياناتك الأخيرة:`,
+  ];
+  [...anomaly.critical, ...anomaly.warnings].forEach(item => {
+    const typeAr = AR_TYPE[item.type] || item.type;
+    lines.push(`• ${typeAr}`);
+    if (item.detail) lines.push(`  ${item.detail}`);
+  });
+  lines.push(``, `يرجى مراجعة أسلوب العمل فوراً والتواصل مع منسقة الميدان.`);
+  lines.push(``, `- فريق إنفلوانسرز 🇱🇧`);
+  return lines.join('\n');
+}
+
+function buildManagerMessage(anomaly) {
+  const lines = [
+    `⚠️ تنبيه ميداني - نظام رصد المسح`,
+    ``,
+    `المستطلِع: ${anomaly.name}`,
+    `عدد المشكلات: ${anomaly.totalIssues} (حرجة: ${anomaly.critical.length} / تحذيرات: ${anomaly.warnings.length})`,
+    ``,
+  ];
+  [...anomaly.critical, ...anomaly.warnings].forEach(item => {
+    const typeAr = AR_TYPE[item.type] || item.type;
+    lines.push(`• ${typeAr}: ${item.detail || ''}`);
+  });
+  lines.push(``, `يرجى المتابعة مع المستطلع.`);
+  return lines.join('\n');
+}
+
+const NISRINE_PHONE = process.env.NISRINE_PHONE || '96130466612'; // +961 3 046 612
+
+async function notifyAnomalies(anomalies) {
+  if (!process.env.GREENAPI_INSTANCE_ID) return; // skip if not configured
+  let newAlerts = 0;
+  for (const anomaly of anomalies) {
+    // Key = enumerator + latest issue timestamp — changes when new issues arrive
+    const alertKey = `${anomaly.name}::${anomaly.latestAt}`;
+    if (sentAlerts.has(alertKey)) continue;
+
+    console.log(`[WhatsApp] New alert for ${anomaly.name} — sending notifications`);
+
+    // Message to enumerator
+    if (anomaly.phone) {
+      await sendWhatsApp(anomaly.phone, buildEnumeratorMessage(anomaly));
+    }
+
+    // Message to field manager (Nisrine)
+    await sendWhatsApp(NISRINE_PHONE, buildManagerMessage(anomaly));
+
+    sentAlerts.add(alertKey);
+    newAlerts++;
+
+    // Small delay between messages to avoid rate limiting
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (newAlerts > 0) {
+    saveNotifications();
+    console.log(`[WhatsApp] Sent ${newAlerts} new alert(s)`);
+  }
+}
+
 let _refreshing = false;
 async function refreshCache() {
   if (_refreshing) return; // prevent concurrent refreshes corrupting tmp_data.xlsx
@@ -595,6 +719,8 @@ async function refreshCache() {
     const parsed = await parseExcel(filePath);
     cache = { data: { ...parsed, filename, modifiedTime }, fetchedAt: new Date().toISOString() };
     console.log(`[${new Date().toISOString()}] Data refreshed from: ${filename}`);
+    // Fire-and-forget anomaly notifications (don't block the cache update)
+    notifyAnomalies(parsed.anomalies || []).catch(e => console.error('[WhatsApp] Notify error:', e.message));
   } catch (err) {
     console.error('Cache refresh error:', err.message);
   } finally {
@@ -639,6 +765,19 @@ app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
   await refreshCache();
   if (!cache.data) return res.status(503).json({ error: 'Refresh failed' });
   res.json({ ok: true, fetchedAt: cache.fetchedAt });
+});
+
+// Manually trigger WhatsApp alerts for current anomalies (QA approver only)
+app.post('/api/notify/test', requireAuth, requireQAApprover, async (req, res) => {
+  if (!process.env.GREENAPI_INSTANCE_ID) {
+    return res.status(503).json({ error: 'WhatsApp not configured — set GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN in Railway' });
+  }
+  if (!cache.data) return res.status(503).json({ error: 'No data in cache yet' });
+  // Clear sent cache so all current alerts fire
+  const { force } = req.body;
+  if (force) sentAlerts.clear();
+  await notifyAnomalies(cache.data.anomalies || []);
+  res.json({ ok: true, anomalies: cache.data.anomalies?.length || 0 });
 });
 
 // Server-side QA approver allowlist (mirrors client-side check)
