@@ -99,7 +99,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       : paid >= owed && owed > 0 ? 'Paid'
       : paid > 0 ? 'Partial' : 'Pending'
     )
-    return { name: e.name, code, accepted, rejected, totalSubmitted, participantCost, rate, owed, paid, balance, status, notes: stored.notes || '' }
+    return { name: e.name, code, accepted, rejected, participantCost, rate, owed, paid, balance, status, notes: stored.notes || '' }
   }), [enumerators, qaByCode, payments])
 
   async function patchEnum(code, patch) {
