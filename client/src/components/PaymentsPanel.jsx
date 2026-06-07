@@ -89,7 +89,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     // QA rows are capped at 2000 most recent so they can undercount
     const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
 
-    const rate = parseFloat(stored.ratePerSurvey) ?? DEFAULT_ENUM_RATE
+    const rate = parseFloat(stored.ratePerSurvey) || 0
     const owed = accepted * rate
     const paid = parseFloat(stored.amountPaid) || 0
     const balance = owed - paid
@@ -149,11 +149,6 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     const res = await fetch(`/api/payments/coordination/${id}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) return
     setPayments(prev => ({ ...prev, coordination: prev.coordination.filter(e => e.id !== id) }))
-  }
-
-  async function applyDefaultRate() {
-    const toUpdate = enumRows.filter(r => !payments.enumerators.find(p => p.code === r.code && p.ratePerSurvey))
-    await Promise.all(toUpdate.map(r => patchEnum(r.code, { ratePerSurvey: DEFAULT_ENUM_RATE })))
   }
 
   // Summary totals
@@ -231,14 +226,8 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       {/* ── Enumerators table ─────────────────────────────────────────────────── */}
       {activeSection === 'enumerators' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-4">
-            <p className="text-xs text-slate-400">Click any rate or amount to edit · Rate is per <strong>accepted</strong> survey · Participant cost = total surveys × $8/respondent</p>
-            {enumRows.some(r => !payments.enumerators.find(p => p.code === r.code && p.ratePerSurvey)) && (
-              <button onClick={applyDefaultRate}
-                className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-                Apply $7 to all
-              </button>
-            )}
+          <div className="px-5 py-3 border-b border-slate-100">
+            <p className="text-xs text-slate-400">Click <strong>Rate / Survey</strong> to set each enumerator's rate manually · Rate is per <strong>accepted</strong> survey · Participant cost = total surveys × $8/respondent</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: 900 }}>
@@ -295,11 +284,13 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                     </td>
                     {/* Balance */}
                     <td className="px-3 py-3 text-center">
-                      {r.balance > 0
-                        ? <span className="font-semibold text-amber-600">{currency(r.balance)}</span>
-                        : r.balance < 0
-                          ? <span className="font-semibold text-blue-500">{currency(Math.abs(r.balance))} over</span>
-                          : <span className="text-emerald-500 font-semibold">✓ Settled</span>}
+                      {r.owed === 0 && r.paid === 0
+                        ? <span className="text-slate-300">—</span>
+                        : r.balance > 0
+                          ? <span className="font-semibold text-amber-600">{currency(r.balance)}</span>
+                          : r.balance < 0
+                            ? <span className="font-semibold text-blue-500">{currency(Math.abs(r.balance))} over</span>
+                            : <span className="text-emerald-500 font-semibold">✓ Settled</span>}
                     </td>
                     {/* Status */}
                     <td className="px-3 py-3 text-center">
