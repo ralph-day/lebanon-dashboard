@@ -32,9 +32,10 @@ function SectionCell({ value, min }) {
 // ── Enumerator detail subpage ─────────────────────────────────────────────────
 function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack }) {
   const myRows = qaRows.filter(r => r.name === e.name)
-  const pass   = myRows.filter(r => r.qaStatus === '✅ PASS').length
-  const review = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
-  const fail   = myRows.filter(r => r.qaStatus === '❌ FAIL').length
+  const pass    = myRows.filter(r => r.qaStatus === '✅ PASS').length
+  const review  = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
+  const fail    = myRows.filter(r => r.qaStatus === '❌ FAIL').length
+  const pending = myRows.length - pass - review - fail
   const total50 = myRows.length || 1
 
   // Recent 15 survey durations for bar chart
@@ -133,11 +134,12 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
         {/* Survey Quality last 50 */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h3 className="text-sm font-semibold text-slate-700 mb-4">Survey Quality ({myRows.length} surveys)</h3>
-          <div className="flex gap-6 mb-4">
+          <div className="flex gap-5 mb-4 flex-wrap">
             {[
-              { label: 'Pass', value: pass, color: 'text-emerald-600', icon: '✅' },
-              { label: 'Review', value: review, color: 'text-yellow-600', icon: '⚠️' },
-              { label: 'Fail', value: fail, color: 'text-red-600', icon: '❌' },
+              { label: 'Pass',    value: pass,    color: 'text-emerald-600', icon: '✅' },
+              { label: 'Review',  value: review,  color: 'text-yellow-600',  icon: '⚠️' },
+              { label: 'Fail',    value: fail,    color: 'text-red-600',     icon: '❌' },
+              ...(pending > 0 ? [{ label: 'Pending', value: pending, color: 'text-slate-400', icon: '⏳' }] : []),
             ].map(s => (
               <div key={s.label} className="text-center">
                 <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -150,6 +152,7 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
             <div className="bg-emerald-400 transition-all" style={{ width: `${pass / total50 * 100}%` }} />
             <div className="bg-yellow-400 transition-all" style={{ width: `${review / total50 * 100}%` }} />
             <div className="bg-red-400 transition-all" style={{ width: `${fail / total50 * 100}%` }} />
+            <div className="bg-slate-200 transition-all" style={{ width: `${pending / total50 * 100}%` }} />
           </div>
         </div>
 
