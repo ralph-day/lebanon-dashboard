@@ -90,6 +90,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
 
     const rate = parseFloat(stored.ratePerSurvey) || 0
+    const otherCosts = parseFloat(stored.otherCosts) || 0
     const owed = accepted * rate
     const paid = parseFloat(stored.amountPaid) || 0
     const balance = owed - paid
@@ -99,7 +100,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       : paid >= owed && owed > 0 ? 'Paid'
       : paid > 0 ? 'Partial' : 'Pending'
     )
-    return { name: e.name, code, accepted, rejected, participantCost, rate, owed, paid, balance, status, notes: stored.notes || '' }
+    return { name: e.name, code, accepted, rejected, participantCost, rate, otherCosts, owed, paid, balance, status, notes: stored.notes || '' }
   }), [enumerators, qaByCode, payments])
 
   async function patchEnum(code, patch) {
@@ -238,6 +239,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                   <th className="text-center text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Rejected</th>
                   <th className="text-center text-xs font-semibold text-purple-600 uppercase tracking-wide px-3 py-2.5">Part. Cost</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Rate / Survey</th>
+                  <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Other Costs</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Total Owed</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Amount Paid</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Balance</th>
@@ -272,6 +274,11 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                     <td className="px-3 py-3 text-center">
                       <EditableCell value={r.rate} prefix="$"
                         onSave={v => patchEnum(r.code, { ratePerSurvey: parseFloat(v) || 0 })} />
+                    </td>
+                    {/* Other costs */}
+                    <td className="px-3 py-3 text-center">
+                      <EditableCell value={r.otherCosts} prefix="$"
+                        onSave={v => patchEnum(r.code, { otherCosts: parseFloat(v) || 0 })} />
                     </td>
                     {/* Total owed */}
                     <td className="px-3 py-3 text-center font-semibold text-slate-700">
