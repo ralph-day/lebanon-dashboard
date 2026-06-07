@@ -69,14 +69,15 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     const code = e.name.match(/\((\w+)\)/)?.[1] || e.name
     const stored = payments.enumerators.find(p => p.code === code) || {}
 
-    // Count accepted / rejected from live QA rows
+    // Count accepted / rejected from live QA rows using SurveyStatus_New (r.status)
+    // This matches the server's own rejected count logic
     const myRows = qaRows.filter(r => {
       const rowCode = r.name?.match(/\((\w+)\)/)?.[1] || ''
       return rowCode === code
     })
-    const accepted = myRows.filter(r => r.qaStatus === '✅ PASS').length
-    const rejected = myRows.filter(r => r.qaStatus === '❌ FAIL').length
-    const totalSubmitted = accepted + rejected
+    const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
+    const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
+    const totalSubmitted = myRows.length  // every row = a participant was interviewed
 
     const rate = parseFloat(stored.ratePerSurvey) ?? DEFAULT_ENUM_RATE
     const owed = accepted * rate

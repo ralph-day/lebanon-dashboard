@@ -32,10 +32,11 @@ function SectionCell({ value, min }) {
 // ── Enumerator detail subpage ─────────────────────────────────────────────────
 function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack }) {
   const myRows = qaRows.filter(r => r.name === e.name)
-  const pass    = myRows.filter(r => r.qaStatus === '✅ PASS').length
+  // Use SurveyStatus_New (r.status) to match the server's accepted/rejected logic
+  const pass    = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
+  const fail    = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
   const review  = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
-  const fail    = myRows.filter(r => r.qaStatus === '❌ FAIL').length
-  const pending = myRows.length - pass - review - fail
+  const pending = myRows.length - pass - fail
   const total50 = myRows.length || 1
 
   // Recent 15 survey durations for bar chart

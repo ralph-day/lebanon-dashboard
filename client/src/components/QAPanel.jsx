@@ -246,17 +246,19 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
             />
           </div>
 
-          {/* Clear filters */}
-          {(searchName || searchDistrict !== 'All' || searchLocation !== 'All' || dateFrom || dateTo) && (
-            <div className="flex items-end">
-              <button
-                onClick={() => { setSearchName(''); setSearchDistrict('All'); setSearchLocation('All'); setDateFrom(''); setDateTo('') }}
-                className="text-xs text-slate-400 hover:text-red-500 border border-slate-200 rounded-lg px-3 py-2 transition-colors whitespace-nowrap"
-              >
-                ✕ Clear
-              </button>
-            </div>
-          )}
+          {/* Clear filters — always visible */}
+          <div className="flex items-end">
+            <button
+              onClick={() => { setSearchName(''); setSearchDistrict('All'); setSearchLocation('All'); setDateFrom(''); setDateTo('') }}
+              className={`text-xs border rounded-lg px-3 py-2 transition-colors whitespace-nowrap ${
+                (searchName || searchDistrict !== 'All' || searchLocation !== 'All' || dateFrom || dateTo)
+                  ? 'text-red-500 border-red-200 hover:bg-red-50'
+                  : 'text-slate-300 border-slate-200 cursor-default'
+              }`}
+            >
+              ✕ Remove filters
+            </button>
+          </div>
         </div>
       </div>
 

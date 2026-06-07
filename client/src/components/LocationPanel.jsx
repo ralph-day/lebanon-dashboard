@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import LebanonMap from './LebanonMap'
 import NotesBubble from './NotesBubble'
 
@@ -31,10 +31,62 @@ function StatusBadge({ status }) {
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{s || 'Unknown'}</span>
 }
 
+// Inline editable responsible field
+function ResponsibleCell({ code, value, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(value || '')
+  const inputRef              = useRef(null)
+
+  function commit() {
+    setEditing(false)
+    if (draft !== (value || '')) onSave(draft)
+  }
+
+  useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
+
+  if (editing) return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value || ''); setEditing(false) } }}
+      placeholder="e.g. Ahmad Z., Hanan I."
+      className="w-full border border-blue-400 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+    />
+  )
+
+  return (
+    <button onClick={() => { setDraft(value || ''); setEditing(true) }}
+      className="text-left w-full text-xs text-slate-600 hover:text-blue-600 hover:underline cursor-pointer leading-tight">
+      {value ? value : <span className="text-slate-300 italic">Add names…</span>}
+    </button>
+  )
+}
+
 export default function LocationPanel({ locations, notes = [], onNoteAdded, onNoteDeleted }) {
   const [filterRegion, setFilterRegion] = useState('All')
   const [filterType, setFilterType]     = useState('All')
   const [search, setSearch]             = useState('')
+  const [locationMeta, setLocationMeta] = useState({})
+
+  useEffect(() => {
+    fetch('/api/location-meta', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : {})
+      .then(setLocationMeta)
+      .catch(() => {})
+  }, [])
+
+  async function saveResponsible(code, responsible) {
+    const res = await fetch(`/api/location-meta/${code}`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ responsible }),
+    })
+    if (res.ok) {
+      setLocationMeta(prev => ({ ...prev, [code]: { ...(prev[code] || {}), responsible } }))
+    }
+  }
   const [showMap, setShowMap]           = useState(false)
   const [expandedDistricts, setExpandedDistricts] = useState(new Set())
   const [sortBy, setSortBy]             = useState('accepted') // accepted | region
@@ -145,7 +197,7 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
       {/* District-grouped table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-13 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr'}}>
+        <div className="grid grid-cols-13 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr 2fr'}}>
           <div>District / Location</div>
           <div className="text-center">Target</div>
           <div className="text-center">Accepted</div>
@@ -153,6 +205,8 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
           <div className="text-center text-red-400">Rejected</div>
           <div>Progress</div>
           <div className="text-center">Status</div>
+          <div></div>
+          <div>Enumerator Responsible</div>
         </div>
 
         {districtRows.length === 0 && (
@@ -162,7 +216,7 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
         {districtRows.map(({ key, group, region, locations, target, accepted, remaining, pct, hasPalestinian }) => {
           const isExpanded = expandedDistricts.has(key)
           const rejected = locations.reduce((s, l) => s + (l.rejected || 0), 0)
-          const gridStyle = {gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr'}
+          const gridStyle = {gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr 2fr'}
           return (
             <div key={key} className="border-b border-slate-100 last:border-0">
               {/* District row */}
@@ -198,6 +252,7 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
                     {pct >= 1 ? 'Complete' : pct >= 0.9 ? 'On Track' : pct >= 0.5 ? 'In Progress' : pct > 0 ? 'Started' : 'Not Started'}
                   </span>
                 </div>
+                <div /><div />
               </button>
 
               {/* Sub-locality rows */}
@@ -211,6 +266,8 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
                     <div className="text-center text-red-300">Rejected</div>
                     <div>Progress</div>
                     <div className="text-center">Status</div>
+                    <div></div>
+                    <div>Enumerator Responsible</div>
                   </div>
                   {locations.map((loc, i) => {
                     const locRejected = loc.rejected || 0
@@ -229,6 +286,14 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
                         </div>
                         <div className="self-center"><ProgressBar pct={loc.pctComplete} /></div>
                         <div className="self-center text-center"><StatusBadge status={loc.status} /></div>
+                        <div></div>
+                        <div className="self-center">
+                          <ResponsibleCell
+                            code={loc.code}
+                            value={locationMeta[loc.code]?.responsible || ''}
+                            onSave={v => saveResponsible(loc.code, v)}
+                          />
+                        </div>
                       </div>
                     )
                   })}

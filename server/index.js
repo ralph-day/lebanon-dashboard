@@ -1064,6 +1064,24 @@ app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Location meta (responsible enumerators) ──────────────────────────────────
+const LOC_META_PATH = path.join(__dirname, 'location_meta.json');
+let locationMeta = {};
+try { if (fs.existsSync(LOC_META_PATH)) locationMeta = JSON.parse(fs.readFileSync(LOC_META_PATH, 'utf8')); } catch(e) { console.error('Could not load location_meta:', e.message); }
+function saveLocationMeta() { try { atomicWrite(LOC_META_PATH, JSON.stringify(locationMeta, null, 2)); } catch(e) { console.error('Could not save location_meta:', e.message); } }
+
+app.get('/api/location-meta', requireAuth, (req, res) => res.json(locationMeta));
+
+app.patch('/api/location-meta/:code', requireAuth, (req, res) => {
+  const { code } = req.params;
+  const { responsible } = req.body;
+  if (typeof responsible !== 'string') return res.status(400).json({ error: 'responsible must be a string' });
+  if (!locationMeta[code]) locationMeta[code] = {};
+  locationMeta[code].responsible = responsible;
+  saveLocationMeta();
+  res.json({ code, responsible });
+});
+
 // Serve built client in production
 if (process.env.NODE_ENV === 'production') {
   const clientBuild = path.join(__dirname, '../client/dist');
