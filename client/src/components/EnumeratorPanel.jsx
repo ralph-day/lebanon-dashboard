@@ -213,6 +213,20 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
   const [selected, setSelected] = useState(null)
   const sorted = [...enumerators].sort((a, b) => b.totalSurveys - a.totalSurveys)
 
+  function enumStatus(e) {
+    const codeMatch = e.name.match(/\((\w+)\)/)
+    const code = codeMatch ? codeMatch[1] : ''
+    const a = assignments.find(x => x.code === code)
+    if (!a && e.totalSurveys === 0) return { label: 'Not Started', cls: 'bg-slate-100 text-slate-400' }
+    if (a?.isActive)     return { label: '● Active',     cls: 'bg-emerald-100 text-emerald-700' }
+    const pct = a?.pct || 0
+    if (pct >= 1)        return { label: 'Complete',     cls: 'bg-blue-100 text-blue-700' }
+    if (pct >= 0.75)     return { label: 'On Track',     cls: 'bg-cyan-100 text-cyan-700' }
+    if (pct >= 0.3)      return { label: 'In Progress',  cls: 'bg-amber-100 text-amber-700' }
+    if (e.totalSurveys > 0) return { label: 'Behind',   cls: 'bg-red-100 text-red-600' }
+    return { label: 'Not Started', cls: 'bg-slate-100 text-slate-400' }
+  }
+
   // Build chart data
   const chartData = sorted.map(e => ({
     name: e.name.split('(')[0].trim(),
@@ -266,6 +280,7 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Status</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Surveys</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Avg (min)</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
@@ -287,6 +302,9 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                     <svg className="w-3.5 h-3.5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
+                  </td>
+                  <td className="px-3 py-2.5 text-center" onClick={ev => ev.stopPropagation()}>
+                    {(() => { const s = enumStatus(e); return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${s.cls}`}>{s.label}</span> })()}
                   </td>
                   <td className="px-3 py-2.5 text-center text-blue-600 font-semibold">{e.totalSurveys}</td>
                   <td className="px-3 py-2.5 text-center text-slate-600">{e.avgDuration != null ? parseFloat(e.avgDuration).toFixed(1) : '—'}</td>
