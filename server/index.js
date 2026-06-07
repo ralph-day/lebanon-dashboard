@@ -1005,8 +1005,22 @@ Each object must have exactly these keys: title, description, type, priority, as
 
 // ── Payments ─────────────────────────────────────────────────────────────────
 const PAYMENTS_PATH = path.join(DATA_DIR, 'payments.json');
-let payments = { enumerators: [], coordination: [], saveLog: [] };
-try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) { console.error('Could not load payments:', e.message); }
+const DEFAULT_FLAT_FEES = [
+  { id: 'org-jafra',      name: 'Jafra',       role: 'Organisation', amount: 1000, amountPaid: 0, status: 'Pending' },
+  { id: 'coord-alaa',     name: 'Alaa Abbas',   role: 'Coordinator',  amount: 800,  amountPaid: 0, status: 'Pending' },
+];
+let payments = { enumerators: [], coordination: [], flatFees: DEFAULT_FLAT_FEES, saveLog: [] };
+try {
+  if (fs.existsSync(PAYMENTS_PATH)) {
+    const saved = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8'));
+    payments = saved;
+    // Ensure flatFees array exists and all defaults are present (upsert by id)
+    if (!payments.flatFees) payments.flatFees = [];
+    DEFAULT_FLAT_FEES.forEach(def => {
+      if (!payments.flatFees.find(f => f.id === def.id)) payments.flatFees.push({ ...def });
+    });
+  }
+} catch(e) { console.error('Could not load payments:', e.message); }
 function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
 
 // GET all payments
@@ -1086,6 +1100,23 @@ app.post('/api/payments/save', requireAuth, (req, res) => {
   payments.saveLog = payments.saveLog.slice(0, 10); // keep last 10
   savePayments();
   res.json({ ok: true, saveLog: payments.saveLog });
+});
+
+// PATCH flat fee (org/coordinator fixed fees)
+app.patch('/api/payments/flat-fee/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  if (!payments.flatFees) payments.flatFees = [];
+  const idx = payments.flatFees.findIndex(f => f.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  const { amountPaid, status, notes, amount } = req.body;
+  const patch = { updatedAt: new Date().toISOString() };
+  if (amountPaid !== undefined) patch.amountPaid = Math.max(0, parseFloat(amountPaid) || 0);
+  if (amount     !== undefined) patch.amount     = Math.max(0, parseFloat(amount)     || 0);
+  if (status     !== undefined) patch.status     = ['Pending','Partial','Paid'].includes(status) ? status : 'Pending';
+  if (notes      !== undefined) patch.notes      = String(notes).substring(0, 500);
+  payments.flatFees[idx] = { ...payments.flatFees[idx], ...patch };
+  savePayments();
+  res.json(payments.flatFees[idx]);
 });
 
 // ── Location meta (responsible enumerators) ──────────────────────────────────
