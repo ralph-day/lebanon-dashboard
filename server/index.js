@@ -544,10 +544,12 @@ async function parseExcel(filePath) {
     const flagList = [r.tooFast, r.belowRange, r.missingGPS].filter(f => f && f.startsWith('✗')).join(', ');
     addAnomaly(r.name, 'critical', 'Failed Survey', `Rejected — ${flagList || `${r.totalFlags} flag(s)`}`, r.submissionDate);
   });
-  qaRows.filter(r => r.tooFast === '✗ Too Fast').forEach(r => {
+  // Only warn for Too Fast / Missing GPS on surveys that are NOT already a FAIL
+  // (FAIL surveys already list their flags under the critical entry above)
+  qaRows.filter(r => r.tooFast === '✗ Too Fast' && r.qaStatus !== '❌ FAIL').forEach(r => {
     addAnomaly(r.name, 'warning', 'Too Fast', `Completed in ${parseFloat(r.fullTime || 0).toFixed(1)} min — below minimum`, r.submissionDate);
   });
-  qaRows.filter(r => r.missingGPS === '✗ Missing GPS').forEach(r => {
+  qaRows.filter(r => r.missingGPS === '✗ Missing GPS' && r.qaStatus !== '❌ FAIL').forEach(r => {
     addAnomaly(r.name, 'warning', 'Missing GPS', 'No location data recorded', r.submissionDate);
   });
 
