@@ -12,13 +12,36 @@ const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Da
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
 
-function TeamHub({ user, enumerators, qaRows, onUnauth }) {
-  const [teamTab, setTeamTab] = useState('tasks')
+// Map tab names ↔ URL hash slugs
+const TAB_TO_SLUG = {
+  'Overview': 'overview',
+  'Field Progress': 'field-progress',
+  'Locations': 'locations',
+  'Enumerators': 'enumerators',
+  'Data Quality': 'data-quality',
+  'Team': 'team',
+}
+const SLUG_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_SLUG).map(([k, v]) => [v, k]))
+
+function parseHash() {
+  const raw = window.location.hash.replace(/^#\/?/, '') // e.g. "team/payments"
+  const [tabSlug, subSlug] = raw.split('/')
+  return { tabSlug: tabSlug || 'overview', subSlug: subSlug || null }
+}
+
+function TeamHub({ user, enumerators, qaRows, onUnauth, initialSubTab }) {
+  const [teamTab, setTeamTab] = useState(initialSubTab || 'tasks')
+
+  function switchTeamTab(key) {
+    setTeamTab(key)
+    window.history.replaceState(null, '', `#team/${key}`)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex gap-2 border-b border-slate-200 pb-0">
         {[['tasks', '📋 Task Board'], ['payments', '💰 Payments']].map(([key, label]) => (
-          <button key={key} onClick={() => setTeamTab(key)}
+          <button key={key} onClick={() => switchTeamTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${teamTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {label}
           </button>
@@ -37,7 +60,21 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
   const canApproveQA  = user?.email === QA_ALLOWED_EMAIL
   const canAccessTeam = TEAM_ALLOWED_EMAILS.includes(user?.email)
   const TABS = canAccessTeam ? [...BASE_TABS, 'Team'] : BASE_TABS
-  const [activeTab, setActiveTab] = useState('Overview')
+
+  // Initialise active tab from URL hash
+  const [activeTab, setActiveTab] = useState(() => {
+    const { tabSlug } = parseHash()
+    const tab = SLUG_TO_TAB[tabSlug]
+    if (tab === 'Team' && !TEAM_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
+    return tab || 'Overview'
+  })
+  const [initialTeamSubTab, setInitialTeamSubTab] = useState(() => parseHash().subSlug || 'tasks')
+
+  function switchTab(tab) {
+    setActiveTab(tab)
+    const slug = TAB_TO_SLUG[tab] || 'overview'
+    window.history.replaceState(null, '', `#${slug}`)
+  }
   const [notes, setNotes]         = useState([])
 
   useEffect(() => {
@@ -126,7 +163,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
           {TABS.map(tab => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => switchTab(tab)}
               className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
                   ? 'border-blue-600 text-blue-600'
@@ -163,7 +200,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
             {activeTab === 'Locations'     && <LocationPanel locations={data.locations} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
-            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} />}
+            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} initialSubTab={initialTeamSubTab} />}
           </>
         )}
       </main>

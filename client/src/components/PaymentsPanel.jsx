@@ -56,12 +56,14 @@ const PARTICIPANT_RATE = 8   // $8 paid to each respondent on the spot
 const DEFAULT_ENUM_RATE = 7  // $7 per accepted survey for the enumerator
 
 export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUser }) {
-  const [payments, setPayments] = useState({ enumerators: [], coordination: [] })
+  const [payments, setPayments] = useState({ enumerators: [], coordination: [], saveLog: [] })
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState('enumerators')
   const [showCoordForm, setShowCoordForm] = useState(false)
   const [coordForm, setCoordForm] = useState({ name: '', role: '', amount: '', period: '', notes: '' })
   const [saving, setSaving] = useState(false)
+  const [savingCheckpoint, setSavingCheckpoint] = useState(false)
+  const [showLog, setShowLog] = useState(false)
 
   useEffect(() => {
     fetch('/api/payments', { credentials: 'include' })
@@ -155,6 +157,16 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     setPayments(prev => ({ ...prev, coordination: prev.coordination.filter(e => e.id !== id) }))
   }
 
+  async function saveCheckpoint() {
+    setSavingCheckpoint(true)
+    try {
+      const res = await fetch('/api/payments/save', { method: 'POST', credentials: 'include' })
+      if (!res.ok) return
+      const { saveLog } = await res.json()
+      setPayments(prev => ({ ...prev, saveLog }))
+    } finally { setSavingCheckpoint(false) }
+  }
+
   // Summary totals
   const enumTotalOwed        = enumRows.reduce((s, r) => s + r.owed, 0)
   const enumTotalPaid        = enumRows.reduce((s, r) => s + r.paid, 0)
@@ -170,20 +182,48 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-slate-800">Payments</h2>
           <p className="text-xs text-slate-400 mt-0.5">Track enumerator and coordination payments</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setActiveSection('enumerators')}
-            className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${activeSection === 'enumerators' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            Enumerators
-          </button>
-          <button onClick={() => setActiveSection('coordination')}
-            className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${activeSection === 'coordination' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-            Coordination
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Save button + log */}
+          <div className="relative">
+            <button onClick={saveCheckpoint} disabled={savingCheckpoint}
+              className="flex items-center gap-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium px-4 py-2 rounded-lg transition-colors">
+              {savingCheckpoint ? '…' : '💾'} Save
+            </button>
+          </div>
+          {(payments.saveLog?.length > 0) && (
+            <div className="relative">
+              <button onClick={() => setShowLog(v => !v)}
+                className="text-xs text-slate-400 hover:text-slate-600 border border-slate-200 rounded-lg px-3 py-2 transition-colors whitespace-nowrap">
+                Last saved by <strong>{payments.saveLog[0].savedBy}</strong> · {new Date(payments.saveLog[0].savedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </button>
+              {showLog && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 w-72 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Save History</p>
+                  {payments.saveLog.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs text-slate-600">
+                      <span className="font-medium">{s.savedBy}</span>
+                      <span className="text-slate-400">{new Date(s.savedAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => setActiveSection('enumerators')}
+              className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${activeSection === 'enumerators' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              Enumerators
+            </button>
+            <button onClick={() => setActiveSection('coordination')}
+              className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${activeSection === 'coordination' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              Coordination
+            </button>
+          </div>
         </div>
       </div>
 

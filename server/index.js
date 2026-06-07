@@ -1005,7 +1005,7 @@ Each object must have exactly these keys: title, description, type, priority, as
 
 // ── Payments ─────────────────────────────────────────────────────────────────
 const PAYMENTS_PATH = path.join(DATA_DIR, 'payments.json');
-let payments = { enumerators: [], coordination: [] };
+let payments = { enumerators: [], coordination: [], saveLog: [] };
 try { if (fs.existsSync(PAYMENTS_PATH)) payments = JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8')); } catch(e) { console.error('Could not load payments:', e.message); }
 function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
 
@@ -1072,6 +1072,20 @@ app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
   payments.coordination = payments.coordination.filter(e => e.id !== req.params.id);
   savePayments();
   res.json({ ok: true });
+});
+
+// POST save checkpoint — records who saved and when (last 10 entries kept)
+app.post('/api/payments/save', requireAuth, (req, res) => {
+  const entry = {
+    savedBy: req.session.user.name || req.session.user.email,
+    email: req.session.user.email,
+    savedAt: new Date().toISOString(),
+  };
+  if (!payments.saveLog) payments.saveLog = [];
+  payments.saveLog.unshift(entry);
+  payments.saveLog = payments.saveLog.slice(0, 10); // keep last 10
+  savePayments();
+  res.json({ ok: true, saveLog: payments.saveLog });
 });
 
 // ── Location meta (responsible enumerators) ──────────────────────────────────
