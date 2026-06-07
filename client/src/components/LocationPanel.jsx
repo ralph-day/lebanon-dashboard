@@ -31,6 +31,75 @@ function StatusBadge({ status }) {
   return <span className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${cls}`}>{s || 'Unknown'}</span>
 }
 
+// ── Rejected surveys subpage ──────────────────────────────────────────────────
+function RejectedDetail({ locationName, rows, onBack }) {
+  const rejected = rows.filter(r => {
+    const s = (r.status || '').trim().toLowerCase()
+    return s && s !== 'accepted'
+  }).sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
+
+  const flags = r => [r.tooFast, r.belowRange, r.missingGPS]
+    .filter(f => f && f.startsWith('✗'))
+    .map(f => f.replace('✗ ', ''))
+    .join(' · ') || '—'
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <h2 className="text-lg font-semibold text-slate-800">{locationName}</h2>
+        <span className="text-xs font-semibold bg-red-100 text-red-600 px-2.5 py-0.5 rounded-full">{rejected.length} rejected</span>
+      </div>
+
+      {rejected.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">No rejected surveys found for this location</div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" style={{ minWidth: 700 }}>
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
+                  <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Date</th>
+                  <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Duration (min)</th>
+                  <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">QA Status</th>
+                  <th className="text-left text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Flags / Reason</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rejected.map((r, i) => (
+                  <tr key={i} className="hover:bg-red-50/40">
+                    <td className="px-4 py-3 font-medium text-slate-800">{r.name || '—'}</td>
+                    <td className="px-3 py-3 text-center text-xs text-slate-500">
+                      {r.submissionDate ? new Date(r.submissionDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-center text-slate-600">
+                      {r.fullTime ? parseFloat(r.fullTime).toFixed(1) : r.appTime ? parseFloat(r.appTime).toFixed(1) : '—'}
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        r.qaStatus === '❌ FAIL' ? 'bg-red-100 text-red-700' :
+                        r.qaStatus === '⚠️ REVIEW' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-500'
+                      }`}>{r.qaStatus || 'Rejected'}</span>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-slate-600">{flags(r)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Inline editable responsible field
 function ResponsibleCell({ code, value, onSave }) {
   const [editing, setEditing] = useState(false)
@@ -64,11 +133,12 @@ function ResponsibleCell({ code, value, onSave }) {
   )
 }
 
-export default function LocationPanel({ locations, notes = [], onNoteAdded, onNoteDeleted }) {
+export default function LocationPanel({ locations, qaRows = [], notes = [], onNoteAdded, onNoteDeleted }) {
   const [filterRegion, setFilterRegion] = useState('All')
   const [filterType, setFilterType]     = useState('All')
   const [search, setSearch]             = useState('')
   const [locationMeta, setLocationMeta] = useState({})
+  const [rejectedDetail, setRejectedDetail] = useState(null) // { locationName, rows }
 
   useEffect(() => {
     fetch('/api/location-meta', { credentials: 'include' })
@@ -139,6 +209,15 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
   const regions = ['All', ...REGION_ORDER.filter(r => locations.some(l => l.region === r))]
   const totalTarget   = filtered.reduce((s, l) => s + (l.target || 0), 0)
   const totalAccepted = filtered.reduce((s, l) => s + (l.accepted || 0), 0)
+
+  // Rejected detail subpage
+  if (rejectedDetail) {
+    return <RejectedDetail
+      locationName={rejectedDetail.locationName}
+      rows={rejectedDetail.rows}
+      onBack={() => setRejectedDetail(null)}
+    />
+  }
 
   return (
     <div className="space-y-4">
@@ -237,8 +316,10 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
                 <div className="text-center self-center font-medium text-slate-700">{target}</div>
                 <div className="text-center self-center font-semibold text-emerald-600">{accepted}</div>
                 <div className="text-center self-center text-slate-500">{remaining}</div>
-                <div className="text-center self-center">
-                  {rejected > 0 ? <span className="text-sm font-semibold text-red-500">{rejected}</span> : <span className="text-slate-300 text-sm">—</span>}
+                <div className="text-center self-center" onClick={e => { if (rejected > 0) { e.stopPropagation(); const districtRows = qaRows.filter(r => locations.some(l => l.location === r.locationName)); setRejectedDetail({ locationName: group, rows: districtRows }) } }}>
+                  {rejected > 0
+                    ? <span className="text-sm font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{rejected}</span>
+                    : <span className="text-slate-300 text-sm">—</span>}
                 </div>
                 <div className="self-center"><ProgressBar pct={pct} /></div>
                 <div className="self-center text-center">
@@ -281,8 +362,11 @@ export default function LocationPanel({ locations, notes = [], onNoteAdded, onNo
                         <div className="text-center text-sm text-slate-600">{loc.target}</div>
                         <div className="text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>
                         <div className="text-center text-sm text-slate-500">{loc.remaining}</div>
-                        <div className="text-center text-sm self-center">
-                          {locRejected > 0 ? <span className="font-semibold text-red-500">{locRejected}</span> : <span className="text-slate-300">—</span>}
+                        <div className="text-center text-sm self-center"
+                          onClick={e => { if (locRejected > 0) { e.stopPropagation(); setRejectedDetail({ locationName: loc.location, rows: qaRows.filter(r => r.locationName === loc.location) }) } }}>
+                          {locRejected > 0
+                            ? <span className="font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{locRejected}</span>
+                            : <span className="text-slate-300">—</span>}
                         </div>
                         <div className="self-center"><ProgressBar pct={loc.pctComplete} /></div>
                         <div className="self-center text-center"><StatusBadge status={loc.status} /></div>

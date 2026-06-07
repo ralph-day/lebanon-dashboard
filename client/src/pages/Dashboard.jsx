@@ -160,7 +160,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
           <>
             {activeTab === 'Overview'      && <OverviewPanel data={data} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Field Progress'&& <EnumeratorProgress assignments={data.assignments || []} />}
-            {activeTab === 'Locations'     && <LocationPanel locations={data.locations} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Locations'     && <LocationPanel locations={data.locations} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} />}
