@@ -91,7 +91,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Shatila Camp', target: 36, deadline: '2026-06-04' },
+      { name: 'Shatila Camp', target: 23, deadline: '2026-06-04' },
     ],
   },
   {
@@ -102,7 +102,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Chatila Camp', target: 36, deadline: '2026-06-05' },
+      { name: 'Shatila Camp', target: 23, deadline: '2026-06-05' },
     ],
   },
   {
@@ -124,7 +124,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Burj El Barajneh Camp', target: 32, deadline: '2026-06-05' },
+      { name: 'Burj el-Barajne Camp', target: 32, deadline: '2026-06-05' },
     ],
   },
   {
