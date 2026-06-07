@@ -12,7 +12,7 @@ const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Da
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
 
-function TeamHub({ user, enumerators, onUnauth }) {
+function TeamHub({ user, enumerators, qaRows, onUnauth }) {
   const [teamTab, setTeamTab] = useState('tasks')
   return (
     <div className="space-y-4">
@@ -25,7 +25,7 @@ function TeamHub({ user, enumerators, onUnauth }) {
         ))}
       </div>
       {teamTab === 'tasks'    && <TaskBoard currentUser={user} onUnauth={onUnauth} />}
-      {teamTab === 'payments' && <PaymentsPanel enumerators={enumerators} currentUser={user} />}
+      {teamTab === 'payments' && <PaymentsPanel enumerators={enumerators} qaRows={qaRows} currentUser={user} />}
     </div>
   )
 }
@@ -163,7 +163,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
             {activeTab === 'Locations'     && <LocationPanel locations={data.locations} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
-            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} onUnauth={onUnauth} />}
+            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} />}
           </>
         )}
       </main>
