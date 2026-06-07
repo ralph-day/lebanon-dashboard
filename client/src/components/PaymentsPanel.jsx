@@ -143,6 +143,11 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     setPayments(prev => ({ ...prev, coordination: prev.coordination.filter(e => e.id !== id) }))
   }
 
+  async function applyDefaultRate() {
+    const toUpdate = enumRows.filter(r => !payments.enumerators.find(p => p.code === r.code && p.ratePerSurvey))
+    await Promise.all(toUpdate.map(r => patchEnum(r.code, { ratePerSurvey: DEFAULT_ENUM_RATE })))
+  }
+
   // Summary totals
   const enumTotalOwed        = enumRows.reduce((s, r) => s + r.owed, 0)
   const enumTotalPaid        = enumRows.reduce((s, r) => s + r.paid, 0)
@@ -218,8 +223,14 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       {/* ── Enumerators table ─────────────────────────────────────────────────── */}
       {activeSection === 'enumerators' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100">
-            <p className="text-xs text-slate-400">Click any rate or amount to edit · Rate is per <strong>accepted</strong> survey · Participant cost = (accepted + rejected) × $8/respondent</p>
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-4">
+            <p className="text-xs text-slate-400">Click any rate or amount to edit · Rate is per <strong>accepted</strong> survey · Participant cost = total surveys × $8/respondent</p>
+            {enumRows.some(r => !payments.enumerators.find(p => p.code === r.code && p.ratePerSurvey)) && (
+              <button onClick={applyDefaultRate}
+                className="shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                Apply $7 to all
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ minWidth: 900 }}>
