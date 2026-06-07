@@ -76,36 +76,43 @@ function isAllowed(email) {
   return false;
 }
 
+// Helper: parse a named cookie from the request without cookie-parser
+function parseCookie(req, name) {
+  const header = req.headers.cookie || '';
+  for (const part of header.split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === name && v) return decodeURIComponent(v);
+  }
+  return null;
+}
+
 app.get('/auth/login', (req, res) => {
-  // Generate CSRF state token to prevent login CSRF
+  // Store CSRF state in a short-lived plain cookie (not the session).
+  // This avoids any session-save timing issues behind Railway's reverse proxy.
   const state = crypto.randomBytes(16).toString('hex');
-  req.session.oauthState = state;
-  // Explicitly save the session before redirecting — ensures the cookie is
-  // written into the response before the browser follows the redirect to Google.
-  // Without this, MemoryStore may not flush the Set-Cookie header in time.
-  req.session.save((err) => {
-    if (err) {
-      console.error('[Auth] Session save error on login:', err);
-      return res.redirect((process.env.CLIENT_URL || 'http://localhost:5173') + '/login?error=session_error');
-    }
-    const url = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
-      state,
-    });
-    res.redirect(url);
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.setHeader('Set-Cookie',
+    `oauth_state=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${secure}`
+  );
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+    state,
   });
+  res.redirect(url);
 });
 
 app.get('/auth/callback', async (req, res) => {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
   try {
-    // Validate OAuth state to prevent CSRF
-    if (!req.query.state || req.query.state !== req.session.oauthState) {
-      console.warn('[Auth] Invalid OAuth state — possible CSRF attempt');
+    // Validate OAuth state (read from the short-lived oauth_state cookie)
+    const storedState = parseCookie(req, 'oauth_state');
+    if (!req.query.state || !storedState || req.query.state !== storedState) {
+      console.warn('[Auth] Invalid OAuth state — stored:', storedState, 'received:', req.query.state);
       return res.redirect(clientUrl + '/login?error=invalid_state');
     }
-    delete req.session.oauthState;
+    // Clear the state cookie
+    res.setHeader('Set-Cookie', 'oauth_state=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
 
     const { tokens } = await oauth2Client.getToken(req.query.code);
     oauth2Client.setCredentials(tokens);

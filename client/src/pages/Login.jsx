@@ -26,6 +26,21 @@ export default function Login() {
             Sign-in failed. Please try again.
           </div>
         )}
+        {error === 'invalid_state' && (
+          <div className="mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-sm text-left">
+            Session expired during sign-in. Please try again.
+          </div>
+        )}
+        {error === 'session_error' && (
+          <div className="mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-sm text-left">
+            Session error. Please try again.
+          </div>
+        )}
+        {error && !['unauthorized','auth_failed','invalid_state','session_error'].includes(error) && (
+          <div className="mb-5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-sm text-left">
+            Error: {error}
+          </div>
+        )}
 
         <a
           href="/auth/login"
