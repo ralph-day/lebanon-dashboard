@@ -77,31 +77,30 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
   }, [qaRows])
 
   // Merge enumerator list with stored payment data
-  const enumRows = useMemo(() => enumerators.map(e => {
-    const code = e.name.match(/\((\w+)\)/)?.[1] || e.name
-    const stored = payments.enumerators.find(p => p.code === code) || {}
+  // Filter out Excel placeholder rows (no enumerator code in parentheses)
+  const enumRows = useMemo(() => enumerators
+    .filter(e => /\(\w+\)/.test(e.name))
+    .map(e => {
+      const code = e.name.match(/\((\w+)\)/)?.[1] || e.name
+      const stored = payments.enumerators.find(p => p.code === code) || {}
 
-    // Count accepted / rejected from pre-indexed QA rows
-    const myRows = qaByCode[code] || []
-    const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
-    const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
-    // Participant cost uses totalSurveys from Excel (authoritative) not QA row count
-    // QA rows are capped at 2000 most recent so they can undercount
-    const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
+      const myRows = qaByCode[code] || []
+      const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
+      const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
+      const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
 
-    const rate = parseFloat(stored.ratePerSurvey) || 0
-    const otherCosts = parseFloat(stored.otherCosts) || 0
-    const owed = accepted * rate
-    const paid = parseFloat(stored.amountPaid) || 0
-    const balance = owed - paid
+      const rate = parseFloat(stored.ratePerSurvey) || 0
+      const otherCosts = parseFloat(stored.otherCosts) || 0
+      const owed = (accepted * rate) + otherCosts   // survey earnings + any extra costs
+      const paid = parseFloat(stored.amountPaid) || 0
 
-    const status = stored.statusOverride || (
-      paid === 0 && owed === 0 ? 'Pending'
-      : paid >= owed && owed > 0 ? 'Paid'
-      : paid > 0 ? 'Partial' : 'Pending'
-    )
-    return { name: e.name, code, accepted, rejected, participantCost, rate, otherCosts, owed, paid, balance, status, notes: stored.notes || '' }
-  }), [enumerators, qaByCode, payments])
+      const status = stored.statusOverride || (
+        paid === 0 && owed === 0 ? 'Pending'
+        : paid >= owed && owed > 0 ? 'Paid'
+        : paid > 0 ? 'Partial' : 'Pending'
+      )
+      return { name: e.name, code, accepted, rejected, participantCost, rate, otherCosts, owed, paid, status, notes: stored.notes || '' }
+    }), [enumerators, qaByCode, payments])
 
   async function patchEnum(code, patch) {
     const res = await fetch(`/api/payments/enumerator/${code}`, {
@@ -155,7 +154,6 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
   // Summary totals
   const enumTotalOwed        = enumRows.reduce((s, r) => s + r.owed, 0)
   const enumTotalPaid        = enumRows.reduce((s, r) => s + r.paid, 0)
-  const enumBalance          = enumTotalOwed - enumTotalPaid
   const totalParticipantCost = enumRows.reduce((s, r) => s + r.participantCost, 0)
 
   const coordTotalOwed = payments.coordination.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0)
@@ -187,18 +185,14 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
 
       {/* Summary cards */}
       {activeSection === 'enumerators' && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-            <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Enumerators Owed</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Total Owed</p>
             <p className="text-2xl font-bold text-slate-800">{currency(enumTotalOwed)}</p>
           </div>
           <div className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 text-center">
-            <p className="text-xs text-emerald-600 uppercase tracking-wide mb-1">Enumerators Paid</p>
+            <p className="text-xs text-emerald-600 uppercase tracking-wide mb-1">Total Paid</p>
             <p className="text-2xl font-bold text-emerald-700">{currency(enumTotalPaid)}</p>
-          </div>
-          <div className={`rounded-xl border p-4 text-center ${enumBalance > 0 ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-200'}`}>
-            <p className={`text-xs uppercase tracking-wide mb-1 ${enumBalance > 0 ? 'text-amber-600' : 'text-slate-400'}`}>Outstanding</p>
-            <p className={`text-2xl font-bold ${enumBalance > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{currency(enumBalance)}</p>
           </div>
           <div className="bg-purple-50 rounded-xl border border-purple-100 p-4 text-center">
             <p className="text-xs text-purple-600 uppercase tracking-wide mb-1">Participant Cost</p>
@@ -242,7 +236,6 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Other Costs</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Total Owed</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Amount Paid</th>
-                  <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Balance</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Status</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Notes</th>
                 </tr>
@@ -289,16 +282,6 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                       <EditableCell value={r.paid} prefix="$"
                         onSave={v => patchEnum(r.code, { amountPaid: parseFloat(v) || 0 })} />
                     </td>
-                    {/* Balance */}
-                    <td className="px-3 py-3 text-center">
-                      {r.owed === 0 && r.paid === 0
-                        ? <span className="text-slate-300">—</span>
-                        : r.balance > 0
-                          ? <span className="font-semibold text-amber-600">{currency(r.balance)}</span>
-                          : r.balance < 0
-                            ? <span className="font-semibold text-blue-500">{currency(Math.abs(r.balance))} over</span>
-                            : <span className="text-emerald-500 font-semibold">✓ Settled</span>}
-                    </td>
                     {/* Status */}
                     <td className="px-3 py-3 text-center">
                       <select value={r.status}
@@ -315,6 +298,20 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
                   </tr>
                 ))}
               </tbody>
+              <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+                <tr>
+                  <td className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Total</td>
+                  <td className="px-3 py-3 text-center font-bold text-emerald-600">{enumRows.reduce((s,r)=>s+r.accepted,0)}</td>
+                  <td className="px-3 py-3 text-center font-bold text-red-500">{enumRows.reduce((s,r)=>s+r.rejected,0) || '—'}</td>
+                  <td className="px-3 py-3 text-center font-bold text-purple-700">{currency(totalParticipantCost)}</td>
+                  <td className="px-3 py-3" />{/* rate */}
+                  <td className="px-3 py-3" />{/* other costs */}
+                  <td className="px-3 py-3 text-center font-bold text-slate-800">{currency(enumTotalOwed)}</td>
+                  <td className="px-3 py-3 text-center font-bold text-emerald-700">{currency(enumTotalPaid)}</td>
+                  <td className="px-3 py-3" />{/* status */}
+                  <td className="px-3 py-3" />{/* notes */}
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
