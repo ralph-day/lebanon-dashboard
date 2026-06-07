@@ -1008,17 +1008,19 @@ app.get('/api/payments', requireAuth, (req, res) => res.json(payments));
 app.patch('/api/payments/enumerator/:code', requireAuth, (req, res) => {
   const { code } = req.params;
   if (!/^\w{1,10}$/.test(code)) return res.status(400).json({ error: 'Invalid code' });
-  const { ratePerSurvey, amountPaid, notes, statusOverride } = req.body;
+  const { ratePerSurvey, amountPaid, otherCosts, notes, statusOverride } = req.body;
   const idx = payments.enumerators.findIndex(e => e.code === code);
   const patch = { code, updatedAt: new Date().toISOString() };
   if (ratePerSurvey  !== undefined) patch.ratePerSurvey  = Math.max(0, parseFloat(ratePerSurvey)  || 0);
   if (amountPaid     !== undefined) patch.amountPaid     = Math.max(0, parseFloat(amountPaid)     || 0);
+  if (otherCosts     !== undefined) patch.otherCosts     = Math.max(0, parseFloat(otherCosts)     || 0);
   if (notes          !== undefined) patch.notes          = String(notes).substring(0, 500);
   if (statusOverride !== undefined) patch.statusOverride = ['Pending','Partial','Paid'].includes(statusOverride) ? statusOverride : 'Pending';
   if (idx === -1) { payments.enumerators.push(patch); }
   else { payments.enumerators[idx] = { ...payments.enumerators[idx], ...patch }; }
   savePayments();
-  res.json(patch);
+  // Return the full merged record so the client doesn't lose existing fields
+  res.json(payments.enumerators.find(e => e.code === code));
 });
 
 // Coordination: POST create, PATCH update, DELETE remove
