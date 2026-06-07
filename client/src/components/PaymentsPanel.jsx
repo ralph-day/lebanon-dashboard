@@ -77,13 +77,14 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     })
     const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
     const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
-    const totalSubmitted = myRows.length  // every row = a participant was interviewed
+    // Participant cost uses totalSurveys from Excel (authoritative) not QA row count
+    // QA rows are capped at 2000 most recent so they can undercount
+    const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
 
     const rate = parseFloat(stored.ratePerSurvey) ?? DEFAULT_ENUM_RATE
     const owed = accepted * rate
     const paid = parseFloat(stored.amountPaid) || 0
     const balance = owed - paid
-    const participantCost = totalSubmitted * PARTICIPANT_RATE
 
     const status = stored.statusOverride || (
       paid === 0 && owed === 0 ? 'Pending'
