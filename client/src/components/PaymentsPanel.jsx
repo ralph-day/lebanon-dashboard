@@ -40,10 +40,14 @@ function EditableCell({ value, onSave, prefix = '', type = 'number', placeholder
     />
   )
 
+  const display = type === 'text'
+    ? (value ? value : <span className="text-slate-300">—</span>)
+    : (parseFloat(value) > 0 ? prefix + parseFloat(value).toFixed(2) : <span className="text-slate-300">—</span>)
+
   return (
     <button onClick={() => { setDraft(value); setEditing(true) }}
-      className="text-sm text-slate-700 hover:text-blue-600 hover:underline cursor-pointer">
-      {prefix}{parseFloat(value) > 0 ? parseFloat(value).toFixed(2) : <span className="text-slate-300">—</span>}
+      className="text-sm text-slate-700 hover:text-blue-600 hover:underline cursor-pointer text-left">
+      {display}
     </button>
   )
 }
