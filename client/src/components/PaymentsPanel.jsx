@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 const STATUS_OPTS = ['Pending', 'Partial', 'Paid']
 const STATUS_STYLE = {
@@ -64,17 +64,25 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       .then(r => r.json()).then(setPayments).finally(() => setLoading(false))
   }, [])
 
+  // Pre-index QA rows by enumerator code once — avoids re-filtering 2000 rows per enumerator per render
+  const qaByCode = useMemo(() => {
+    const map = {}
+    qaRows.forEach(r => {
+      const code = r.name?.match(/\((\w+)\)/)?.[1] || ''
+      if (!code) return
+      if (!map[code]) map[code] = []
+      map[code].push(r)
+    })
+    return map
+  }, [qaRows])
+
   // Merge enumerator list with stored payment data
-  const enumRows = enumerators.map(e => {
+  const enumRows = useMemo(() => enumerators.map(e => {
     const code = e.name.match(/\((\w+)\)/)?.[1] || e.name
     const stored = payments.enumerators.find(p => p.code === code) || {}
 
-    // Count accepted / rejected from live QA rows using SurveyStatus_New (r.status)
-    // This matches the server's own rejected count logic
-    const myRows = qaRows.filter(r => {
-      const rowCode = r.name?.match(/\((\w+)\)/)?.[1] || ''
-      return rowCode === code
-    })
+    // Count accepted / rejected from pre-indexed QA rows
+    const myRows = qaByCode[code] || []
     const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
     const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
     // Participant cost uses totalSurveys from Excel (authoritative) not QA row count
@@ -92,7 +100,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       : paid > 0 ? 'Partial' : 'Pending'
     )
     return { name: e.name, code, accepted, rejected, totalSubmitted, participantCost, rate, owed, paid, balance, status, notes: stored.notes || '' }
-  })
+  }), [enumerators, qaByCode, payments])
 
   async function patchEnum(code, patch) {
     const res = await fetch(`/api/payments/enumerator/${code}`, {
