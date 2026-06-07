@@ -617,12 +617,15 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
     await refreshCache();
   }
   if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+  // Apply approvals over ALL cached rows (needed for accurate counts + knownIds check)
   const approvedRows = applyApprovals(cache.data.qa.rows);
   const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
   const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
   const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
-  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: approvedRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
+  // Send most-recent 2000 rows to client — prevents large payloads freezing the UI
+  const clientRows = approvedRows.slice(-2000);
+  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
 app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
