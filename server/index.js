@@ -149,6 +149,18 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
+const TEAM_EMAILS = [
+  'infomgmtreportofficer@gmail.com',
+  'ralphbaydoun@gmail.com',
+  'ralph@influeanswers.com',
+  'ahmad.zaazou91@gmail.com',
+  'nisrinekhoory@gmail.com',
+];
+function requireTeam(req, res, next) {
+  if (TEAM_EMAILS.includes(req.session.user?.email)) return next();
+  res.status(403).json({ error: 'Team access only' });
+}
+
 // ── Data cache ────────────────────────────────────────────────────────────────
 let cache = { data: null, fetchedAt: null };
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -877,9 +889,9 @@ let tasks = [];
 try { if (fs.existsSync(TASKS_PATH)) tasks = JSON.parse(fs.readFileSync(TASKS_PATH, 'utf8')); } catch(e) { console.error('Could not load tasks:', e.message); }
 function saveTasks() { try { atomicWrite(TASKS_PATH, JSON.stringify(tasks, null, 2)); } catch(e) { console.error('Could not save tasks:', e.message); } }
 
-app.get('/api/tasks', requireAuth, (req, res) => res.json(tasks));
+app.get('/api/tasks', requireAuth, requireTeam, (req, res) => res.json(tasks));
 
-app.post('/api/tasks', requireAuth, (req, res) => {
+app.post('/api/tasks', requireAuth, requireTeam, (req, res) => {
   const { title, description, type, assignee, priority, dueDate, linkedEntity } = req.body;
   if (!title?.trim()) return res.status(400).json({ error: 'Title required' });
   const VALID_PRIORITIES = ['high', 'medium', 'low'];
@@ -903,7 +915,7 @@ app.post('/api/tasks', requireAuth, (req, res) => {
   res.json(task);
 });
 
-app.patch('/api/tasks/:id', requireAuth, (req, res) => {
+app.patch('/api/tasks/:id', requireAuth, requireTeam, (req, res) => {
   const idx = tasks.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
   // Explicit allowlist — no arbitrary field injection
@@ -925,7 +937,7 @@ app.patch('/api/tasks/:id', requireAuth, (req, res) => {
   res.json(tasks[idx]);
 });
 
-app.delete('/api/tasks/:id', requireAuth, (req, res) => {
+app.delete('/api/tasks/:id', requireAuth, requireTeam, (req, res) => {
   const task = tasks.find(t => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: 'Not found' });
   // Only the creator or a QA approver (team admin) can delete
@@ -948,7 +960,7 @@ const emailParseLimit = rateLimit({
   legacyHeaders: false,
 });
 
-app.post('/api/tasks/parse-email', requireAuth, emailParseLimit, async (req, res) => {
+app.post('/api/tasks/parse-email', requireAuth, requireTeam, emailParseLimit, async (req, res) => {
   const { emailText } = req.body;
   if (!emailText?.trim()) return res.status(400).json({ error: 'No email text provided' });
 
@@ -1038,10 +1050,10 @@ try {
 function savePayments() { try { atomicWrite(PAYMENTS_PATH, JSON.stringify(payments, null, 2)); } catch(e) { console.error('Could not save payments:', e.message); } }
 
 // GET all payments
-app.get('/api/payments', requireAuth, (req, res) => res.json(payments));
+app.get('/api/payments', requireAuth, requireTeam, (req, res) => res.json(payments));
 
 // PATCH enumerator payment record (upsert by code) — field allowlist
-app.patch('/api/payments/enumerator/:code', requireAuth, (req, res) => {
+app.patch('/api/payments/enumerator/:code', requireAuth, requireTeam, (req, res) => {
   const { code } = req.params;
   if (!/^\w{1,10}$/.test(code)) return res.status(400).json({ error: 'Invalid code' });
   const { ratePerSurvey, amountPaid, otherCosts, notes, statusOverride } = req.body;
@@ -1060,7 +1072,7 @@ app.patch('/api/payments/enumerator/:code', requireAuth, (req, res) => {
 });
 
 // Coordination: POST create, PATCH update, DELETE remove
-app.post('/api/payments/coordination', requireAuth, (req, res) => {
+app.post('/api/payments/coordination', requireAuth, requireTeam, (req, res) => {
   const { name, role, amount, period, notes } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
   const entry = {
@@ -1079,7 +1091,7 @@ app.post('/api/payments/coordination', requireAuth, (req, res) => {
   res.json(entry);
 });
 
-app.patch('/api/payments/coordination/:id', requireAuth, (req, res) => {
+app.patch('/api/payments/coordination/:id', requireAuth, requireTeam, (req, res) => {
   const idx = payments.coordination.findIndex(e => e.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
   const { amountPaid, status, notes } = req.body;
@@ -1092,7 +1104,7 @@ app.patch('/api/payments/coordination/:id', requireAuth, (req, res) => {
   res.json(payments.coordination[idx]);
 });
 
-app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
+app.delete('/api/payments/coordination/:id', requireAuth, requireTeam, (req, res) => {
   const entry = payments.coordination.find(e => e.id === req.params.id);
   if (!entry) return res.status(404).json({ error: 'Not found' });
   const isApprover = QA_APPROVER_EMAILS.includes(req.session.user.email);
@@ -1103,7 +1115,7 @@ app.delete('/api/payments/coordination/:id', requireAuth, (req, res) => {
 });
 
 // POST save checkpoint — records who saved and when (last 10 entries kept)
-app.post('/api/payments/save', requireAuth, (req, res) => {
+app.post('/api/payments/save', requireAuth, requireTeam, (req, res) => {
   const entry = {
     savedBy: req.session.user.name || req.session.user.email,
     email: req.session.user.email,
@@ -1117,7 +1129,7 @@ app.post('/api/payments/save', requireAuth, (req, res) => {
 });
 
 // PATCH flat fee (org/coordinator fixed fees)
-app.patch('/api/payments/flat-fee/:id', requireAuth, (req, res) => {
+app.patch('/api/payments/flat-fee/:id', requireAuth, requireTeam, (req, res) => {
   const { id } = req.params;
   if (!payments.flatFees) payments.flatFees = [];
   const idx = payments.flatFees.findIndex(f => f.id === id);
