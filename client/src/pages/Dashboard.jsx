@@ -10,7 +10,7 @@ import PaymentsPanel from '../components/PaymentsPanel'
 const REFRESH_INTERVAL = 15 * 60 * 1000
 const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
-const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com']
+const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com', 'nisrinekhoory@gmail.com']
 
 // Map tab names ↔ URL hash slugs
 const TAB_TO_SLUG = {
