@@ -85,7 +85,18 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
 
   useEffect(() => {
     fetch('/api/payments', { credentials: 'include' })
-      .then(r => r.json()).then(setPayments).finally(() => setLoading(false))
+      .then(r => { if (r.ok) return r.json(); throw new Error('Not ok') })
+      .then(data => {
+        // Defensive merge — never let a bad response clobber the safe default shape
+        setPayments(prev => ({
+          enumerators:  Array.isArray(data.enumerators)  ? data.enumerators  : prev.enumerators,
+          coordination: Array.isArray(data.coordination) ? data.coordination : prev.coordination,
+          flatFees:     Array.isArray(data.flatFees)     ? data.flatFees     : prev.flatFees,
+          saveLog:      Array.isArray(data.saveLog)      ? data.saveLog      : prev.saveLog,
+        }))
+      })
+      .catch(() => {}) // keep default safe state on error
+      .finally(() => setLoading(false))
   }, [])
 
   // Pre-index QA rows by enumerator code
@@ -104,7 +115,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
     .filter(e => /\(\w+\)/.test(e.name))
     .map(e => {
       const code   = e.name.match(/\((\w+)\)/)?.[1] || e.name
-      const stored = payments.enumerators.find(p => p.code === code) || {}
+      const stored = (payments.enumerators || []).find(p => p.code === code) || {}
       const myRows = qaByCode[code] || []
       const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
       const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
