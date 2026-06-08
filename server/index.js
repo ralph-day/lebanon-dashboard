@@ -253,21 +253,29 @@ function wsToJson(ws, defval = null) {
   if (!ws) return [];
   const headers = {};
   const rows = [];
-  ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
-    if (rowNum === 1) {
-      row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-        const v = resolveCellValue(cell.value);
-        if (v != null) headers[colNum] = String(v);
-      });
-      return;
-    }
-    const obj = {};
-    Object.entries(headers).forEach(([col, header]) => {
-      const v = resolveCellValue(row.getCell(Number(col)).value);
-      obj[header] = v != null ? v : defval;
+  try {
+    ws.eachRow({ includeEmpty: false }, (row, rowNum) => {
+      try {
+        if (rowNum === 1) {
+          row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+            try {
+              const v = resolveCellValue(cell.value);
+              if (v != null) headers[colNum] = String(v);
+            } catch(e) {}
+          });
+          return;
+        }
+        const obj = {};
+        Object.entries(headers).forEach(([col, header]) => {
+          try {
+            const v = resolveCellValue(row.getCell(Number(col)).value);
+            obj[header] = v != null ? v : defval;
+          } catch(e) { obj[header] = defval; }
+        });
+        rows.push(obj);
+      } catch(e) { console.warn(`[Excel] Skipped row ${rowNum}:`, e.message); }
     });
-    rows.push(obj);
-  });
+  } catch(e) { console.warn('[Excel] wsToJson error:', e.message); }
   return rows;
 }
 
@@ -275,13 +283,17 @@ function wsToJson(ws, defval = null) {
 function wsToArrays(ws) {
   if (!ws) return [];
   const rows = [];
-  ws.eachRow({ includeEmpty: true }, (row) => {
-    const arr = [];
-    row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-      arr[colNum - 1] = resolveCellValue(cell.value);
+  try {
+    ws.eachRow({ includeEmpty: true }, (row) => {
+      try {
+        const arr = [];
+        row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+          try { arr[colNum - 1] = resolveCellValue(cell.value); } catch(e) { arr[colNum - 1] = null; }
+        });
+        rows.push(arr);
+      } catch(e) {}
     });
-    rows.push(arr);
-  });
+  } catch(e) { console.warn('[Excel] wsToArrays error:', e.message); }
   return rows;
 }
 
@@ -297,7 +309,7 @@ async function parseExcel(filePath) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(filePath);
 
-  const sheet = (name) => wsToJson(wb.getWorksheet(name));
+  const sheet = (name) => { try { return wsToJson(wb.getWorksheet(name)); } catch(e) { console.warn(`[Excel] Failed to parse sheet "${name}":`, e.message); return []; } };
 
   const tracker     = sheet('Target_Tracker');
   const enumSummary = sheet('Enumerator_Summary');
