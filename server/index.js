@@ -238,10 +238,12 @@ function resolveCellValue(val) {
   if (val === null || val === undefined) return null;
   if (val instanceof Date) return val;
   if (typeof val === 'object') {
-    if (val.result !== undefined) return resolveCellValue(val.result); // formula cell
+    if (val.result !== undefined) return resolveCellValue(val.result); // formula cell with result
     if (Array.isArray(val.richText)) return val.richText.map(r => r.text || '').join(''); // rich text
     if (val.error !== undefined) return null; // formula error (#REF! etc.)
     if (val.text !== undefined) return val.text;
+    if (val.formula !== undefined) return null; // formula cell with no computed result
+    return null; // unknown object — never pass raw objects to client
   }
   return val;
 }
