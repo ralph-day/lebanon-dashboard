@@ -79,6 +79,7 @@ export default function MiniMap({ gpsPoints = [] }) {
 
   const [filterEnum,    setFilterEnum]   = useState('all')
   const [showTooClose,  setShowTooClose] = useState(false)
+  const [showAccepted,  setShowAccepted] = useState(false)
   const [selectedPoint, setSelectedPoint] = useState(null)
 
   // React-driven blink toggle
@@ -181,11 +182,14 @@ export default function MiniMap({ gpsPoints = [] }) {
           </select>
           {/* Stat chips */}
           <div className="flex gap-1.5 text-xs font-semibold">
-            <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full">{accepted} accepted</span>
+            <button
+              onClick={() => { setShowAccepted(v => !v); setShowTooClose(false) }}
+              className={`px-2 py-0.5 rounded-full transition-colors border ${showAccepted ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-transparent hover:bg-green-100'}`}
+            >{accepted} accepted</button>
             <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} rejected</span>
             {tooClose > 0 && (
               <button
-                onClick={() => setShowTooClose(v => !v)}
+                onClick={() => { setShowTooClose(v => !v); setShowAccepted(false) }}
                 className={`px-2 py-0.5 rounded-full font-semibold text-xs transition-colors border ${
                   showTooClose
                     ? 'bg-orange-500 text-white border-orange-500'
@@ -198,6 +202,37 @@ export default function MiniMap({ gpsPoints = [] }) {
           </div>
         </div>
       </div>
+
+      {/* Accepted surveys panel */}
+      {showAccepted && (
+        <div className="border-t border-green-100 bg-green-50 px-4 py-3">
+          <p className="text-xs font-semibold text-green-700 mb-2">✅ Accepted surveys — {dateLabel}</p>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {visiblePoints.filter(p => p.status === 'accepted').map((p, i) => {
+              const isSelected = selectedPoint?.id === p.id
+              return (
+                <div
+                  key={p.id || i}
+                  onClick={() => { setSelectedPoint(p); setShowAccepted(true) }}
+                  className={`rounded-lg px-3 py-2 border text-xs flex items-start justify-between gap-3 cursor-pointer transition-colors ${
+                    isSelected ? 'bg-green-100 border-green-400 ring-1 ring-green-400' : 'bg-white border-green-100 hover:bg-green-50'
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-800">{p.enumerator || '—'}</p>
+                    <p className="text-slate-500">{p.location || '—'}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {p.date && <p className="text-slate-400">{new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                    {p.accuracy != null && <p className="text-slate-400">±{p.accuracy} m</p>}
+                    <p className="text-green-600 font-medium mt-0.5">📍 Show on map</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Too-close summary panel */}
       {showTooClose && (

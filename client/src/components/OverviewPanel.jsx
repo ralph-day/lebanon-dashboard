@@ -44,7 +44,7 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
   )
 }
 
-function DailyProgress({ assignments, qaRows, navigate }) {
+function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
   const [offset, setOffset] = useState(0) // 0 = today, -1 = yesterday, etc.
 
   // Day = 8 AM Lebanon (UTC+3) to 8 AM next day
@@ -91,7 +91,13 @@ function DailyProgress({ assignments, qaRows, navigate }) {
     .filter(a => a.dayTotal > 0)
     .sort((a, b) => b.dayAccepted - a.dayAccepted)
 
-  const totalAccepted = rows.reduce((s, a) => s + a.dayAccepted, 0)
+  // Use gpsPoints as ground truth for the total — same source as the field map
+  // so both numbers always agree. qaRows per-row breakdown may be a subset.
+  const totalAccepted = gpsPoints.filter(p => {
+    if (!p.date) return false
+    const ts = new Date(p.date).getTime()
+    return ts >= dayStart.getTime() && ts <= dayEnd.getTime() && (p.status || '') === 'accepted'
+  }).length || rows.reduce((s, a) => s + a.dayAccepted, 0) // fallback if no gpsPoints
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -223,7 +229,7 @@ export default function OverviewPanel({ data }) {
 
       {/* ── Daily Progress + Mini Map ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
+        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} gpsPoints={gpsPoints} navigate={navigate} />
         <MiniMap gpsPoints={gpsPoints} />
       </div>
 
