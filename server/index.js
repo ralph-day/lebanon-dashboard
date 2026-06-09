@@ -1380,6 +1380,12 @@ async function checkSecurityNews(seedOnly = false) {
       continue;
     }
 
+    // Only process breaking news — Lebanese outlets always prefix with "عاجل"
+    if (!title.includes('عاجل')) {
+      sentSecurityAlerts.add(guid);
+      continue;
+    }
+
     const fullText = `${title} ${description}`;
     const matchedKeywords = detectConflictKeywords(fullText);
     if (matchedKeywords.length < 2) {
