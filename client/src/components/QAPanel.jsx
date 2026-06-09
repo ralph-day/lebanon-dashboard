@@ -246,6 +246,26 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
             />
           </div>
 
+          {/* Today shortcut */}
+          <div className="flex items-end">
+            {(() => {
+              const todayStr = new Date(Date.now() + 3*60*60*1000).toISOString().slice(0, 10)
+              const isToday = dateFrom === todayStr && dateTo === todayStr
+              return (
+                <button
+                  onClick={() => { const t = todayStr; setDateFrom(t); setDateTo(t) }}
+                  className={`text-xs border rounded-lg px-3 py-2 transition-colors whitespace-nowrap font-semibold ${
+                    isToday
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'text-blue-600 border-blue-200 hover:bg-blue-50'
+                  }`}
+                >
+                  Today
+                </button>
+              )
+            })()}
+          </div>
+
           {/* Clear filters — always visible */}
           <div className="flex items-end">
             <button
