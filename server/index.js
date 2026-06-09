@@ -1367,32 +1367,108 @@ async function fetchAllNewsItems() {
   return items;
 }
 
-// ── Active security alerts (shown on map for 2 hours) ─────────────────────
-const activeSecurityAlerts = [];  // expires after 2h (for map overlay)
-const alertHistory = [];          // kept for 24h (for the Security Alerts card)
-const TWO_HOURS_MS  = 2 * 60 * 60 * 1000;
-const DAY_MS        = 24 * 60 * 60 * 1000;
+// ── Security alert store ───────────────────────────────────────────────────
+const activeSecurityAlerts = [];   // in-memory, for map overlay (expires 2h)
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+const SECURITY_HISTORY_PATH = path.join(DATA_DIR, 'security_history.json');
+let alertHistory = [];  // permanent, persisted to disk
+
+try {
+  if (fs.existsSync(SECURITY_HISTORY_PATH)) {
+    alertHistory = JSON.parse(fs.readFileSync(SECURITY_HISTORY_PATH, 'utf8'));
+    console.log(`[Security] Loaded ${alertHistory.length} historical alerts`);
+  }
+} catch(e) { console.error('[Security] Could not load history:', e.message); }
+
+function saveAlertHistory() {
+  try { atomicWrite(SECURITY_HISTORY_PATH, JSON.stringify(alertHistory)); }
+  catch(e) { console.error('[Security] Could not save history:', e.message); }
+}
 
 function pruneExpiredAlerts() {
   const now = Date.now();
   while (activeSecurityAlerts.length && activeSecurityAlerts[0].expiresAt < now) {
     activeSecurityAlerts.shift();
   }
-  while (alertHistory.length && alertHistory[alertHistory.length - 1].triggeredAt < now - DAY_MS) {
-    alertHistory.pop();
-  }
 }
 
-// Endpoint: returns active alerts (for map) + recent history (for card)
+// Map overlay — active alerts only
 app.get('/api/security-alerts/active', (req, res) => {
   pruneExpiredAlerts();
   res.json(activeSecurityAlerts);
 });
 
+// Security card — full permanent history
 app.get('/api/security-alerts/history', (req, res) => {
-  pruneExpiredAlerts();
   res.json(alertHistory);
 });
+
+// Backfill endpoint — fetches all matching messages from Telegram since a given date
+app.post('/api/security-alerts/backfill', async (req, res) => {
+  const since = req.body?.since ? new Date(req.body.since).getTime() / 1000 : new Date('2026-05-20').getTime() / 1000;
+  res.json({ started: true, since: new Date(since * 1000).toISOString() });
+  // Run in background
+  runBackfill(since).then(count => {
+    console.log(`[Security] Backfill complete — ${count} incidents added`);
+  }).catch(e => console.error('[Security] Backfill error:', e.message));
+});
+
+async function runBackfill(sinceUnix) {
+  const client = await getTelegramClient();
+  if (!client) { console.error('[Security] No Telegram client for backfill'); return 0; }
+
+  const existingIds = new Set(alertHistory.map(a => a._id));
+  let added = 0;
+
+  for (const channel of TG_CHANNELS) {
+    console.log(`[Security] Backfilling ${channel} since ${new Date(sinceUnix * 1000).toDateString()}...`);
+    let offsetId = 0;
+    let done = false;
+
+    while (!done) {
+      const messages = await client.getMessages(channel, { limit: 100, offsetId });
+      if (!messages.length) break;
+
+      for (const msg of messages) {
+        if (!msg.message) continue;
+        if (msg.date < sinceUnix) { done = true; break; }
+
+        const id = `${channel}_${msg.id}`;
+        if (existingIds.has(id)) continue;
+
+        const fullText = msg.message;
+        const matchedKeywords = detectConflictKeywords(fullText);
+        if (matchedKeywords.length < 2) continue;
+        const mentionedAreas = extractMentionedAreas(fullText);
+        if (mentionedAreas.length === 0) continue;
+
+        existingIds.add(id);
+        alertHistory.push({
+          _id: id,
+          title: msg.message.slice(0, 200),
+          areas: mentionedAreas,
+          keywords: matchedKeywords.slice(0, 5),
+          source: channel,
+          link: `https://t.me/${channel}/${msg.id}`,
+          triggeredAt: msg.date * 1000,
+          expiresAt: 0,  // historical — never active on map
+          backfilled: true,
+        });
+        added++;
+      }
+
+      if (messages.length < 100) break;
+      offsetId = messages[messages.length - 1].id;
+      await new Promise(r => setTimeout(r, 500)); // be polite to Telegram
+    }
+  }
+
+  // Sort newest first
+  alertHistory.sort((a, b) => b.triggeredAt - a.triggeredAt);
+  saveAlertHistory();
+  return added;
+}
 
 async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   const title = article.title || '';
@@ -1412,6 +1488,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   };
   activeSecurityAlerts.push(alertEntry);
   alertHistory.unshift(alertEntry); // newest first
+  saveAlertHistory();
 
   // Build alert message
   const areaText = mentionedAreas.length > 0 ? `\n📍 المناطق المذكورة: ${mentionedAreas.join('، ')}` : '';
