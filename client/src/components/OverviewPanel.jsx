@@ -65,25 +65,15 @@ function DailyProgress({ assignments, qaRows, navigate }) {
 
   // Compute per-enumerator stats for selected day from qaRows
   const statsByCode = {}
-  let unmatchedAccepted = 0, unmatchedRejected = 0, unmatchedQaFail = 0, unmatchedTotal = 0
-  const unmatchedNames = new Set()
   qaRows.forEach(r => {
     if (!r.submissionDate) return
     const ts = new Date(r.submissionDate).getTime()
     if (ts < dayStart.getTime() || ts > dayEnd.getTime()) return
     const assignment = assignments.find(a => r.name.includes(`(${a.code})`))
-    const st = (r.status || '').trim().toLowerCase()
-    if (!assignment) {
-      // Count unmatched surveys (surveys not linked to a known enumerator code)
-      unmatchedTotal++
-      if (st === 'accepted') unmatchedAccepted++
-      else if (st) unmatchedRejected++
-      if (r.qaStatus === '❌ FAIL') unmatchedQaFail++
-      if (r.name) unmatchedNames.add(r.name)
-      return
-    }
+    if (!assignment) return
     if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, qaFail: 0, total: 0 }
     statsByCode[assignment.code].total++
+    const st = (r.status || '').trim().toLowerCase()
     if (st === 'accepted') statsByCode[assignment.code].accepted++
     else if (st) statsByCode[assignment.code].rejected++
     // QA fail = automated quality check failed (separate from supervisor rejection)
@@ -101,8 +91,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
     .filter(a => a.dayTotal > 0)
     .sort((a, b) => b.dayAccepted - a.dayAccepted)
 
-  // Total accepted = all matched + all unmatched (same ground truth as the field map)
-  const totalAccepted = rows.reduce((s, a) => s + a.dayAccepted, 0) + unmatchedAccepted
+  const totalAccepted = rows.reduce((s, a) => s + a.dayAccepted, 0)
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -151,25 +140,6 @@ function DailyProgress({ assignments, qaRows, navigate }) {
                 </div>
               </div>
             ))}
-            {unmatchedTotal > 0 && (
-              <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 bg-slate-50 border border-slate-200">
-                <span className="text-sm font-medium text-slate-500 w-36 shrink-0 truncate" title={[...unmatchedNames].join(', ')}>
-                  Other / Unlinked
-                </span>
-                <span className="text-xs text-slate-300 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">—</span>
-                <div className="flex-1" />
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-sm font-bold text-emerald-600">+{unmatchedAccepted}</span>
-                  <span className="text-xs text-slate-400">accepted</span>
-                  {unmatchedRejected > 0 && (
-                    <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded ml-1">{unmatchedRejected} rejected</span>
-                  )}
-                  {unmatchedQaFail > 0 && (
-                    <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-1">{unmatchedQaFail} QA fail</span>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-400">
             <span>Total accepted: <span className="font-semibold text-slate-600">{totalAccepted}</span></span>
@@ -183,7 +153,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
 
 export default function OverviewPanel({ data }) {
   const navigate = useNavigate()
-  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [], surveys = [] } = data
+  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [] } = data
 
   const totalCompleted = overview.totalTarget - overview.remaining
   const pct = overview.totalTarget > 0 ? Math.round((totalCompleted / overview.totalTarget) * 100) : 0
@@ -253,7 +223,7 @@ export default function OverviewPanel({ data }) {
 
       {/* ── Daily Progress + Mini Map ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <DailyProgress assignments={assignments} qaRows={surveys.length > 0 ? surveys : (data.qa?.rows || [])} navigate={navigate} />
+        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
         <MiniMap gpsPoints={gpsPoints} />
       </div>
 

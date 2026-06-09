@@ -78,7 +78,6 @@ export default function MiniMap({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
   const [filterEnum,    setFilterEnum]   = useState('all')
-  const [filterStatus,  setFilterStatus] = useState('all') // 'all' | 'accepted' | 'rejected'
   const [showTooClose,  setShowTooClose] = useState(false)
   const [selectedPoint, setSelectedPoint] = useState(null)
 
@@ -124,11 +123,10 @@ export default function MiniMap({ gpsPoints = [] }) {
     return pts.map(p => ({ ...p, duplicate: sameDayDupIds.has(p.id) }))
   }, [gpsPoints, activeDate])
 
-  const visiblePoints = useMemo(() => {
-    let pts = filterEnum === 'all' ? datePoints : datePoints.filter(p => p.enumerator === filterEnum)
-    if (filterStatus !== 'all') pts = pts.filter(p => p.status === filterStatus)
-    return pts
-  }, [datePoints, filterEnum, filterStatus])
+  const visiblePoints = useMemo(() =>
+    filterEnum === 'all' ? datePoints : datePoints.filter(p => p.enumerator === filterEnum),
+    [datePoints, filterEnum]
+  )
 
   // Blink: most-recent per enumerator within 2 h (across ALL data, not just today)
   const blinkingIds = useMemo(() => {
@@ -146,11 +144,9 @@ export default function MiniMap({ gpsPoints = [] }) {
     )
   }, [gpsPoints])
 
-  // Counts always reflect the enumerator filter but NOT the status filter (so chips stay visible)
-  const basePoints = filterEnum === 'all' ? datePoints : datePoints.filter(p => p.enumerator === filterEnum)
-  const accepted  = basePoints.filter(p => p.status === 'accepted').length
-  const rejected  = basePoints.filter(p => p.status === 'rejected').length
-  const tooClose  = basePoints.filter(p => p.duplicate).length
+  const accepted  = visiblePoints.filter(p => p.status === 'accepted').length
+  const rejected  = visiblePoints.filter(p => p.status === 'rejected').length
+  const tooClose  = visiblePoints.filter(p => p.duplicate).length
 
   const CENTER = [33.85, 35.86]
 
@@ -176,7 +172,7 @@ export default function MiniMap({ gpsPoints = [] }) {
           {/* Enumerator filter */}
           <select
             value={filterEnum}
-            onChange={e => { setFilterEnum(e.target.value); setFilterStatus('all') }}
+            onChange={e => setFilterEnum(e.target.value)}
             className="text-xs border border-slate-200 rounded-lg px-2 py-1 text-slate-700 bg-white"
           >
             {enumerators.map(e => (
@@ -185,22 +181,8 @@ export default function MiniMap({ gpsPoints = [] }) {
           </select>
           {/* Stat chips */}
           <div className="flex gap-1.5 text-xs font-semibold">
-            <button
-              onClick={() => setFilterStatus(s => s === 'accepted' ? 'all' : 'accepted')}
-              className={`px-2 py-0.5 rounded-full transition-colors border ${
-                filterStatus === 'accepted'
-                  ? 'bg-green-600 text-white border-green-600'
-                  : 'bg-green-50 text-green-700 border-transparent hover:bg-green-100'
-              }`}
-            >{accepted} accepted</button>
-            <button
-              onClick={() => setFilterStatus(s => s === 'rejected' ? 'all' : 'rejected')}
-              className={`px-2 py-0.5 rounded-full transition-colors border ${
-                filterStatus === 'rejected'
-                  ? 'bg-red-600 text-white border-red-600'
-                  : 'bg-red-50 text-red-600 border-transparent hover:bg-red-100'
-              }`}
-            >{rejected} rejected</button>
+            <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full">{accepted} accepted</span>
+            <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} rejected</span>
             {tooClose > 0 && (
               <button
                 onClick={() => setShowTooClose(v => !v)}
