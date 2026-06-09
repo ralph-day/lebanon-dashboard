@@ -1280,9 +1280,8 @@ const CONFLICT_KEYWORDS = [
   // Arabic — road closures & protests
   'تسكير', 'تسكير طرق', 'إغلاق طريق', 'إغلاق الطريق', 'قطع طريق', 'قطع الطريق',
   'إعتصام', 'اعتصام', 'تجمع', 'بدأ تجمع', 'محتجون', 'محتجين', 'مسيرة احتجاجية',
-  // Arabic — locations / conflict context
-  'الجيش الإسرائيلي', 'إسرائيل', 'حزب الله', 'المقاومة', 'الجنوب', 'البقاع',
-  'الضاحية', 'بيروت', 'صيدا', 'صور', 'النبطية', 'بعلبك', 'زحلة',
+  // Arabic — conflict actors only (no place names — those are in LEBANON_AREAS)
+  'الجيش الإسرائيلي', 'إسرائيل', 'حزب الله', 'المقاومة',
   // English
   'strike', 'airstrike', 'explosion', 'attack', 'rocket', 'missile', 'drone',
   'evacuation', 'warning', 'IDF', 'Israeli army', 'Hezbollah', 'hostilities',
@@ -1315,7 +1314,7 @@ const TG_API_HASH = process.env.TELEGRAM_API_HASH || '';
 const TG_SESSION  = process.env.TELEGRAM_SESSION  || '';
 
 // Channels to monitor — add more usernames here anytime
-const TG_CHANNELS = ['mtvlebanonews', 'nna_agencies', 'bintjbeilorg'];
+const TG_CHANNELS = ['mtvlebanonews', 'bintjbeilnews'];
 
 let tgClient = null;
 
@@ -1564,7 +1563,7 @@ checkSecurityNews(true).catch(e => console.error('[Security] Seed error:', e.mes
 cron.schedule('*/3 * * * *', () => {
   checkSecurityNews(false).catch(e => console.error('[Security] Cron error:', e.message));
 });
-console.log('[Security] News monitor started — watching MTV Lebanon + NNA on Telegram every 3 minutes');
+console.log('[Security] News monitor started — watching MTV Lebanon + Bint Jbeil on Telegram every 3 minutes');
 
 // ── End Security Alert System ─────────────────────────────────────────────────
 

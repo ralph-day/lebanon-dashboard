@@ -2,8 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 
 const SOURCE_LABEL = {
   mtvlebanonews: 'MTV Lebanon',
-  nna_agencies:  'NNA',
-  bintjbeilorg:  'Bint Jbeil',
+  bintjbeilnews: 'Bint Jbeil',
 }
 
 const ALL_AREAS = [
@@ -184,7 +183,7 @@ export default function SecurityAlertsPanel() {
         <div>
           <h2 className="text-xl font-bold text-slate-800">Security Alerts</h2>
           <p className="text-sm text-slate-400 mt-0.5">
-            Monitoring MTV Lebanon · NNA · Bint Jbeil — every 3 minutes
+            Monitoring MTV Lebanon · Bint Jbeil — every 3 minutes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -253,8 +252,7 @@ export default function SecurityAlertsPanel() {
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none">
             <option value="all">All sources</option>
             <option value="mtvlebanonews">MTV Lebanon</option>
-            <option value="nna_agencies">NNA</option>
-            <option value="bintjbeilorg">Bint Jbeil</option>
+            <option value="bintjbeilnews">Bint Jbeil</option>
           </select>
           {/* Area */}
           <select value={filterArea} onChange={e => setFilterArea(e.target.value)}
@@ -316,8 +314,7 @@ export default function SecurityAlertsPanel() {
         <div className="flex flex-wrap gap-2">
           {[
             { name: 'MTV Lebanon', handle: '@mtvlebanonews', color: 'bg-blue-50 text-blue-700 border-blue-100' },
-            { name: 'NNA',         handle: '@nna_agencies',  color: 'bg-green-50 text-green-700 border-green-100' },
-            { name: 'Bint Jbeil',  handle: '@bintjbeilorg',  color: 'bg-amber-50 text-amber-700 border-amber-100' },
+            { name: 'Bint Jbeil',  handle: '@bintjbeilnews', color: 'bg-amber-50 text-amber-700 border-amber-100' },
           ].map(ch => (
             <div key={ch.handle} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${ch.color}`}>
               <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
