@@ -45,7 +45,9 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
 }
 
 function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
-  const [offset, setOffset] = useState(0) // 0 = today, -1 = yesterday, etc.
+  const [offset, setOffset]           = useState(0) // 0 = today, -1 = yesterday, etc.
+  const [showAccepted, setShowAccepted] = useState(false)
+  const [showRejected, setShowRejected] = useState(false)
 
   // Day = 8 AM Lebanon (UTC+3) to 8 AM next day
   const LEBANON_OFFSET_MS = 3 * 60 * 60 * 1000
@@ -91,6 +93,18 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
     .filter(a => a.dayTotal > 0)
     .sort((a, b) => b.dayAccepted - a.dayAccepted)
 
+  // Individual qaRows for the selected day (for dropdowns)
+  const dayQaRows = qaRows.filter(r => {
+    if (!r.submissionDate) return false
+    const ts = new Date(r.submissionDate).getTime()
+    return ts >= dayStart.getTime() && ts <= dayEnd.getTime()
+  })
+  const dayAcceptedRows = dayQaRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted')
+  const dayRejectedRows = dayQaRows.filter(r => {
+    const st = (r.status || '').trim().toLowerCase()
+    return st && st !== 'accepted'
+  })
+
   // totalAccepted uses gpsPoints with Lebanon midnight-to-midnight boundary —
   // identical to the field map's date filter — so both numbers always agree.
   // The per-row breakdown (qaRows) may be a subset; the header shows the full truth.
@@ -113,14 +127,65 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
           <div className="flex items-center gap-2">
             <span className={`text-sm font-semibold px-3 py-1 rounded-lg ${offset === 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>{label}</span>
             {rows.length > 0 && (
-              <span className="text-sm font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-lg border border-orange-200">
-                {totalAccepted} accepted
-              </span>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => { setShowAccepted(v => !v); setShowRejected(false) }}
+                  className={`text-sm font-bold px-3 py-1 rounded-lg border transition-colors ${showAccepted ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
+                >{totalAccepted} accepted</button>
+                {dayRejectedRows.length > 0 && (
+                  <button
+                    onClick={() => { setShowRejected(v => !v); setShowAccepted(false) }}
+                    className={`text-sm font-bold px-3 py-1 rounded-lg border transition-colors ${showRejected ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}
+                  >{dayRejectedRows.length} rejected</button>
+                )}
+              </div>
             )}
           </div>
           <button onClick={() => setOffset(o => Math.min(o + 1, 0))} disabled={offset === 0} className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 flex items-center justify-center text-sm disabled:opacity-30">→</button>
         </div>
       </div>
+
+      {/* Accepted dropdown */}
+      {showAccepted && dayAcceptedRows.length > 0 && (
+        <div className="mb-3 border border-green-100 rounded-lg bg-green-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-green-700 mb-2">✅ Accepted surveys — {label}</p>
+          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+            {dayAcceptedRows.map((r, i) => (
+              <div key={r.id || i} className="bg-white border border-green-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800">{r.name || '—'}</p>
+                  <p className="text-slate-500">{r.locationName || r.district || '—'}</p>
+                </div>
+                <div className="text-right shrink-0 text-slate-400">
+                  {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  <p className="text-green-600 font-medium">{r.qaStatus || '—'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rejected dropdown */}
+      {showRejected && dayRejectedRows.length > 0 && (
+        <div className="mb-3 border border-red-100 rounded-lg bg-red-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-red-700 mb-2">🚫 Rejected surveys — {label}</p>
+          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+            {dayRejectedRows.map((r, i) => (
+              <div key={r.id || i} className="bg-white border border-red-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800">{r.name || '—'}</p>
+                  <p className="text-slate-500">{r.locationName || r.district || '—'}</p>
+                </div>
+                <div className="text-right shrink-0 text-slate-400">
+                  {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  <p className="text-red-500 font-medium">{(r.status || '').trim() || 'rejected'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-4">No submissions recorded for {label.toLowerCase()}</p>
