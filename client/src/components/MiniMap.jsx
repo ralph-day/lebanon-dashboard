@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -47,6 +47,13 @@ export default function MiniMap({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
   const [filterEnum, setFilterEnum] = useState('all')
+
+  // React-driven blink toggle
+  const [blinkOn, setBlinkOn] = useState(true)
+  useEffect(() => {
+    const t = setInterval(() => setBlinkOn(v => !v), 700)
+    return () => clearInterval(t)
+  }, [])
 
   const today = todayLebanonStr()
   const TWO_HOURS = 2 * 60 * 60 * 1000
@@ -164,13 +171,12 @@ export default function MiniMap({ gpsPoints = [] }) {
                 <CircleMarker
                   key={p.id || i}
                   center={[p.lat, p.lng]}
-                  radius={isBlink ? 8 : p.duplicate ? 7 : 5}
+                  radius={isBlink ? 9 : p.duplicate ? 7 : 5}
                   pathOptions={{
-                    color:       dotColor(p),
-                    fillColor:   dotColor(p),
-                    fillOpacity: 0.85,
+                    color:       isBlink ? '#3b82f6' : dotColor(p),
+                    fillColor:   isBlink ? '#3b82f6' : dotColor(p),
+                    fillOpacity: isBlink ? (blinkOn ? 0.95 : 0.1) : 0.85,
                     weight:      isBlink ? 3 : 1,
-                    className:   isBlink ? 'dot-blink' : '',
                   }}
                 >
                   <Popup>
@@ -206,8 +212,8 @@ export default function MiniMap({ gpsPoints = [] }) {
         ))}
         {blinkingIds.size > 0 && (
           <span className="flex items-center gap-1 text-blue-500 font-medium">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 dot-blink inline-block" />
-            Blinking = live (within last 2 h)
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse inline-block" />
+            Blue pulsing = live (within last 2 h)
           </span>
         )}
       </div>

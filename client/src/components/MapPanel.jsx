@@ -57,6 +57,13 @@ function todayStr() {
 export default function MapPanel({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
+  // Blink toggle — drives opacity via React state instead of CSS class
+  const [blinkOn, setBlinkOn] = useState(true)
+  useEffect(() => {
+    const t = setInterval(() => setBlinkOn(v => !v), 700)
+    return () => clearInterval(t)
+  }, [])
+
   // Filters
   const [filterEnum,   setFilterEnum]   = useState('all')
   const [filterLoc,    setFilterLoc]    = useState('all')
@@ -207,8 +214,8 @@ export default function MapPanel({ gpsPoints = [] }) {
         ))}
         {blinkingIds.size > 0 && (
           <span className="flex items-center gap-1.5 text-blue-600 font-medium">
-            <span className="w-3 h-3 rounded-full inline-block bg-blue-500 dot-blink" />
-            Blinking = latest survey by enumerator (within 2 h)
+            <span className="w-3 h-3 rounded-full inline-block bg-blue-500 animate-pulse" />
+            Blue pulsing = latest survey by enumerator (within 2 h)
           </span>
         )}
       </div>
@@ -226,13 +233,12 @@ export default function MapPanel({ gpsPoints = [] }) {
               <CircleMarker
                 key={p.id || i}
                 center={[p.lat, p.lng]}
-                radius={isBlink ? 9 : p.duplicate ? 8 : 6}
+                radius={isBlink ? 10 : p.duplicate ? 8 : 6}
                 pathOptions={{
-                  color:       dotColor(p),
-                  fillColor:   dotColor(p),
-                  fillOpacity: 0.85,
+                  color:       isBlink ? '#3b82f6' : dotColor(p),
+                  fillColor:   isBlink ? '#3b82f6' : dotColor(p),
+                  fillOpacity: isBlink ? (blinkOn ? 0.95 : 0.1) : 0.85,
                   weight:      isBlink ? 3 : p.duplicate ? 2 : 1,
-                  className:   isBlink ? 'dot-blink' : '',
                 }}
               >
                 <Popup>
