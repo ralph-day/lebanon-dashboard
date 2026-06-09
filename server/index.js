@@ -676,7 +676,7 @@ async function parseExcel(filePath) {
 
 // ── WhatsApp Notifications via Green API ─────────────────────────────────────
 // Setup: sign up at green-api.com, create an instance, scan QR with your WhatsApp.
-// Add GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN to Railway env vars.
+// WhatsApp via Meta Business API — uses META_WA_TOKEN and META_WA_PHONE_ID Railway env vars.
 
 const NOTIFICATIONS_PATH = path.join(DATA_DIR, 'notifications.json');
 let sentAlerts = new Set();
@@ -692,34 +692,40 @@ function saveNotifications() {
   try { atomicWrite(NOTIFICATIONS_PATH, JSON.stringify([...sentAlerts])); } catch(e) { console.error('Could not save notifications:', e.message); }
 }
 
-// Format phone for Green API: strip leading zeros/+ and append @c.us
-function toWaId(phone) {
+// Format phone for Meta API: strip all non-digits, prepend 961 if needed
+function toMetaPhone(phone) {
   const digits = String(phone).replace(/\D/g, '');
-  // If already starts with country code (961...) use as-is, else prepend 961
-  const full = digits.startsWith('961') ? digits : `961${digits}`;
-  return `${full}@c.us`;
+  return digits.startsWith('961') ? digits : `961${digits}`;
 }
 
 async function sendWhatsApp(phone, message) {
-  const instanceId = process.env.GREENAPI_INSTANCE_ID;
-  const apiToken   = process.env.GREENAPI_API_TOKEN;
-  if (!instanceId || !apiToken) return; // silently skip if not configured
-  const chatId = toWaId(phone);
-  const url = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
+  const token   = process.env.META_WA_TOKEN;
+  const phoneId = process.env.META_WA_PHONE_ID;
+  if (!token || !phoneId) return; // silently skip if not configured
+  const to = toMetaPhone(phone);
+  const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId, message }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: message },
+      }),
     });
     if (!res.ok) {
       const err = await res.text();
-      console.error(`[WhatsApp] Failed to send to ${chatId}: ${err}`);
+      console.error(`[WhatsApp] Failed to send to ${to}: ${err}`);
     } else {
-      console.log(`[WhatsApp] Sent to ${chatId}`);
+      console.log(`[WhatsApp] Sent to ${to}`);
     }
   } catch(e) {
-    console.error(`[WhatsApp] Network error sending to ${chatId}:`, e.message);
+    console.error(`[WhatsApp] Network error sending to ${to}:`, e.message);
   }
 }
 
@@ -769,7 +775,7 @@ function buildManagerMessage(anomaly) {
 const NISRINE_PHONE = process.env.NISRINE_PHONE || '96130466612'; // +961 3 046 612
 
 async function notifyAnomalies(anomalies) {
-  if (!process.env.GREENAPI_INSTANCE_ID) return; // skip if not configured
+  if (!process.env.META_WA_TOKEN) return; // skip if not configured
   let newAlerts = 0;
   for (const anomaly of anomalies) {
     // Key = enumerator + latest issue timestamp — changes when new issues arrive
@@ -857,8 +863,8 @@ app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
 
 // Manually trigger WhatsApp alerts for current anomalies (QA approver only)
 app.post('/api/notify/test', requireAuth, requireQAApprover, async (req, res) => {
-  if (!process.env.GREENAPI_INSTANCE_ID) {
-    return res.status(503).json({ error: 'WhatsApp not configured — set GREENAPI_INSTANCE_ID and GREENAPI_API_TOKEN in Railway' });
+  if (!process.env.META_WA_TOKEN) {
+    return res.status(503).json({ error: 'WhatsApp not configured — set META_WA_TOKEN and META_WA_PHONE_ID in Railway' });
   }
   if (!cache.data) return res.status(503).json({ error: 'No data in cache yet' });
   // Clear sent cache so all current alerts fire
