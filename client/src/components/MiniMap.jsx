@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
 const BLINK_STYLE = `
@@ -39,6 +39,15 @@ function toLebanonDateStr(isoStr) {
   return lb.toISOString().slice(0, 10)
 }
 
+// Fly to a point when selectedPoint changes
+function FlyToPoint({ point }) {
+  const map = useMap()
+  useEffect(() => {
+    if (point) map.flyTo([point.lat, point.lng], 16, { duration: 1 })
+  }, [point])
+  return null
+}
+
 function todayLebanonStr() {
   return toLebanonDateStr(new Date().toISOString())
 }
@@ -46,8 +55,9 @@ function todayLebanonStr() {
 export default function MiniMap({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
-  const [filterEnum,   setFilterEnum]   = useState('all')
-  const [showTooClose, setShowTooClose] = useState(false)
+  const [filterEnum,    setFilterEnum]   = useState('all')
+  const [showTooClose,  setShowTooClose] = useState(false)
+  const [selectedPoint, setSelectedPoint] = useState(null)
 
   // React-driven blink toggle
   const [blinkOn, setBlinkOn] = useState(true)
@@ -170,18 +180,30 @@ export default function MiniMap({ gpsPoints = [] }) {
         <div className="border-t border-orange-100 bg-orange-50 px-4 py-3">
           <p className="text-xs font-semibold text-orange-700 mb-2">⚠ Surveys too close to another interview (≤15 m)</p>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {visiblePoints.filter(p => p.duplicate).map((p, i) => (
-              <div key={p.id || i} className="bg-white rounded-lg px-3 py-2 border border-orange-100 text-xs flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-800">{p.enumerator || '—'}</p>
-                  <p className="text-slate-500">{p.location || '—'}</p>
+            {visiblePoints.filter(p => p.duplicate).map((p, i) => {
+              const isSelected = selectedPoint?.id === p.id
+              return (
+                <div
+                  key={p.id || i}
+                  onClick={() => { setSelectedPoint(p); setShowTooClose(true) }}
+                  className={`rounded-lg px-3 py-2 border text-xs flex items-start justify-between gap-3 cursor-pointer transition-colors ${
+                    isSelected
+                      ? 'bg-orange-100 border-orange-400 ring-1 ring-orange-400'
+                      : 'bg-white border-orange-100 hover:bg-orange-50'
+                  }`}
+                >
+                  <div>
+                    <p className="font-semibold text-slate-800">{p.enumerator || '—'}</p>
+                    <p className="text-slate-500">{p.location || '—'}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {p.date && <p className="text-slate-400">{new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                    {p.accuracy != null && <p className="text-slate-400">±{p.accuracy} m</p>}
+                    <p className="text-orange-500 font-medium mt-0.5">📍 Show on map</p>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  {p.date && <p className="text-slate-400">{new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
-                  {p.accuracy != null && <p className="text-slate-400">±{p.accuracy} m</p>}
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {visiblePoints.filter(p => p.duplicate).length === 0 && (
               <p className="text-xs text-slate-400">No flagged surveys for current filter</p>
             )}
@@ -199,18 +221,20 @@ export default function MiniMap({ gpsPoints = [] }) {
           <MapContainer center={CENTER} zoom={9} zoomControl={false} attributionControl={false}
             style={{ height: '100%', width: '100%' }}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <FlyToPoint point={selectedPoint} />
             {visiblePoints.map((p, i) => {
-              const isBlink = blinkingIds.has(p.id)
+              const isBlink    = blinkingIds.has(p.id)
+              const isSelected = selectedPoint?.id === p.id
               return (
                 <CircleMarker
                   key={p.id || i}
                   center={[p.lat, p.lng]}
-                  radius={isBlink ? 9 : p.duplicate ? 7 : 5}
+                  radius={isSelected ? 11 : isBlink ? 9 : p.duplicate ? 7 : 5}
                   pathOptions={{
-                    color:       isBlink ? '#3b82f6' : dotColor(p),
+                    color:       isSelected ? '#fff' : isBlink ? '#3b82f6' : dotColor(p),
                     fillColor:   isBlink ? '#3b82f6' : dotColor(p),
-                    fillOpacity: isBlink ? (blinkOn ? 0.95 : 0.1) : 0.85,
-                    weight:      isBlink ? 3 : 1,
+                    fillOpacity: isBlink ? (blinkOn ? 0.95 : 0.1) : 0.9,
+                    weight:      isSelected ? 4 : isBlink ? 3 : 1,
                   }}
                 >
                   <Popup>
