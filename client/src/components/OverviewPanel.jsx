@@ -69,18 +69,25 @@ function DailyProgress({ assignments, qaRows, navigate }) {
     if (!r.submissionDate) return
     const ts = new Date(r.submissionDate).getTime()
     if (ts < dayStart.getTime() || ts > dayEnd.getTime()) return
-    // match to assignment by name containing code
     const assignment = assignments.find(a => r.name.includes(`(${a.code})`))
     if (!assignment) return
-    if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, total: 0 }
+    if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, qaFail: 0, total: 0 }
     statsByCode[assignment.code].total++
     const st = (r.status || '').trim().toLowerCase()
     if (st === 'accepted') statsByCode[assignment.code].accepted++
     else if (st) statsByCode[assignment.code].rejected++
+    // QA fail = automated quality check failed (separate from supervisor rejection)
+    if (r.qaStatus === '❌ FAIL') statsByCode[assignment.code].qaFail++
   })
 
   const rows = assignments
-    .map(a => ({ ...a, dayAccepted: statsByCode[a.code]?.accepted || 0, dayRejected: statsByCode[a.code]?.rejected || 0, dayTotal: statsByCode[a.code]?.total || 0 }))
+    .map(a => ({
+      ...a,
+      dayAccepted: statsByCode[a.code]?.accepted || 0,
+      dayRejected: statsByCode[a.code]?.rejected || 0,
+      dayQaFail:   statsByCode[a.code]?.qaFail   || 0,
+      dayTotal:    statsByCode[a.code]?.total     || 0,
+    }))
     .filter(a => a.dayTotal > 0)
     .sort((a, b) => b.dayAccepted - a.dayAccepted)
 
@@ -120,7 +127,16 @@ function DailyProgress({ assignments, qaRows, navigate }) {
                 <div className="flex items-center gap-1.5 shrink-0">
                   <span className="text-sm font-bold text-emerald-600">+{a.dayAccepted}</span>
                   <span className="text-xs text-slate-400">accepted</span>
-                  {a.dayRejected > 0 && <span className="text-xs text-red-400 ml-1">({a.dayRejected} rejected)</span>}
+                  {a.dayRejected > 0 && (
+                    <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded ml-1" title="Rejected by supervisor">
+                      {a.dayRejected} rejected
+                    </span>
+                  )}
+                  {a.dayQaFail > 0 && (
+                    <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-1" title="Failed automated QA quality check">
+                      {a.dayQaFail} QA fail
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

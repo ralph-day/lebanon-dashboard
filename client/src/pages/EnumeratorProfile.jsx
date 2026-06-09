@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts'
+import { useState, useMemo } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 
 const SECTIONS = [
   { key: 'time_demo',         label: 'Demographics', min: 3 },
@@ -14,11 +14,11 @@ const SECTIONS = [
 
 function StatBox({ label, value, sub, color = 'slate' }) {
   const colors = {
-    blue:    'bg-blue-50 text-blue-700 border-blue-100',
-    green:   'bg-emerald-50 text-emerald-700 border-emerald-100',
-    amber:   'bg-amber-50 text-amber-700 border-amber-100',
-    red:     'bg-red-50 text-red-700 border-red-100',
-    slate:   'bg-slate-50 text-slate-700 border-slate-100',
+    blue:  'bg-blue-50 text-blue-700 border-blue-100',
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    red:   'bg-red-50 text-red-700 border-red-100',
+    slate: 'bg-slate-50 text-slate-700 border-slate-100',
   }
   return (
     <div className={`rounded-xl border p-4 ${colors[color]}`}>
@@ -29,15 +29,52 @@ function StatBox({ label, value, sub, color = 'slate' }) {
   )
 }
 
+const barColor = (status) => {
+  if (status === '✅ PASS') return '#10b981'
+  if (status === '⚠️ REVIEW') return '#f59e0b'
+  return '#ef4444'
+}
+
+// Lebanon timezone date string
+function toLbDate(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d)) return null
+  return new Date(d.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
 export default function EnumeratorProfile({ data }) {
   const { code } = useParams()
   const navigate = useNavigate()
 
-  const assignment = data?.assignments?.find(a => a.code === code)
-  const enumerator = data?.enumerators?.find(e => e.name.includes(`(${code})`))
+  // Date filter state
+  const [dateMode,   setDateMode]   = useState('all')  // 'all' | 'today' | 'last7' | 'custom'
+  const [customDate, setCustomDate] = useState(() => toLbDate(new Date().toISOString()))
+
+  const assignment   = data?.assignments?.find(a => a.code === code)
+  const enumerator   = data?.enumerators?.find(e => e.name.includes(`(${code})`))
   const sectionTiming = data?.sectionTimings?.find(s => s.name.includes(`(${code})`))
-  const qaRows = data?.qa?.rows?.filter(r => r.name.includes(`(${code})`)) || []
-  const anomalies = data?.anomalies?.find(a => a.name.includes(`(${code})`))
+  const allQaRows    = data?.qa?.rows?.filter(r => r.name.includes(`(${code})`)) || []
+  const anomalies    = data?.anomalies?.find(a => a.name.includes(`(${code})`))
+
+  // All unique dates this enumerator has submissions
+  const allDates = useMemo(() => {
+    const s = new Set(allQaRows.map(r => toLbDate(r.submissionDate)).filter(Boolean))
+    return [...s].sort().reverse()
+  }, [allQaRows])
+
+  // Apply date filter to qaRows
+  const qaRows = useMemo(() => {
+    const todayLb = toLbDate(new Date().toISOString())
+    const last7   = toLbDate(new Date(Date.now() - 6 * 86400000).toISOString())
+    return allQaRows.filter(r => {
+      const ds = toLbDate(r.submissionDate)
+      if (dateMode === 'today')  return ds === todayLb
+      if (dateMode === 'last7')  return ds >= last7
+      if (dateMode === 'custom') return ds === customDate
+      return true // 'all'
+    })
+  }, [allQaRows, dateMode, customDate])
 
   if (!assignment && !enumerator) {
     return (
@@ -50,34 +87,56 @@ export default function EnumeratorProfile({ data }) {
     )
   }
 
-  const name = assignment?.name || enumerator?.name || code
+  const name  = assignment?.name || enumerator?.name || code
   const phone = data?.assignments?.find(a => a.code === code)?.phone || null
 
-  // QA breakdown
-  const pass = qaRows.filter(r => r.qaStatus === '✅ PASS').length
+  // QA breakdown (filtered)
+  const pass   = qaRows.filter(r => r.qaStatus === '✅ PASS').length
   const review = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
-  const fail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length
-  const total = qaRows.length
+  const fail   = qaRows.filter(r => r.qaStatus === '❌ FAIL').length
+  const rejected = qaRows.filter(r => {
+    const st = (r.status || '').trim().toLowerCase()
+    return st && st !== 'accepted'
+  }).length
+  const total  = qaRows.length
 
-  // Section timing radar data
-  const radarData = SECTIONS.map(s => ({
-    section: s.label,
-    avg: sectionTiming?.[s.key] || 0,
-    min: s.min,
-  }))
+  // Recent survey bars (last 20 in filtered set)
+  const recentBars = [...qaRows]
+    .sort((a, b) => new Date(a.submissionDate) - new Date(b.submissionDate))
+    .slice(-20)
+    .map((r, i) => ({
+      i: i + 1,
+      mins: parseFloat(r.fullTime || 0).toFixed(1),
+      status: r.qaStatus,
+      date: r.submissionDate ? new Date(r.submissionDate).toLocaleString() : '',
+      surveyStatus: r.status || '',
+    }))
 
-  // Recent submissions bar chart
-  const recentBars = qaRows.slice(0, 15).reverse().map((r, i) => ({
-    i: i + 1,
-    mins: parseFloat(r.fullTime || 0).toFixed(1),
-    status: r.qaStatus,
-  }))
+  // Daily breakdown table
+  const dailyStats = useMemo(() => {
+    const byDate = {}
+    allQaRows.forEach(r => {
+      const ds = toLbDate(r.submissionDate)
+      if (!ds) return
+      if (!byDate[ds]) byDate[ds] = { date: ds, total: 0, accepted: 0, rejected: 0, qaPass: 0, qaReview: 0, qaFail: 0 }
+      byDate[ds].total++
+      const st = (r.status || '').trim().toLowerCase()
+      if (st === 'accepted') byDate[ds].accepted++
+      else if (st) byDate[ds].rejected++
+      if (r.qaStatus === '✅ PASS')   byDate[ds].qaPass++
+      if (r.qaStatus === '⚠️ REVIEW') byDate[ds].qaReview++
+      if (r.qaStatus === '❌ FAIL')   byDate[ds].qaFail++
+    })
+    return Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date))
+  }, [allQaRows])
 
-  const barColor = (status) => {
-    if (status === '✅ PASS') return '#10b981'
-    if (status === '⚠️ REVIEW') return '#f59e0b'
-    return '#ef4444'
-  }
+  // Date filter label
+  const filterLabel = {
+    all:    'All time',
+    today:  'Today',
+    last7:  'Last 7 days',
+    custom: customDate,
+  }[dateMode]
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -96,7 +155,8 @@ export default function EnumeratorProfile({ data }) {
             )}
           </div>
           {phone && (
-            <a href={`tel:+961${phone}`} className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition-colors">
+            <a href={`tel:+961${phone}`}
+              className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg transition-colors">
               📞 {phone}
             </a>
           )}
@@ -105,15 +165,39 @@ export default function EnumeratorProfile({ data }) {
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-        {/* Overview stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatBox label="Total Surveys" value={enumerator?.totalSurveys || assignment?.completed} color="blue" />
-          <StatBox label="Avg Duration" value={enumerator?.avgDuration != null ? `${parseFloat(enumerator.avgDuration).toFixed(1)} min` : '—'} color="slate" />
-          <StatBox label="Missing GPS" value={enumerator?.missingGPS ?? '—'} color={enumerator?.missingGPS > 0 ? 'amber' : 'green'} />
-          <StatBox label="Quality" value={enumerator?.qualityPct != null ? `${parseFloat(enumerator.qualityPct).toFixed(0)}%` : '—'} color="slate" />
+        {/* ── Date filter bar ───────────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Showing</span>
+          {[['all', 'All time'], ['today', 'Today'], ['last7', 'Last 7 days']].map(([mode, lbl]) => (
+            <button key={mode} onClick={() => setDateMode(mode)}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-colors ${
+                dateMode === mode
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}>
+              {lbl}
+            </button>
+          ))}
+          <input type="date" value={customDate}
+            onChange={e => { setCustomDate(e.target.value); setDateMode('custom') }}
+            className={`text-xs border rounded-lg px-2 py-1.5 text-slate-700 bg-white transition-colors ${
+              dateMode === 'custom' ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200'
+            }`}
+          />
+          <span className="ml-auto text-xs text-slate-400">
+            {total} survey{total !== 1 ? 's' : ''} · {filterLabel}
+          </span>
         </div>
 
-        {/* Assignment progress */}
+        {/* ── Overview stats (all-time from server) ────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatBox label="Total Surveys" value={enumerator?.totalSurveys || assignment?.completed} sub="all time" color="blue" />
+          <StatBox label="Avg Duration"  value={enumerator?.avgDuration != null ? `${parseFloat(enumerator.avgDuration).toFixed(1)} min` : '—'} color="slate" />
+          <StatBox label="Missing GPS"   value={enumerator?.missingGPS ?? '—'} color={enumerator?.missingGPS > 0 ? 'amber' : 'green'} />
+          <StatBox label="Quality"       value={enumerator?.qualityPct != null ? `${parseFloat(enumerator.qualityPct).toFixed(0)}%` : '—'} sub="all time" color="slate" />
+        </div>
+
+        {/* ── Assignment progress ───────────────────────────────────────────── */}
         {assignment && (
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h3 className="text-sm font-semibold text-slate-700 mb-4">Assignment Progress</h3>
@@ -145,48 +229,64 @@ export default function EnumeratorProfile({ data }) {
           </div>
         )}
 
-        {/* QA summary + recent surveys */}
+        {/* ── Quality for selected period ───────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-4">Survey Quality (last 50)</h3>
-            <div className="flex gap-4">
-              {[['✅ Pass', pass, '#10b981'], ['⚠️ Review', review, '#f59e0b'], ['❌ Fail', fail, '#ef4444']].map(([label, val, color]) => (
-                <div key={label} className="text-center flex-1">
-                  <p className="text-2xl font-bold" style={{ color }}>{val}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{label}</p>
-                  <p className="text-xs text-slate-400">{total > 0 ? Math.round(val / total * 100) : 0}%</p>
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Survey Quality</h3>
+            <p className="text-xs text-slate-400 mb-4">{filterLabel} · {total} surveys</p>
+            {total === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No surveys for this period</p>
+            ) : (
+              <>
+                <div className="flex gap-4 mb-4">
+                  {[['✅ Pass', pass, '#10b981'], ['⚠️ Review', review, '#f59e0b'], ['❌ QA Fail', fail, '#ef4444']].map(([label, val, color]) => (
+                    <div key={label} className="text-center flex-1">
+                      <p className="text-2xl font-bold" style={{ color }}>{val}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{label}</p>
+                      <p className="text-xs text-slate-400">{total > 0 ? Math.round(val / total * 100) : 0}%</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="mt-4">
-              <div className="flex h-2 rounded-full overflow-hidden">
-                <div style={{ width: `${total > 0 ? pass/total*100 : 0}%`, background: '#10b981' }} />
-                <div style={{ width: `${total > 0 ? review/total*100 : 0}%`, background: '#f59e0b' }} />
-                <div style={{ width: `${total > 0 ? fail/total*100 : 0}%`, background: '#ef4444' }} />
-              </div>
-            </div>
+                {rejected > 0 && (
+                  <div className="bg-red-50 rounded-lg px-3 py-2 text-xs text-red-700 font-medium mb-3">
+                    ⛔ {rejected} survey{rejected !== 1 ? 's' : ''} rejected by supervisor
+                  </div>
+                )}
+                <div className="flex h-2 rounded-full overflow-hidden">
+                  <div style={{ width: `${total > 0 ? pass/total*100 : 0}%`,   background: '#10b981' }} />
+                  <div style={{ width: `${total > 0 ? review/total*100 : 0}%`, background: '#f59e0b' }} />
+                  <div style={{ width: `${total > 0 ? fail/total*100 : 0}%`,   background: '#ef4444' }} />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Survey Durations</h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <BarChart data={recentBars} margin={{ left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="i" tick={{ fontSize: 9 }} />
-                <YAxis tick={{ fontSize: 10 }} unit="m" />
-                <Tooltip formatter={(v) => [`${v} min`, 'Duration']} />
-                <Bar dataKey="mins" radius={[3, 3, 0, 0]}>
-                  {recentBars.map((r, i) => <Cell key={i} fill={barColor(r.status)} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Survey Durations</h3>
+            <p className="text-xs text-slate-400 mb-3">{filterLabel} · last {recentBars.length} shown</p>
+            {recentBars.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No surveys for this period</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={130}>
+                <BarChart data={recentBars} margin={{ left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="i" tick={{ fontSize: 9 }} />
+                  <YAxis tick={{ fontSize: 10 }} unit="m" />
+                  <Tooltip formatter={(v, n, p) => [`${v} min · ${p.payload.date}`, 'Duration']} />
+                  <Bar dataKey="mins" radius={[3, 3, 0, 0]}>
+                    {recentBars.map((r, i) => <Cell key={i} fill={barColor(r.status)} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* Section timing */}
+        {/* ── Section timing (all-time averages from server) ────────────────── */}
         {sectionTiming && (
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-4">Avg Section Duration vs Minimum</h3>
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Avg Section Duration vs Minimum</h3>
+            <p className="text-xs text-slate-400 mb-4">All-time averages</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {SECTIONS.map(s => {
                 const val = sectionTiming[s.key] || 0
@@ -203,7 +303,55 @@ export default function EnumeratorProfile({ data }) {
           </div>
         )}
 
-        {/* Active anomalies */}
+        {/* ── Daily breakdown table ─────────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <h3 className="text-sm font-semibold text-slate-700 mb-4">Daily Submission Log</h3>
+          {dailyStats.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-4">No submission history</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-slate-400 border-b border-slate-100">
+                    <th className="text-left pb-2 font-medium">Date</th>
+                    <th className="text-right pb-2 font-medium">Total</th>
+                    <th className="text-right pb-2 font-medium text-emerald-600">Accepted</th>
+                    <th className="text-right pb-2 font-medium text-red-500">Rejected</th>
+                    <th className="text-right pb-2 font-medium text-emerald-600">QA Pass</th>
+                    <th className="text-right pb-2 font-medium text-amber-500">Review</th>
+                    <th className="text-right pb-2 font-medium text-red-500">QA Fail</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {dailyStats.map(d => {
+                    const isToday = d.date === toLbDate(new Date().toISOString())
+                    return (
+                      <tr key={d.date}
+                        onClick={() => { setCustomDate(d.date); setDateMode('custom') }}
+                        className={`cursor-pointer hover:bg-slate-50 transition-colors ${
+                          dateMode === 'custom' && customDate === d.date ? 'bg-blue-50' : ''
+                        }`}>
+                        <td className="py-2 font-medium text-slate-700">
+                          {d.date}
+                          {isToday && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">today</span>}
+                        </td>
+                        <td className="py-2 text-right text-slate-600">{d.total}</td>
+                        <td className="py-2 text-right font-semibold text-emerald-600">{d.accepted || '—'}</td>
+                        <td className="py-2 text-right font-semibold text-red-500">{d.rejected || '—'}</td>
+                        <td className="py-2 text-right text-emerald-600">{d.qaPass || '—'}</td>
+                        <td className="py-2 text-right text-amber-500">{d.qaReview || '—'}</td>
+                        <td className="py-2 text-right font-semibold text-red-500">{d.qaFail || '—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="text-xs text-slate-400 mt-3">Click a row to filter the quality view to that day</p>
+            </div>
+          )}
+        </div>
+
+        {/* ── Active anomalies ──────────────────────────────────────────────── */}
         {anomalies && anomalies.totalIssues > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-5">
             <h3 className="text-sm font-semibold text-red-700 mb-3">Active Issues (last 4h)</h3>
