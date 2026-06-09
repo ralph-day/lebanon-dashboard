@@ -108,12 +108,21 @@ function AuditTable({ gpsPoints }) {
 
   const rows = useMemo(() => {
     const q = search.toLowerCase()
-    // Recompute duplicates within this day only
     const dayPts = gpsPoints.filter(p => toLbDate(p.date) === auditDate)
-    const { ids: dupIds, pairs: dupPairs } = sameScopeDuplicates(dayPts)
+    // Same-day flag (for the ⚠ badge)
+    const { ids: dupIds } = sameScopeDuplicates(dayPts)
 
-    return dayPts
-      .map(p => ({ ...p, duplicate: dupIds.has(p.id), pairedWith: dupPairs.get(p.id) || [] }))
+    // Cross-date pairing: for each survey today, find ALL surveys in the full
+    // dataset (any date) that are within 15m — so we know if it's a repeat visit
+    const allOther = gpsPoints // compare against everything
+    return dayPts.map(p => {
+      const paired = allOther
+        .filter(o => o.id !== p.id)
+        .map(o => ({ ...o, dist: Math.round(haversineMp(p.lat, p.lng, o.lat, o.lng)) }))
+        .filter(o => o.dist <= DUP_M)
+        .sort((a, b) => a.dist - b.dist)
+      return { ...p, duplicate: dupIds.has(p.id) || paired.length > 0, pairedWith: paired }
+    })
       .filter(p => {
         if (q && !`${p.enumerator} ${p.location} ${p.status}`.toLowerCase().includes(q)) return false
         return true
@@ -215,10 +224,19 @@ function AuditTable({ gpsPoints }) {
                         {p.pairedWith?.length > 0 ? (
                           <div className="space-y-0.5">
                             {p.pairedWith.map((pw, k) => {
+                              const pwDate = toLbDate(pw.date)
                               const pwTime = pw.date ? new Date(pw.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '?'
+                              const isSameDay = pwDate === auditDate
+                              const dateLabel = isSameDay
+                                ? `Today ${pwTime}`
+                                : `${pwDate} ${pwTime}`
                               return (
-                                <div key={k} className="text-xs text-orange-700 bg-orange-50 rounded px-1.5 py-0.5 whitespace-nowrap">
-                                  {pw.enumerator?.split('(')[0]?.trim() || '?'} · {pwTime} · {pw.dist}m away
+                                <div key={k} className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap font-medium ${
+                                  isSameDay
+                                    ? 'text-orange-700 bg-orange-50'
+                                    : 'text-red-700 bg-red-50'
+                                }`}>
+                                  {pw.enumerator?.split('(')[0]?.trim() || '?'} · {dateLabel} · {pw.dist}m away
                                 </div>
                               )
                             })}
