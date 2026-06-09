@@ -1352,22 +1352,40 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   await sendWhatsApp(MOE_PHONE,    managerMsg);
 }
 
-async function checkSecurityNews() {
-  if (!process.env.META_WA_TOKEN) return; // skip if WhatsApp not configured
+let securityMonitorSeeded = false;
+
+async function checkSecurityNews(seedOnly = false) {
+  if (!process.env.META_WA_TOKEN) return;
   const items = await fetchAnnaharRSS();
   if (items.length === 0) return;
+
+  const now = Date.now();
+  const FOUR_MIN_MS = 4 * 60 * 1000; // slightly wider than 3-min interval
 
   for (const item of items) {
     const title = item.title?._ || item.title || '';
     const description = item.description?._ || item.description || '';
     const guid = item.guid?._ || item.guid || title;
+
+    // Always mark as seen
+    if (seedOnly || sentSecurityAlerts.has(guid)) {
+      sentSecurityAlerts.add(guid);
+      continue;
+    }
+
+    // Only alert on articles published within the last 4 minutes
+    const pubDate = item.pubDate ? new Date(item.pubDate).getTime() : 0;
+    if (pubDate && (now - pubDate) > FOUR_MIN_MS) {
+      sentSecurityAlerts.add(guid);
+      continue;
+    }
+
     const fullText = `${title} ${description}`;
-
-    // Skip if already alerted for this article
-    if (sentSecurityAlerts.has(guid)) continue;
-
     const matchedKeywords = detectConflictKeywords(fullText);
-    if (matchedKeywords.length < 2) continue; // require at least 2 keywords to reduce false positives
+    if (matchedKeywords.length < 2) {
+      sentSecurityAlerts.add(guid);
+      continue;
+    }
 
     const mentionedAreas = extractMentionedAreas(fullText);
     console.log(`[Security] ⚠️ Alert triggered: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')}`);
@@ -1377,11 +1395,19 @@ async function checkSecurityNews() {
 
     await sendSecurityAlert(item, matchedKeywords, mentionedAreas);
   }
+
+  if (seedOnly) {
+    saveSecurityAlerts();
+    console.log(`[Security] Seeded ${sentSecurityAlerts.size} existing articles — monitoring for new ones`);
+  }
 }
 
-// Run every 3 minutes
+// Seed on startup (mark all current articles as seen, don't alert)
+checkSecurityNews(true).catch(e => console.error('[Security] Seed error:', e.message));
+
+// Run every 3 minutes — only alerts on NEW articles published since last check
 cron.schedule('*/3 * * * *', () => {
-  checkSecurityNews().catch(e => console.error('[Security] Cron error:', e.message));
+  checkSecurityNews(false).catch(e => console.error('[Security] Cron error:', e.message));
 });
 console.log('[Security] News monitor started — checking Annahar every 3 minutes');
 
