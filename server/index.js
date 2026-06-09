@@ -773,6 +773,7 @@ function buildManagerMessage(anomaly) {
 }
 
 const NISRINE_PHONE = process.env.NISRINE_PHONE || '96130466612'; // +961 3 046 612
+const MOE_PHONE    = process.env.MOE_PHONE    || '96176999503'; // +961 76 999 503
 
 async function notifyAnomalies(anomalies) {
   if (!process.env.META_WA_TOKEN) return; // skip if not configured
@@ -789,8 +790,9 @@ async function notifyAnomalies(anomalies) {
       await sendWhatsApp(anomaly.phone, buildEnumeratorMessage(anomaly));
     }
 
-    // Message to field manager (Nisrine)
+    // Message to field managers (Nisrine + Moe)
     await sendWhatsApp(NISRINE_PHONE, buildManagerMessage(anomaly));
+    await sendWhatsApp(MOE_PHONE,    buildManagerMessage(anomaly));
 
     sentAlerts.add(alertKey);
     newAlerts++;
