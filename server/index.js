@@ -496,6 +496,24 @@ async function parseExcel(filePath) {
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
   const qaRejected = qaRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
 
+  // Ground-truth surveys array — built from rawData (same source as gpsPoints),
+  // with qaStatus merged in from the QA dashboard sheet.
+  // This avoids the discrepancy between the QA sheet (subset) and rawData (all surveys).
+  const qaStatusById = {};
+  qaRows.forEach(r => { if (r.id) qaStatusById[r.id] = r.qaStatus; });
+  const surveys = rawData
+    .map(r => {
+      const id = r.instanceID || r['KEY'] || '';
+      return {
+        id,
+        name: r.NameCode || r.name || '',
+        status: (r.SurveyStatus_New || '').trim().toLowerCase(),
+        submissionDate: toISO(r.SubmissionDate || r.submission_date || r['_submission_time']),
+        qaStatus: qaStatusById[id] || '',
+      };
+    })
+    .filter(r => r.submissionDate);
+
   // Section timing averages per enumerator
   const sectionFields = ['time_demo', 'time_priorities', 'time_mutualaid', 'time_access_trust', 'time_expectations', 'time_info', 'time_future'];
   const timingMap = {};
@@ -661,7 +679,7 @@ async function parseExcel(filePath) {
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
     qa: { rows: qaRows, pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
-    sectionTimings, natTotals, genderTotals, gpsPoints,
+    sectionTimings, natTotals, genderTotals, gpsPoints, surveys,
   };
 }
 

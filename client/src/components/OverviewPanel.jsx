@@ -153,7 +153,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
 
 export default function OverviewPanel({ data }) {
   const navigate = useNavigate()
-  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [] } = data
+  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [], surveys = [] } = data
 
   const totalCompleted = overview.totalTarget - overview.remaining
   const pct = overview.totalTarget > 0 ? Math.round((totalCompleted / overview.totalTarget) * 100) : 0
@@ -223,7 +223,7 @@ export default function OverviewPanel({ data }) {
 
       {/* ── Daily Progress + Mini Map ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
+        <DailyProgress assignments={assignments} qaRows={surveys.length > 0 ? surveys : (data.qa?.rows || [])} navigate={navigate} />
         <MiniMap gpsPoints={gpsPoints} />
       </div>
 
