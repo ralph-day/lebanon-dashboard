@@ -52,6 +52,28 @@ function todayLebanonStr() {
   return toLebanonDateStr(new Date().toISOString())
 }
 
+// Recompute same-day duplicates — only flag if two surveys on the SAME date are ≤15m apart
+const DUPLICATE_M = 15
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+function computeSameDayDuplicates(points) {
+  const ids = new Set()
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      if (haversineM(points[i].lat, points[i].lng, points[j].lat, points[j].lng) <= DUPLICATE_M) {
+        ids.add(points[i].id)
+        ids.add(points[j].id)
+      }
+    }
+  }
+  return ids
+}
+
 export default function MiniMap({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
@@ -93,11 +115,13 @@ export default function MiniMap({ gpsPoints = [] }) {
     return ['all', ...new Set(names)]
   }, [gpsPoints, activeDate])
 
-  // Points for display
-  const datePoints = useMemo(() =>
-    gpsPoints.filter(p => toLebanonDateStr(p.date) === activeDate),
-    [gpsPoints, activeDate]
-  )
+  // Points for the active date — recompute duplicates within this date only
+  const datePoints = useMemo(() => {
+    const pts = gpsPoints.filter(p => toLebanonDateStr(p.date) === activeDate)
+    const sameDayDupIds = computeSameDayDuplicates(pts)
+    // Return points with corrected duplicate flag (same-day only)
+    return pts.map(p => ({ ...p, duplicate: sameDayDupIds.has(p.id) }))
+  }, [gpsPoints, activeDate])
 
   const visiblePoints = useMemo(() =>
     filterEnum === 'all' ? datePoints : datePoints.filter(p => p.enumerator === filterEnum),

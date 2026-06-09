@@ -61,6 +61,22 @@ function toLbDate(iso) {
   return new Date(d.getTime() + LB_OFFSET).toISOString().slice(0, 10)
 }
 
+// Recompute duplicates within a subset of points only (same-day scope)
+const DUP_M = 15
+function haversineMp(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+}
+function sameScopeDuplicates(points) {
+  const ids = new Set()
+  for (let i = 0; i < points.length; i++)
+    for (let j = i+1; j < points.length; j++)
+      if (haversineMp(points[i].lat, points[i].lng, points[j].lat, points[j].lng) <= DUP_M)
+        { ids.add(points[i].id); ids.add(points[j].id) }
+  return ids
+}
+
 // ── GPS Audit Table ────────────────────────────────────────────────────────
 function AuditTable({ gpsPoints }) {
   const [sortKey,  setSortKey]  = useState('date')
@@ -82,9 +98,13 @@ function AuditTable({ gpsPoints }) {
 
   const rows = useMemo(() => {
     const q = search.toLowerCase()
-    return gpsPoints
+    // Recompute duplicates within this day only
+    const dayPts = gpsPoints.filter(p => toLbDate(p.date) === auditDate)
+    const dupIds = sameScopeDuplicates(dayPts)
+
+    return dayPts
+      .map(p => ({ ...p, duplicate: dupIds.has(p.id) }))
       .filter(p => {
-        if (toLbDate(p.date) !== auditDate) return false
         if (q && !`${p.enumerator} ${p.location} ${p.status}`.toLowerCase().includes(q)) return false
         return true
       })
