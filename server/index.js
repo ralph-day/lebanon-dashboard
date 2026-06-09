@@ -1304,9 +1304,9 @@ function extractMentionedAreas(text) {
   return LEBANON_AREAS.filter(area => text.includes(area));
 }
 
-async function fetchAnnaharRSS() {
+async function fetchRSS(url, sourceName) {
   try {
-    const res = await fetch('https://www.annahar.com/rss', {
+    const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsMonitor/1.0)' },
       signal: AbortSignal.timeout(10000),
     });
@@ -1314,12 +1314,35 @@ async function fetchAnnaharRSS() {
     const xml = await res.text();
     const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
     const items = parsed?.rss?.channel?.item || [];
-    return Array.isArray(items) ? items : [items];
+    const arr = Array.isArray(items) ? items : [items];
+    // Tag each item with its source
+    return arr.map(item => ({ ...item, _source: sourceName }));
   } catch(e) {
-    console.error('[Security] RSS fetch error:', e.message);
+    console.error(`[Security] RSS fetch error (${sourceName}):`, e.message);
     return [];
   }
 }
+
+async function fetchAllNewsItems() {
+  return fetchRSS('https://www.lebanon24.com/Rss/News/1/%D9%84%D8%A8%D9%86%D8%A7%D9%86', 'l24');
+}
+
+// ── Active security alerts (shown on map for 2 hours) ─────────────────────
+const activeSecurityAlerts = [];
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+function pruneExpiredAlerts() {
+  const now = Date.now();
+  while (activeSecurityAlerts.length && activeSecurityAlerts[0].expiresAt < now) {
+    activeSecurityAlerts.shift();
+  }
+}
+
+// Endpoint: returns currently active alerts for the map
+app.get('/api/security-alerts/active', (req, res) => {
+  pruneExpiredAlerts();
+  res.json(activeSecurityAlerts);
+});
 
 async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   const title = article.title?._ || article.title || '';
@@ -1327,22 +1350,27 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   const link = article.link || '';
   const pubDate = article.pubDate || '';
 
+  // Register in active alerts so the map can highlight affected areas
+  const now = Date.now();
+  activeSecurityAlerts.push({
+    title,
+    areas: mentionedAreas,
+    keywords: matchedKeywords.slice(0, 5),
+    link,
+    triggeredAt: now,
+    expiresAt: now + TWO_HOURS_MS,
+  });
+
   // Build alert message
   const areaText = mentionedAreas.length > 0 ? `\n📍 المناطق المذكورة: ${mentionedAreas.join('، ')}` : '';
-  const enumeratorMsg =
-    `🚨 تنبيه أمني عاجل — فريق الميدان\n\n` +
-    `${title}\n\n` +
-    `⚠️ ${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n` +
-    `${areaText}\n\n` +
-    `إذا كنت في منطقة متأثرة، يرجى إيقاف المقابلة فوراً والتوجه إلى مكان آمن.\n` +
-    `المصدر: النهار | ${pubDate}`;
+  const sourceName = article._source === 'l24' ? 'لبنان 24' : 'النهار';
 
   const managerMsg =
     `🚨 تنبيه أمني — لوحة المسح\n\n` +
     `${title}\n\n` +
     `الكلمات المفتاحية: ${matchedKeywords.slice(0, 5).join('، ')}\n` +
     `${areaText}\n\n` +
-    `المصدر: النهار | ${link}`;
+    `المصدر: ${sourceName} | ${link}`;
 
   console.log(`[Security] Sending alert to managers`);
 
@@ -1356,7 +1384,7 @@ let securityMonitorSeeded = false;
 
 async function checkSecurityNews(seedOnly = false) {
   if (!process.env.META_WA_TOKEN) return;
-  const items = await fetchAnnaharRSS();
+  const items = await fetchAllNewsItems();
   if (items.length === 0) return;
 
   const now = Date.now();
@@ -1365,7 +1393,7 @@ async function checkSecurityNews(seedOnly = false) {
   for (const item of items) {
     const title = item.title?._ || item.title || '';
     const description = item.description?._ || item.description || '';
-    const guid = item.guid?._ || item.guid || title;
+    const guid = (item.guid?._ || item.guid || title) + (item._source || '');
 
     // Always mark as seen
     if (seedOnly || sentSecurityAlerts.has(guid)) {
@@ -1380,8 +1408,8 @@ async function checkSecurityNews(seedOnly = false) {
       continue;
     }
 
-    // Only process breaking news — Lebanese outlets always prefix with "عاجل"
-    if (!title.includes('عاجل')) {
+    // No عاجل filter needed — Lebanon24 doesn't use it; keyword + area filters handle quality
+    if (false) {
       sentSecurityAlerts.add(guid);
       continue;
     }
@@ -1399,7 +1427,7 @@ async function checkSecurityNews(seedOnly = false) {
       continue; // must mention a Lebanese district or governorate
     }
 
-    console.log(`[Security] ⚠️ Alert triggered: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')} — areas: ${mentionedAreas.join(', ')}`);
+    console.log(`[Security] ⚠️ Alert triggered [${item._source}]: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')} — areas: ${mentionedAreas.join(', ')}`);
 
     sentSecurityAlerts.add(guid);
     saveSecurityAlerts();
@@ -1420,7 +1448,7 @@ checkSecurityNews(true).catch(e => console.error('[Security] Seed error:', e.mes
 cron.schedule('*/3 * * * *', () => {
   checkSecurityNews(false).catch(e => console.error('[Security] Cron error:', e.message));
 });
-console.log('[Security] News monitor started — checking Annahar every 3 minutes');
+console.log('[Security] News monitor started — checking Lebanon24 every 3 minutes');
 
 // ── End Security Alert System ─────────────────────────────────────────────────
 
