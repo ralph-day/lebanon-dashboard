@@ -1312,7 +1312,7 @@ const TG_API_HASH = process.env.TELEGRAM_API_HASH || '';
 const TG_SESSION  = process.env.TELEGRAM_SESSION  || '';
 
 // Channels to monitor — add more usernames here anytime
-const TG_CHANNELS = ['mtvlebanonews', 'nna_agencies'];
+const TG_CHANNELS = ['mtvlebanonews', 'nna_agencies', 'bintjbeilorg'];
 
 let tgClient = null;
 
@@ -1365,20 +1365,30 @@ async function fetchAllNewsItems() {
 }
 
 // ── Active security alerts (shown on map for 2 hours) ─────────────────────
-const activeSecurityAlerts = [];
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const activeSecurityAlerts = [];  // expires after 2h (for map overlay)
+const alertHistory = [];          // kept for 24h (for the Security Alerts card)
+const TWO_HOURS_MS  = 2 * 60 * 60 * 1000;
+const DAY_MS        = 24 * 60 * 60 * 1000;
 
 function pruneExpiredAlerts() {
   const now = Date.now();
   while (activeSecurityAlerts.length && activeSecurityAlerts[0].expiresAt < now) {
     activeSecurityAlerts.shift();
   }
+  while (alertHistory.length && alertHistory[alertHistory.length - 1].triggeredAt < now - DAY_MS) {
+    alertHistory.pop();
+  }
 }
 
-// Endpoint: returns currently active alerts for the map
+// Endpoint: returns active alerts (for map) + recent history (for card)
 app.get('/api/security-alerts/active', (req, res) => {
   pruneExpiredAlerts();
   res.json(activeSecurityAlerts);
+});
+
+app.get('/api/security-alerts/history', (req, res) => {
+  pruneExpiredAlerts();
+  res.json(alertHistory);
 });
 
 async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
@@ -1388,14 +1398,17 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
 
   // Register in active alerts so the map can highlight affected areas
   const now = Date.now();
-  activeSecurityAlerts.push({
+  const alertEntry = {
     title,
     areas: mentionedAreas,
     keywords: matchedKeywords.slice(0, 5),
+    source: article._source || 'telegram',
     link,
     triggeredAt: now,
     expiresAt: now + TWO_HOURS_MS,
-  });
+  };
+  activeSecurityAlerts.push(alertEntry);
+  alertHistory.unshift(alertEntry); // newest first
 
   // Build alert message
   const areaText = mentionedAreas.length > 0 ? `\n📍 المناطق المذكورة: ${mentionedAreas.join('، ')}` : '';
