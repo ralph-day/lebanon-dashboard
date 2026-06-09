@@ -68,13 +68,23 @@ function haversineMp(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
+// Returns Map of id → array of paired point ids (with distance)
 function sameScopeDuplicates(points) {
   const ids = new Set()
-  for (let i = 0; i < points.length; i++)
-    for (let j = i+1; j < points.length; j++)
-      if (haversineMp(points[i].lat, points[i].lng, points[j].lat, points[j].lng) <= DUP_M)
-        { ids.add(points[i].id); ids.add(points[j].id) }
-  return ids
+  const pairs = new Map() // id → [{id, enumerator, date, location, dist}]
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i+1; j < points.length; j++) {
+      const d = haversineMp(points[i].lat, points[i].lng, points[j].lat, points[j].lng)
+      if (d <= DUP_M) {
+        ids.add(points[i].id); ids.add(points[j].id)
+        if (!pairs.has(points[i].id)) pairs.set(points[i].id, [])
+        if (!pairs.has(points[j].id)) pairs.set(points[j].id, [])
+        pairs.get(points[i].id).push({ ...points[j], dist: Math.round(d) })
+        pairs.get(points[j].id).push({ ...points[i], dist: Math.round(d) })
+      }
+    }
+  }
+  return { ids, pairs }
 }
 
 // ── GPS Audit Table ────────────────────────────────────────────────────────
@@ -100,10 +110,10 @@ function AuditTable({ gpsPoints }) {
     const q = search.toLowerCase()
     // Recompute duplicates within this day only
     const dayPts = gpsPoints.filter(p => toLbDate(p.date) === auditDate)
-    const dupIds = sameScopeDuplicates(dayPts)
+    const { ids: dupIds, pairs: dupPairs } = sameScopeDuplicates(dayPts)
 
     return dayPts
-      .map(p => ({ ...p, duplicate: dupIds.has(p.id) }))
+      .map(p => ({ ...p, duplicate: dupIds.has(p.id), pairedWith: dupPairs.get(p.id) || [] }))
       .filter(p => {
         if (q && !`${p.enumerator} ${p.location} ${p.status}`.toLowerCase().includes(q)) return false
         return true
@@ -169,6 +179,7 @@ function AuditTable({ gpsPoints }) {
                   <SortTh k="status"     label="Status" />
                   <SortTh k="accuracy"   label="GPS Accuracy" />
                   <SortTh k="duplicate"  label="Flag" />
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-left">Paired with</th>
                   <th className="py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-left">Coordinates</th>
                 </tr>
               </thead>
@@ -199,6 +210,20 @@ function AuditTable({ gpsPoints }) {
                           ? <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">⚠ Too close</span>
                           : <span className="text-xs text-slate-300">—</span>
                         }
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {p.pairedWith?.length > 0 ? (
+                          <div className="space-y-0.5">
+                            {p.pairedWith.map((pw, k) => {
+                              const pwTime = pw.date ? new Date(pw.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '?'
+                              return (
+                                <div key={k} className="text-xs text-orange-700 bg-orange-50 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                  {pw.enumerator?.split('(')[0]?.trim() || '?'} · {pwTime} · {pw.dist}m away
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : <span className="text-xs text-slate-300">—</span>}
                       </td>
                       <td className="py-2.5 px-3 text-xs text-slate-400 tabular-nums">
                         {p.lat.toFixed(5)}, {p.lng.toFixed(5)}
