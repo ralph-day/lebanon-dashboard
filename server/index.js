@@ -1344,23 +1344,12 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
     `${areaText}\n\n` +
     `المصدر: النهار | ${link}`;
 
-  // Get all enumerator phones from config
-  const enumeratorPhones = ENUMERATOR_ASSIGNMENTS
-    .map(e => e.phone)
-    .filter(Boolean);
+  console.log(`[Security] Sending alert to managers`);
 
-  console.log(`[Security] Sending alert to ${enumeratorPhones.length} enumerators + managers`);
-
-  // Send to all enumerators
-  for (const phone of enumeratorPhones) {
-    await sendWhatsApp(phone, enumeratorMsg);
-    await new Promise(r => setTimeout(r, 500));
-  }
-
-  // Send to managers
+  // Send to managers only
+  await sendWhatsApp(RALPH_PHONE,  managerMsg);
   await sendWhatsApp(NISRINE_PHONE, managerMsg);
-  await sendWhatsApp(MOE_PHONE, managerMsg);
-  await sendWhatsApp(RALPH_PHONE, managerMsg);
+  await sendWhatsApp(MOE_PHONE,    managerMsg);
 }
 
 async function checkSecurityNews() {
