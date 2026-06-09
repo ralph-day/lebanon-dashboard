@@ -1388,7 +1388,12 @@ async function checkSecurityNews(seedOnly = false) {
     }
 
     const mentionedAreas = extractMentionedAreas(fullText);
-    console.log(`[Security] ⚠️ Alert triggered: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')}`);
+    if (mentionedAreas.length === 0) {
+      sentSecurityAlerts.add(guid);
+      continue; // must mention a Lebanese district or governorate
+    }
+
+    console.log(`[Security] ⚠️ Alert triggered: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')} — areas: ${mentionedAreas.join(', ')}`);
 
     sentSecurityAlerts.add(guid);
     saveSecurityAlerts();
