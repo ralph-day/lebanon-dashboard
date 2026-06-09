@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import AnomalyAlerts from './AnomalyAlerts'
+import MiniMap from './MiniMap'
 import { useNavigate } from 'react-router-dom'
 
 const NAT_COLORS = { Palestinian: '#3b82f6', Lebanese: '#10b981', Syrian: '#f59e0b' }
@@ -136,7 +137,7 @@ function DailyProgress({ assignments, qaRows, navigate }) {
 
 export default function OverviewPanel({ data }) {
   const navigate = useNavigate()
-  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [] } = data
+  const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [] } = data
 
   const totalCompleted = overview.totalTarget - overview.remaining
   const pct = overview.totalTarget > 0 ? Math.round((totalCompleted / overview.totalTarget) * 100) : 0
@@ -204,8 +205,11 @@ export default function OverviewPanel({ data }) {
         </div>
       </div>
 
-      {/* ── Daily Progress ────────────────────────────────────────────────── */}
-      <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
+      {/* ── Daily Progress + Mini Map ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} navigate={navigate} />
+        <MiniMap gpsPoints={gpsPoints} />
+      </div>
 
       {/* ── Big numbers ───────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
