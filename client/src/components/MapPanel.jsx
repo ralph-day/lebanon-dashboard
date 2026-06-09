@@ -53,9 +53,153 @@ function todayStr() {
   return lb.toISOString().slice(0, 10)
 }
 
+const LB_OFFSET = 3 * 60 * 60 * 1000
+function toLbDate(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d)) return null
+  return new Date(d.getTime() + LB_OFFSET).toISOString().slice(0, 10)
+}
+
+// ── GPS Audit Table ────────────────────────────────────────────────────────
+function AuditTable({ gpsPoints }) {
+  const [sortKey,  setSortKey]  = useState('date')
+  const [sortDir,  setSortDir]  = useState('desc')
+  const [auditDate, setAuditDate] = useState(() => toLbDate(new Date().toISOString()))
+  const [search,   setSearch]   = useState('')
+
+  // Find most recent date if today empty
+  const availableDate = useMemo(() => {
+    const today = toLbDate(new Date().toISOString())
+    const hasToday = gpsPoints.some(p => toLbDate(p.date) === today)
+    if (hasToday) return today
+    const dates = [...new Set(gpsPoints.map(p => toLbDate(p.date)).filter(Boolean))].sort()
+    return dates[dates.length - 1] || today
+  }, [gpsPoints])
+
+  // Default to most recent date on mount
+  useState(() => { setAuditDate(availableDate) })
+
+  const rows = useMemo(() => {
+    const q = search.toLowerCase()
+    return gpsPoints
+      .filter(p => {
+        if (toLbDate(p.date) !== auditDate) return false
+        if (q && !`${p.enumerator} ${p.location} ${p.status}`.toLowerCase().includes(q)) return false
+        return true
+      })
+      .sort((a, b) => {
+        let va = a[sortKey] ?? ''
+        let vb = b[sortKey] ?? ''
+        if (sortKey === 'date') { va = a.date || ''; vb = b.date || '' }
+        if (sortKey === 'accuracy') { va = a.accuracy ?? 9999; vb = b.accuracy ?? 9999 }
+        if (sortKey === 'duplicate') { va = a.duplicate ? 1 : 0; vb = b.duplicate ? 1 : 0 }
+        if (va < vb) return sortDir === 'asc' ? -1 : 1
+        if (va > vb) return sortDir === 'asc' ? 1 : -1
+        return 0
+      })
+  }, [gpsPoints, auditDate, sortKey, sortDir, search])
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const SortTh = ({ k, label }) => (
+    <th onClick={() => toggleSort(k)}
+      className="text-left py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide cursor-pointer hover:text-slate-800 select-none whitespace-nowrap">
+      {label} {sortKey === k ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+    </th>
+  )
+
+  const tooClose = rows.filter(p => p.duplicate).length
+  const accepted = rows.filter(p => p.status === 'accepted').length
+  const rejected = rows.filter(p => p.status === 'rejected').length
+
+  return (
+    <div className="space-y-4">
+      {/* Audit controls */}
+      <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-wrap items-center gap-3">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Audit date</span>
+        <input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 bg-white" />
+        <input type="text" placeholder="Search enumerator, location…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white w-56" />
+        <div className="flex gap-2 ml-auto text-xs font-semibold">
+          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-lg">{accepted} accepted</span>
+          <span className="bg-red-50 text-red-600 px-2 py-1 rounded-lg">{rejected} rejected</span>
+          {tooClose > 0 && <span className="bg-orange-50 text-orange-600 px-2 py-1 rounded-lg">⚠ {tooClose} too close</span>}
+          <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">{rows.length} total</span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-10">No GPS data for {auditDate}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <SortTh k="enumerator" label="Enumerator" />
+                  <SortTh k="location"   label="Location" />
+                  <SortTh k="date"       label="Time" />
+                  <SortTh k="status"     label="Status" />
+                  <SortTh k="accuracy"   label="GPS Accuracy" />
+                  <SortTh k="duplicate"  label="Flag" />
+                  <th className="py-2 px-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-left">Coordinates</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {rows.map((p, i) => {
+                  const time = p.date ? new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+                  return (
+                    <tr key={p.id || i} className={`text-sm hover:bg-slate-50 transition-colors ${p.duplicate ? 'bg-orange-50/40' : ''}`}>
+                      <td className="py-2.5 px-3 font-medium text-slate-800">{p.enumerator || '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-600">{p.location || '—'}</td>
+                      <td className="py-2.5 px-3 text-slate-500 tabular-nums">{time}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          p.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                          p.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                          'bg-slate-100 text-slate-500'
+                        }`}>{p.status || 'unknown'}</span>
+                      </td>
+                      <td className={`py-2.5 px-3 tabular-nums text-sm font-medium ${
+                        p.accuracy == null ? 'text-slate-400' :
+                        p.accuracy <= 5 ? 'text-green-600' :
+                        p.accuracy <= 15 ? 'text-amber-600' : 'text-red-500'
+                      }`}>
+                        {p.accuracy != null ? `±${p.accuracy} m` : '—'}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {p.duplicate
+                          ? <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">⚠ Too close</span>
+                          : <span className="text-xs text-slate-300">—</span>
+                        }
+                      </td>
+                      <td className="py-2.5 px-3 text-xs text-slate-400 tabular-nums">
+                        {p.lat.toFixed(5)}, {p.lng.toFixed(5)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 export default function MapPanel({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
+
+  const [view, setView] = useState('map') // 'map' | 'audit'
 
   // Blink toggle — drives opacity via React state instead of CSS class
   const [blinkOn, setBlinkOn] = useState(true)
@@ -127,8 +271,32 @@ export default function MapPanel({ gpsPoints = [] }) {
     )
   }
 
+  if (view === 'audit') return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-slate-200 pb-0">
+        {[['map', '🗺 Map'], ['audit', '📋 GPS Audit']].map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${view === v ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <AuditTable gpsPoints={gpsPoints} />
+    </div>
+  )
+
   return (
     <div className="space-y-4">
+
+      {/* View switcher */}
+      <div className="flex gap-2 border-b border-slate-200 pb-0">
+        {[['map', '🗺 Map'], ['audit', '📋 GPS Audit']].map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${view === v ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Stats bar */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
