@@ -182,6 +182,7 @@ function AuditTable({ gpsPoints }) {
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
+                  <SortTh k="id"         label="Survey ID" />
                   <SortTh k="enumerator" label="Enumerator" />
                   <SortTh k="location"   label="Location" />
                   <SortTh k="date"       label="Time" />
@@ -202,6 +203,7 @@ function AuditTable({ gpsPoints }) {
                     : '—'
                   return (
                     <tr key={p.id || i} className={`text-sm hover:bg-slate-50 transition-colors ${p.duplicate ? 'bg-orange-50/40' : ''}`}>
+                      <td className="py-2.5 px-3 text-xs text-slate-400 font-mono tabular-nums">{p.id || '—'}</td>
                       <td className="py-2.5 px-3 font-medium text-slate-800">{p.enumerator || '—'}</td>
                       <td className="py-2.5 px-3 text-slate-600">{p.location || '—'}</td>
                       <td className="py-2.5 px-3 text-slate-500 tabular-nums">{time}</td>
@@ -241,7 +243,7 @@ function AuditTable({ gpsPoints }) {
                                     ? 'text-orange-700 bg-orange-50'
                                     : 'text-red-700 bg-red-50'
                                 }`}>
-                                  {pw.enumerator?.split('(')[0]?.trim() || '?'} · {dateLabel} · {pw.dist}m away
+                                  {pw.enumerator?.split('(')[0]?.trim() || '?'} · {dateLabel} · {pw.dist}m away{pw.id ? ` · ${pw.id}` : ''}
                                 </div>
                               )
                             })}
