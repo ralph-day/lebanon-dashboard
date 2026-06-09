@@ -194,7 +194,12 @@ function AuditTable({ gpsPoints }) {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {rows.map((p, i) => {
-                  const time = p.date ? new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+                  const isToday = toLbDate(p.date) === toLbDate(new Date().toISOString())
+                  const time = p.date
+                    ? isToday
+                      ? `Today ${new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : new Date(p.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' + new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : '—'
                   return (
                     <tr key={p.id || i} className={`text-sm hover:bg-slate-50 transition-colors ${p.duplicate ? 'bg-orange-50/40' : ''}`}>
                       <td className="py-2.5 px-3 font-medium text-slate-800">{p.enumerator || '—'}</td>
