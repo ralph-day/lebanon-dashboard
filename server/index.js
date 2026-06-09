@@ -310,10 +310,26 @@ function wsToArrays(ws) {
 }
 
 // Normalize any date value (JS Date, Excel serial, or string) to ISO string
+// Lebanon offset: UTC+3. KoboToolbox writes submission times into Excel as
+// Lebanon local time with no timezone marker. ExcelJS surfaces them as either
+// a JS Date (already UTC-shifted by the host OS, which on Railway is UTC, so
+// the Date is 3 h behind reality) or as an Excel serial number (days since
+// 1900, representing local Lebanon time).  Either way we must add 3 h to get
+// the true UTC instant before storing as ISO.
+const LB_TZ_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
+
 function toISO(val) {
   if (!val) return null;
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val.toISOString();
-  if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000).toISOString();
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    // ExcelJS on a UTC host returns a Date whose value is the Excel local time
+    // treated as UTC — i.e. 3 h behind the true UTC instant. Add Lebanon offset.
+    return new Date(val.getTime() + LB_TZ_OFFSET_MS).toISOString();
+  }
+  if (typeof val === 'number') {
+    // Excel serial → ms since Unix epoch (treating serial as UTC), then add Lebanon offset.
+    return new Date((val - 25569) * 86400 * 1000 + LB_TZ_OFFSET_MS).toISOString();
+  }
   return String(val);
 }
 
