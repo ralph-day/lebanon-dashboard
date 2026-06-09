@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import AnomalyAlerts from './AnomalyAlerts'
 import MiniMap from './MiniMap'
@@ -226,6 +226,129 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
   )
 }
 
+const LEBANON_OFFSET_MS = 3 * 60 * 60 * 1000
+
+function toLbDateStr(isoStr) {
+  if (!isoStr) return null
+  const d = new Date(isoStr)
+  if (isNaN(d)) return null
+  return new Date(d.getTime() + LEBANON_OFFSET_MS).toISOString().slice(0, 10)
+}
+
+function DateHistoryStrip({ qaRows = [], gpsPoints = [] }) {
+  // Build list of unique dates that have data, sorted desc
+  const dates = useMemo(() => {
+    const seen = new Set()
+    ;[...qaRows, ...gpsPoints].forEach(r => {
+      const d = toLbDateStr(r.submissionDate || r.date)
+      if (d) seen.add(d)
+    })
+    return [...seen].sort().reverse()
+  }, [qaRows, gpsPoints])
+
+  const todayStr = toLbDateStr(new Date().toISOString())
+  const [selected, setSelected] = useState(null) // null = no date selected
+
+  // Stats for the selected date
+  const dayStats = useMemo(() => {
+    if (!selected) return null
+    const dayGps = gpsPoints.filter(p => toLbDateStr(p.date) === selected)
+    const accepted = dayGps.filter(p => p.status === 'accepted').length
+    const rejected = dayGps.filter(p => p.status === 'rejected').length
+    const pending  = dayGps.filter(p => p.status === 'pending').length
+    const total    = dayGps.length
+
+    const dayQa = qaRows.filter(r => toLbDateStr(r.submissionDate) === selected)
+    const pass   = dayQa.filter(r => r.qaStatus === '✅ PASS').length
+    const review = dayQa.filter(r => r.qaStatus === '⚠️ REVIEW').length
+    const fail   = dayQa.filter(r => r.qaStatus === '❌ FAIL').length
+
+    // Unique enumerators active that day
+    const enums = new Set(dayGps.map(p => p.enumerator).filter(Boolean))
+
+    return { accepted, rejected, pending, total, pass, review, fail, enums: enums.size }
+  }, [selected, qaRows, gpsPoints])
+
+  if (dates.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-700">📅 Daily History</h3>
+        {selected && (
+          <button onClick={() => setSelected(null)} className="text-xs text-slate-400 hover:text-slate-600">
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Date chips */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {dates.map(d => {
+          const isToday    = d === todayStr
+          const isSelected = d === selected
+          const label = isToday ? 'Today' : new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          return (
+            <button
+              key={d}
+              onClick={() => setSelected(isSelected ? null : d)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                isSelected
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : isToday
+                    ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Day breakdown */}
+      {selected && dayStats && (
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-emerald-700">{dayStats.accepted}</p>
+            <p className="text-xs text-emerald-600 mt-0.5">Accepted</p>
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-red-600">{dayStats.rejected}</p>
+            <p className="text-xs text-red-500 mt-0.5">Rejected</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-slate-700">{dayStats.total}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Total GPS</p>
+          </div>
+          <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-purple-700">{dayStats.enums}</p>
+            <p className="text-xs text-purple-600 mt-0.5">Enumerators</p>
+          </div>
+          <div className="bg-green-50 border border-green-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-green-700">{dayStats.pass}</p>
+            <p className="text-xs text-green-600 mt-0.5">QA Pass</p>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-amber-700">{dayStats.review}</p>
+            <p className="text-xs text-amber-600 mt-0.5">QA Review</p>
+          </div>
+          <div className="bg-red-50 border border-red-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-red-700">{dayStats.fail}</p>
+            <p className="text-xs text-red-500 mt-0.5">QA Fail</p>
+          </div>
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-center">
+            <p className="text-2xl font-bold text-blue-700">
+              {dayStats.total > 0 ? Math.round(dayStats.accepted / dayStats.total * 100) : 0}%
+            </p>
+            <p className="text-xs text-blue-600 mt-0.5">Accept Rate</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function OverviewPanel({ data }) {
   const navigate = useNavigate()
   const { overview, natTotals, genderTotals, qa, locations, assignments = [], activeEnumerators = [], anomalies = [], gpsPoints = [] } = data
@@ -309,6 +432,9 @@ export default function OverviewPanel({ data }) {
         <StatCard label="Remaining" value={overview.remaining.toLocaleString()} sub="surveys to collect" color="amber" />
         <StatCard label="Locations" value={overview.totalLocations} sub="survey areas" color="slate" />
       </div>
+
+      {/* ── Daily History Strip ───────────────────────────────────────────── */}
+      <DateHistoryStrip qaRows={qa.rows || []} gpsPoints={gpsPoints} />
 
       {/* ── Progress bar ──────────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
