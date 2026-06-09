@@ -780,6 +780,8 @@ async function notifyAnomalies(anomalies) {
   if (!process.env.META_WA_TOKEN) return; // skip if not configured
   let newAlerts = 0;
   for (const anomaly of anomalies) {
+    // Skip test enumerators — never send alerts for test surveys
+    if (/test/i.test(anomaly.name)) continue;
     // Key = enumerator + latest issue timestamp — changes when new issues arrive
     const alertKey = `${anomaly.name}::${anomaly.latestAt}`;
     if (sentAlerts.has(alertKey)) continue;
