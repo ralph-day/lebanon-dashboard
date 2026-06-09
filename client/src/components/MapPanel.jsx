@@ -33,21 +33,24 @@ function dotColor(p) {
 }
 
 function dotLabel(p) {
-  if (p.duplicate) return '⚠ Duplicate household'
+  if (p.duplicate) return '⚠ Too close to another interview (≤15 m)'
   if (p.status === 'accepted') return '✅ Accepted'
   if (p.status === 'rejected') return '❌ Rejected'
   return '⏳ Pending / Unknown'
 }
 
+// Use Lebanon timezone (UTC+3) for all date comparisons
 function toDateStr(dateVal) {
   if (!dateVal) return null
   const d = new Date(dateVal)
   if (isNaN(d)) return null
-  return d.toISOString().slice(0, 10) // "YYYY-MM-DD"
+  const lb = new Date(d.getTime() + 3 * 60 * 60 * 1000)
+  return lb.toISOString().slice(0, 10)
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  const lb = new Date(Date.now() + 3 * 60 * 60 * 1000)
+  return lb.toISOString().slice(0, 10)
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -195,7 +198,7 @@ export default function MapPanel({ gpsPoints = [] }) {
           { color: '#22c55e', label: 'Accepted' },
           { color: '#ef4444', label: 'Rejected' },
           { color: '#f59e0b', label: 'Pending / Unknown' },
-          { color: '#f97316', label: 'Duplicate household (≤15 m)' },
+          { color: '#f97316', label: 'Too close to another interview (≤15 m)' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full inline-block" style={{ background: color }} />
