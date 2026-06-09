@@ -13,7 +13,6 @@ const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
 const Anthropic = require('@anthropic-ai/sdk');
 const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
 const cron = require('node-cron');
-const xml2js = require('xml2js');
 
 // ── Startup validation — fail fast regardless of NODE_ENV ─────────────────────
 const REQUIRED_ENV = ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
@@ -1304,27 +1303,65 @@ function extractMentionedAreas(text) {
   return LEBANON_AREAS.filter(area => text.includes(area));
 }
 
-async function fetchRSS(url, sourceName) {
+// ── Telegram client (GramJS) ───────────────────────────────────────────────
+const { TelegramClient } = require('telegram');
+const { StringSession }  = require('telegram/sessions');
+
+const TG_API_ID   = parseInt(process.env.TELEGRAM_API_ID  || '0');
+const TG_API_HASH = process.env.TELEGRAM_API_HASH || '';
+const TG_SESSION  = process.env.TELEGRAM_SESSION  || '';
+
+// Channels to monitor — add more usernames here anytime
+const TG_CHANNELS = ['mtvlebanonews', 'nna_agencies'];
+
+let tgClient = null;
+
+async function getTelegramClient() {
+  if (tgClient && tgClient.connected) return tgClient;
+  if (!TG_API_ID || !TG_API_HASH || !TG_SESSION) return null;
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsMonitor/1.0)' },
-      signal: AbortSignal.timeout(10000),
+    tgClient = new TelegramClient(new StringSession(TG_SESSION), TG_API_ID, TG_API_HASH, {
+      connectionRetries: 3,
+      useWSS: true,
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const xml = await res.text();
-    const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
-    const items = parsed?.rss?.channel?.item || [];
-    const arr = Array.isArray(items) ? items : [items];
-    // Tag each item with its source
-    return arr.map(item => ({ ...item, _source: sourceName }));
+    await tgClient.connect();
+    console.log('[Security] Telegram client connected');
+    return tgClient;
   } catch(e) {
-    console.error(`[Security] RSS fetch error (${sourceName}):`, e.message);
-    return [];
+    console.error('[Security] Telegram connect error:', e.message);
+    tgClient = null;
+    return null;
   }
 }
 
 async function fetchAllNewsItems() {
-  return fetchRSS('https://www.lebanon24.com/Rss/News/1/%D9%84%D8%A8%D9%86%D8%A7%D9%86', 'l24');
+  const client = await getTelegramClient();
+  if (!client) return [];
+
+  const items = [];
+  const FOUR_MIN_MS = 4 * 60 * 1000;
+  const cutoff = Math.floor((Date.now() - FOUR_MIN_MS) / 1000); // unix seconds
+
+  for (const channel of TG_CHANNELS) {
+    try {
+      const messages = await client.getMessages(channel, { limit: 20 });
+      for (const msg of messages) {
+        if (!msg.message) continue;
+        if (msg.date < cutoff) continue; // older than 4 mins
+        items.push({
+          _id:     `${channel}_${msg.id}`,
+          _source: channel,
+          title:   msg.message.slice(0, 120),
+          description: msg.message,
+          pubDate: new Date(msg.date * 1000).toISOString(),
+          link:    `https://t.me/${channel}/${msg.id}`,
+        });
+      }
+    } catch(e) {
+      console.error(`[Security] Telegram fetch error (${channel}):`, e.message);
+    }
+  }
+  return items;
 }
 
 // ── Active security alerts (shown on map for 2 hours) ─────────────────────
@@ -1345,9 +1382,8 @@ app.get('/api/security-alerts/active', (req, res) => {
 });
 
 async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
-  const title = article.title?._ || article.title || '';
-  const description = article.description?._ || article.description || '';
-  const link = article.link || '';
+  const title = article.title || '';
+  const link  = article.link  || '';
   const pubDate = article.pubDate || '';
 
   // Register in active alerts so the map can highlight affected areas
@@ -1363,7 +1399,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
 
   // Build alert message
   const areaText = mentionedAreas.length > 0 ? `\n📍 المناطق المذكورة: ${mentionedAreas.join('، ')}` : '';
-  const sourceName = article._source === 'l24' ? 'لبنان 24' : 'النهار';
+  const sourceName = article._source === 'mtvlebanonews' ? 'MTV Lebanon' : article._source === 'nna_agencies' ? 'NNA' : article._source || 'Telegram';
 
   const managerMsg =
     `🚨 تنبيه أمني — لوحة المسح\n\n` +
@@ -1391,45 +1427,32 @@ async function checkSecurityNews(seedOnly = false) {
   const FOUR_MIN_MS = 4 * 60 * 1000; // slightly wider than 3-min interval
 
   for (const item of items) {
-    const title = item.title?._ || item.title || '';
-    const description = item.description?._ || item.description || '';
-    const guid = (item.guid?._ || item.guid || title) + (item._source || '');
+    const title       = item.title || '';
+    const description = item.description || '';
+    const id          = item._id || title;
 
     // Always mark as seen
-    if (seedOnly || sentSecurityAlerts.has(guid)) {
-      sentSecurityAlerts.add(guid);
-      continue;
-    }
-
-    // Only alert on articles published within the last 4 minutes
-    const pubDate = item.pubDate ? new Date(item.pubDate).getTime() : 0;
-    if (pubDate && (now - pubDate) > FOUR_MIN_MS) {
-      sentSecurityAlerts.add(guid);
-      continue;
-    }
-
-    // No عاجل filter needed — Lebanon24 doesn't use it; keyword + area filters handle quality
-    if (false) {
-      sentSecurityAlerts.add(guid);
+    if (seedOnly || sentSecurityAlerts.has(id)) {
+      sentSecurityAlerts.add(id);
       continue;
     }
 
     const fullText = `${title} ${description}`;
     const matchedKeywords = detectConflictKeywords(fullText);
     if (matchedKeywords.length < 2) {
-      sentSecurityAlerts.add(guid);
+      sentSecurityAlerts.add(id);
       continue;
     }
 
     const mentionedAreas = extractMentionedAreas(fullText);
     if (mentionedAreas.length === 0) {
-      sentSecurityAlerts.add(guid);
-      continue; // must mention a Lebanese district or governorate
+      sentSecurityAlerts.add(id);
+      continue;
     }
 
     console.log(`[Security] ⚠️ Alert triggered [${item._source}]: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')} — areas: ${mentionedAreas.join(', ')}`);
 
-    sentSecurityAlerts.add(guid);
+    sentSecurityAlerts.add(id);
     saveSecurityAlerts();
 
     await sendSecurityAlert(item, matchedKeywords, mentionedAreas);
@@ -1448,7 +1471,7 @@ checkSecurityNews(true).catch(e => console.error('[Security] Seed error:', e.mes
 cron.schedule('*/3 * * * *', () => {
   checkSecurityNews(false).catch(e => console.error('[Security] Cron error:', e.message));
 });
-console.log('[Security] News monitor started — checking Lebanon24 every 3 minutes');
+console.log('[Security] News monitor started — watching MTV Lebanon + NNA on Telegram every 3 minutes');
 
 // ── End Security Alert System ─────────────────────────────────────────────────
 

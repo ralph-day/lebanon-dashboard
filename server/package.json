@@ -18,7 +18,9 @@
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
     "googleapis": "^173.0.0",
+    "input": "^1.0.1",
     "node-cron": "^4.2.1",
+    "telegram": "^2.26.22",
     "xml2js": "^0.6.2"
   }
 }
