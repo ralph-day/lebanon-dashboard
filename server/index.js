@@ -12,6 +12,8 @@ const { ipKeyGenerator } = rateLimit;
 const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
 const Anthropic = require('@anthropic-ai/sdk');
 const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
+const cron = require('node-cron');
+const xml2js = require('xml2js');
 
 // ── Startup validation — fail fast regardless of NODE_ENV ─────────────────────
 const REQUIRED_ENV = ['SESSION_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'];
@@ -1248,6 +1250,153 @@ app.patch('/api/location-meta/:code', requireAuth, (req, res) => {
   saveLocationMeta();
   res.json({ code, responsible });
 });
+
+// ── Security Alert System ─────────────────────────────────────────────────────
+// Monitors Annahar RSS feed every 3 minutes for conflict-related news.
+// Sends WhatsApp alerts to all field team members + managers when a threat is detected.
+
+const SECURITY_ALERTS_PATH = path.join(DATA_DIR, 'security_alerts.json');
+let sentSecurityAlerts = new Set();
+try {
+  if (fs.existsSync(SECURITY_ALERTS_PATH)) {
+    const saved = JSON.parse(fs.readFileSync(SECURITY_ALERTS_PATH, 'utf8'));
+    sentSecurityAlerts = new Set(saved);
+    console.log(`[Security] Loaded ${sentSecurityAlerts.size} sent alert keys`);
+  }
+} catch(e) { console.error('[Security] Could not load alert history:', e.message); }
+
+function saveSecurityAlerts() {
+  try { atomicWrite(SECURITY_ALERTS_PATH, JSON.stringify([...sentSecurityAlerts])); }
+  catch(e) { console.error('[Security] Could not save alert history:', e.message); }
+}
+
+// Conflict keywords — Arabic + English
+const CONFLICT_KEYWORDS = [
+  // Arabic — strikes & attacks
+  'غارة', 'غارات', 'قصف', 'استهداف', 'هجوم', 'انفجار', 'صاروخ', 'صواريخ',
+  'مسيّرة', 'مسيرة', 'طائرة مسيرة', 'اغتيال', 'سقط', 'سقوط',
+  // Arabic — warnings & evacuations
+  'تحذير', 'تحذيرات', 'إخلاء', 'إنذار', 'أفيخاي', 'أدرعي', 'الناطق باسم',
+  'طوارئ', 'تحذر', 'يحذر',
+  // Arabic — locations / conflict context
+  'الجيش الإسرائيلي', 'إسرائيل', 'حزب الله', 'المقاومة', 'الجنوب', 'البقاع',
+  'الضاحية', 'بيروت', 'صيدا', 'صور', 'النبطية', 'بعلبك', 'زحلة',
+  // English
+  'strike', 'airstrike', 'explosion', 'attack', 'rocket', 'missile', 'drone',
+  'evacuation', 'warning', 'IDF', 'Israeli army', 'Hezbollah', 'hostilities',
+  'shelling', 'bombardment', 'targeted', 'killed', 'wounded',
+];
+
+// Lebanon survey areas — for location matching in alerts
+const LEBANON_AREAS = [
+  'بيروت', 'الضاحية', 'جنوب', 'بعلبك', 'البقاع', 'النبطية', 'صيدا', 'صور',
+  'زحلة', 'طرابلس', 'عكار', 'كسروان', 'المتن', 'الشوف', 'عاليه',
+  'Beirut', 'South', 'Bekaa', 'Nabatieh', 'Sidon', 'Tyre', 'Baalbek',
+  'Zahle', 'Tripoli', 'Akkar',
+];
+
+function detectConflictKeywords(text) {
+  const lower = text.toLowerCase();
+  return CONFLICT_KEYWORDS.filter(kw => lower.includes(kw.toLowerCase()));
+}
+
+function extractMentionedAreas(text) {
+  return LEBANON_AREAS.filter(area => text.includes(area));
+}
+
+async function fetchAnnaharRSS() {
+  try {
+    const res = await fetch('https://www.annahar.com/rss', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsMonitor/1.0)' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const xml = await res.text();
+    const parsed = await xml2js.parseStringPromise(xml, { explicitArray: false });
+    const items = parsed?.rss?.channel?.item || [];
+    return Array.isArray(items) ? items : [items];
+  } catch(e) {
+    console.error('[Security] RSS fetch error:', e.message);
+    return [];
+  }
+}
+
+async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
+  const title = article.title?._ || article.title || '';
+  const description = article.description?._ || article.description || '';
+  const link = article.link || '';
+  const pubDate = article.pubDate || '';
+
+  // Build alert message
+  const areaText = mentionedAreas.length > 0 ? `\n📍 المناطق المذكورة: ${mentionedAreas.join('، ')}` : '';
+  const enumeratorMsg =
+    `🚨 تنبيه أمني عاجل — فريق الميدان\n\n` +
+    `${title}\n\n` +
+    `⚠️ ${description.slice(0, 200)}${description.length > 200 ? '...' : ''}\n` +
+    `${areaText}\n\n` +
+    `إذا كنت في منطقة متأثرة، يرجى إيقاف المقابلة فوراً والتوجه إلى مكان آمن.\n` +
+    `المصدر: النهار | ${pubDate}`;
+
+  const managerMsg =
+    `🚨 تنبيه أمني — لوحة المسح\n\n` +
+    `${title}\n\n` +
+    `الكلمات المفتاحية: ${matchedKeywords.slice(0, 5).join('، ')}\n` +
+    `${areaText}\n\n` +
+    `المصدر: النهار | ${link}`;
+
+  // Get all enumerator phones from config
+  const enumeratorPhones = ENUMERATOR_ASSIGNMENTS
+    .map(e => e.phone)
+    .filter(Boolean);
+
+  console.log(`[Security] Sending alert to ${enumeratorPhones.length} enumerators + managers`);
+
+  // Send to all enumerators
+  for (const phone of enumeratorPhones) {
+    await sendWhatsApp(phone, enumeratorMsg);
+    await new Promise(r => setTimeout(r, 500));
+  }
+
+  // Send to managers
+  await sendWhatsApp(NISRINE_PHONE, managerMsg);
+  await sendWhatsApp(MOE_PHONE, managerMsg);
+  await sendWhatsApp(RALPH_PHONE, managerMsg);
+}
+
+async function checkSecurityNews() {
+  if (!process.env.META_WA_TOKEN) return; // skip if WhatsApp not configured
+  const items = await fetchAnnaharRSS();
+  if (items.length === 0) return;
+
+  for (const item of items) {
+    const title = item.title?._ || item.title || '';
+    const description = item.description?._ || item.description || '';
+    const guid = item.guid?._ || item.guid || title;
+    const fullText = `${title} ${description}`;
+
+    // Skip if already alerted for this article
+    if (sentSecurityAlerts.has(guid)) continue;
+
+    const matchedKeywords = detectConflictKeywords(fullText);
+    if (matchedKeywords.length < 2) continue; // require at least 2 keywords to reduce false positives
+
+    const mentionedAreas = extractMentionedAreas(fullText);
+    console.log(`[Security] ⚠️ Alert triggered: "${title.slice(0, 80)}" — keywords: ${matchedKeywords.slice(0,3).join(', ')}`);
+
+    sentSecurityAlerts.add(guid);
+    saveSecurityAlerts();
+
+    await sendSecurityAlert(item, matchedKeywords, mentionedAreas);
+  }
+}
+
+// Run every 3 minutes
+cron.schedule('*/3 * * * *', () => {
+  checkSecurityNews().catch(e => console.error('[Security] Cron error:', e.message));
+});
+console.log('[Security] News monitor started — checking Annahar every 3 minutes');
+
+// ── End Security Alert System ─────────────────────────────────────────────────
 
 // Serve built client in production
 if (process.env.NODE_ENV === 'production') {
