@@ -6,9 +6,10 @@ import EnumeratorProgress from '../components/EnumeratorProgress'
 import QAPanel from '../components/QAPanel'
 import TaskBoard from '../components/TaskBoard'
 import PaymentsPanel from '../components/PaymentsPanel'
+import MapPanel from '../components/MapPanel'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
-const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality']
+const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality', 'Map']
 const QA_ALLOWED_EMAIL = 'infomgmtreportofficer@gmail.com'
 const TEAM_ALLOWED_EMAILS = ['infomgmtreportofficer@gmail.com', 'ralphbaydoun@gmail.com', 'ralph@influeanswers.com', 'ahmad.zaazou91@gmail.com', 'nisrinekhoory@gmail.com']
 
@@ -19,6 +20,7 @@ const TAB_TO_SLUG = {
   'Locations': 'locations',
   'Enumerators': 'enumerators',
   'Data Quality': 'data-quality',
+  'Map': 'map',
   'Team': 'team',
 }
 const SLUG_TO_TAB = Object.fromEntries(Object.entries(TAB_TO_SLUG).map(([k, v]) => [v, k]))
@@ -200,6 +202,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
             {activeTab === 'Locations'     && <LocationPanel locations={data.locations} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
+            {activeTab === 'Map'           && <MapPanel gpsPoints={data.gpsPoints || []} />}
             {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} initialSubTab={initialTeamSubTab} />}
           </>
         )}

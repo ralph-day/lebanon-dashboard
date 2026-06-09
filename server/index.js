@@ -339,6 +339,49 @@ async function parseExcel(filePath) {
     if (status && status !== 'accepted') rejByLoc[loc]++;
   });
 
+  // GPS survey points — extract from raw data sheet
+  const gpsPoints = [];
+  rawData.forEach(r => {
+    const lat = parseFloat(r['gps-Latitude']);
+    const lng = parseFloat(r['gps-Longitude']);
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) return;
+    const loc4 = r.loc_4 || r['Fixed Location'] || '';
+    const cfg  = LOCATION_MAP[loc4] || {};
+    gpsPoints.push({
+      id:           r.instanceID || r['KEY'] || '',
+      lat,
+      lng,
+      accuracy:     parseFloat(r['gps-Accuracy']) || null,
+      altitude:     parseFloat(r['gps-Altitude']) || null,
+      enumerator:   r.NameCode || r.name || '',
+      location:     cfg.name || loc4.replace(/_/g, ' '),
+      loc4,
+      status:       (r.SurveyStatus_New || '').trim().toLowerCase(),
+      date:         toISO(r.SubmissionDate || r.submission_date || r['_submission_time']),
+    });
+  });
+
+  // Duplicate household detection — flag any two surveys within 15 metres
+  const DUPLICATE_THRESHOLD_M = 15;
+  function haversineM(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+  const duplicateIds = new Set();
+  for (let i = 0; i < gpsPoints.length; i++) {
+    for (let j = i + 1; j < gpsPoints.length; j++) {
+      const d = haversineM(gpsPoints[i].lat, gpsPoints[i].lng, gpsPoints[j].lat, gpsPoints[j].lng);
+      if (d <= DUPLICATE_THRESHOLD_M) {
+        duplicateIds.add(gpsPoints[i].id);
+        duplicateIds.add(gpsPoints[j].id);
+      }
+    }
+  }
+  gpsPoints.forEach(p => { p.duplicate = duplicateIds.has(p.id); });
+
   // Dashboard sheet as arrays (first sheet fallback)
   const dashWs = wb.getWorksheet('Dashboard') || wb.worksheets[0];
   const dashboardSheet = wsToArrays(dashWs);
@@ -618,7 +661,7 @@ async function parseExcel(filePath) {
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
     qa: { rows: qaRows, pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
-    sectionTimings, natTotals, genderTotals,
+    sectionTimings, natTotals, genderTotals, gpsPoints,
   };
 }
 
