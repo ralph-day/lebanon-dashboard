@@ -698,25 +698,40 @@ function toMetaPhone(phone) {
   return digits.startsWith('961') ? digits : `961${digits}`;
 }
 
-async function sendWhatsApp(phone, message) {
+async function sendWhatsApp(phone, message, templateName, templateParams) {
   const token   = process.env.META_WA_TOKEN;
   const phoneId = process.env.META_WA_PHONE_ID;
   if (!token || !phoneId) return; // silently skip if not configured
   const to = toMetaPhone(phone);
   const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+
+  // Use template if provided (works without 24h window), else fall back to free-form text
+  const body = templateName
+    ? {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'ar' },
+          components: [{
+            type: 'body',
+            parameters: templateParams.map(p => ({ type: 'text', text: p })),
+          }],
+        },
+      }
+    : {
         messaging_product: 'whatsapp',
         to,
         type: 'text',
         text: { body: message },
-      }),
+      };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.text();
@@ -788,15 +803,22 @@ async function notifyAnomalies(anomalies) {
 
     console.log(`[WhatsApp] New alert for ${anomaly.name} — sending notifications`);
 
+    // Build issue list string for templates
+    const issueList = [...anomaly.critical, ...anomaly.warnings]
+      .map(i => `${i.type === 'Failed Survey' ? '❌' : '⚠️'} ${i.detail}`)
+      .join('\n');
+    const firstName = anomaly.name.split(' ')[0];
+    const issueCount = `${anomaly.totalIssues} (حرجة: ${anomaly.critical.length} / تحذيرات: ${anomaly.warnings.length})`;
+
     // Message to enumerator
     if (anomaly.phone) {
-      await sendWhatsApp(anomaly.phone, buildEnumeratorMessage(anomaly));
+      await sendWhatsApp(anomaly.phone, null, 'survey_enumerator_alert', [firstName, issueList]);
     }
 
     // Message to field managers (Nisrine + Moe + Ralph)
-    await sendWhatsApp(NISRINE_PHONE, buildManagerMessage(anomaly));
-    await sendWhatsApp(MOE_PHONE,    buildManagerMessage(anomaly));
-    await sendWhatsApp(RALPH_PHONE,  buildManagerMessage(anomaly));
+    await sendWhatsApp(NISRINE_PHONE, null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
+    await sendWhatsApp(MOE_PHONE,    null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
+    await sendWhatsApp(RALPH_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
 
     sentAlerts.add(alertKey);
     newAlerts++;
