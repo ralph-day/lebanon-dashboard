@@ -91,13 +91,17 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
     .filter(a => a.dayTotal > 0)
     .sort((a, b) => b.dayAccepted - a.dayAccepted)
 
-  // Use gpsPoints as ground truth for the total — same source as the field map
-  // so both numbers always agree. qaRows per-row breakdown may be a subset.
-  const totalAccepted = gpsPoints.filter(p => {
-    if (!p.date) return false
-    const ts = new Date(p.date).getTime()
-    return ts >= dayStart.getTime() && ts <= dayEnd.getTime() && (p.status || '') === 'accepted'
-  }).length || rows.reduce((s, a) => s + a.dayAccepted, 0) // fallback if no gpsPoints
+  // totalAccepted uses gpsPoints with Lebanon midnight-to-midnight boundary —
+  // identical to the field map's date filter — so both numbers always agree.
+  // The per-row breakdown (qaRows) may be a subset; the header shows the full truth.
+  const lbDateStr = lbDay.toISOString().slice(0, 10) // YYYY-MM-DD in Lebanon time
+  const totalAccepted = gpsPoints.length > 0
+    ? gpsPoints.filter(p => {
+        if (!p.date || p.status !== 'accepted') return false
+        const lb = new Date(new Date(p.date).getTime() + LEBANON_OFFSET_MS)
+        return lb.toISOString().slice(0, 10) === lbDateStr
+      }).length
+    : rows.reduce((s, a) => s + a.dayAccepted, 0) // fallback if no gpsPoints
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5">
