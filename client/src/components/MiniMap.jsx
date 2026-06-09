@@ -46,7 +46,8 @@ function todayLebanonStr() {
 export default function MiniMap({ gpsPoints = [] }) {
   useEffect(injectStyle, [])
 
-  const [filterEnum, setFilterEnum] = useState('all')
+  const [filterEnum,   setFilterEnum]   = useState('all')
+  const [showTooClose, setShowTooClose] = useState(false)
 
   // React-driven blink toggle
   const [blinkOn, setBlinkOn] = useState(true)
@@ -149,11 +150,44 @@ export default function MiniMap({ gpsPoints = [] }) {
             <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full">{accepted} accepted</span>
             <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} rejected</span>
             {tooClose > 0 && (
-              <span className="bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">⚠ {tooClose} too close</span>
+              <button
+                onClick={() => setShowTooClose(v => !v)}
+                className={`px-2 py-0.5 rounded-full font-semibold text-xs transition-colors border ${
+                  showTooClose
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100'
+                }`}
+              >
+                ⚠ {tooClose} too close
+              </button>
             )}
           </div>
         </div>
       </div>
+
+      {/* Too-close summary panel */}
+      {showTooClose && (
+        <div className="border-t border-orange-100 bg-orange-50 px-4 py-3">
+          <p className="text-xs font-semibold text-orange-700 mb-2">⚠ Surveys too close to another interview (≤15 m)</p>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {visiblePoints.filter(p => p.duplicate).map((p, i) => (
+              <div key={p.id || i} className="bg-white rounded-lg px-3 py-2 border border-orange-100 text-xs flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800">{p.enumerator || '—'}</p>
+                  <p className="text-slate-500">{p.location || '—'}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  {p.date && <p className="text-slate-400">{new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  {p.accuracy != null && <p className="text-slate-400">±{p.accuracy} m</p>}
+                </div>
+              </div>
+            ))}
+            {visiblePoints.filter(p => p.duplicate).length === 0 && (
+              <p className="text-xs text-slate-400">No flagged surveys for current filter</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {visiblePoints.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-slate-400 py-10">
