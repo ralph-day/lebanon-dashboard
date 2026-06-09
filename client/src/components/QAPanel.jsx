@@ -74,6 +74,19 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
       bg: 'bg-red-50 border-red-300',         text: 'text-red-800',     activeBg: 'bg-red-700'     },
   ]
 
+  // Helper: count within current date+search filters (ignoring status filter)
+  function countWhere(predicate) {
+    return rows.filter(r => {
+      const matchName     = !searchName || r.name.toLowerCase().includes(searchName.toLowerCase())
+      const matchDistrict = searchDistrict === 'All' || r.district === searchDistrict
+      const matchLocation = searchDistrict === 'All' || searchLocation === 'All' || r.locationName === searchLocation
+      const ts = r.submissionDate ? new Date(r.submissionDate) : null
+      const matchFrom = !dateFrom || (ts && ts >= new Date(dateFrom))
+      const matchTo   = !dateTo   || (ts && ts <= new Date(dateTo + 'T23:59:59'))
+      return matchName && matchDistrict && matchLocation && matchFrom && matchTo && predicate(r)
+    }).length
+  }
+
   // Unique sorted districts from all rows
   const allDistricts = ['All', ...Array.from(new Set(rows.map(r => r.district).filter(Boolean))).sort()]
 
@@ -170,18 +183,27 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
       <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         {/* Status filter buttons */}
         <div className="flex flex-wrap gap-2 items-center">
-          {['All', '✅ PASS', '⚠️ REVIEW', '❌ FAIL', '__REJECTED__'].map(f => (
+          {[
+            { key: 'All',          label: 'All',           count: countWhere(() => true) },
+            { key: '✅ PASS',      label: '✅ PASS',       count: countWhere(r => r.qaStatus === '✅ PASS') },
+            { key: '⚠️ REVIEW',   label: '⚠️ REVIEW',    count: countWhere(r => r.qaStatus === '⚠️ REVIEW') },
+            { key: '❌ FAIL',      label: '❌ FAIL',       count: countWhere(r => r.qaStatus === '❌ FAIL') },
+            { key: '__REJECTED__', label: '🚫 Rejected',   count: countWhere(r => (r.status || '').trim().toLowerCase() !== 'accepted' && (r.status || '').trim() !== '') },
+          ].map(({ key, label, count }) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+                filter === key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
               }`}
             >
-              {f === '__REJECTED__' ? '🚫 Rejected' : f}
+              {label}
+              <span className={`font-bold px-1.5 py-0.5 rounded-full text-xs ${
+                filter === key ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+              }`}>{count}</span>
             </button>
           ))}
-          <span className="text-sm text-slate-400 ml-auto">{filtered.length} surveys</span>
+          <span className="text-sm text-slate-400 ml-auto">{filtered.length} surveys shown</span>
         </div>
 
         {/* Search row */}
