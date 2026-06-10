@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const session = require('express-session');
 const { google } = require('googleapis');
@@ -26,6 +27,34 @@ if (missing.length > 0) {
 const app = express();
 app.set('trust proxy', 1); // Trust Railway/Heroku reverse proxy for secure cookies + correct IP
 const PORT = process.env.PORT || 3001;
+
+// ── Security headers (helmet) ─────────────────────────────────────────────────
+// Sets HSTS, a restrictive CSP, clickjacking protection (frame-ancestors 'none'),
+// X-Content-Type-Options: nosniff, Referrer-Policy, and removes X-Powered-By.
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      // Leaflet and React apply inline element styles at runtime.
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      // OpenStreetMap map tiles are loaded as cross-origin <img> elements.
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"], // clickjacking protection (replaces X-Frame-Options)
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  // Map tiles are loaded cross-origin; COEP would block them.
+  crossOriginEmbedderPolicy: false,
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
 const DRIVE_FOLDER_ID = process.env.DRIVE_FOLDER_ID;
 if (!DRIVE_FOLDER_ID) {
   console.error('[FATAL] DRIVE_FOLDER_ID environment variable is required');
@@ -44,7 +73,8 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow same-origin (null) and explicitly allowed origins
     if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error('CORS: origin not allowed'));
+    // Disallowed origin: omit CORS headers (fail closed) instead of throwing a 500.
+    cb(null, false);
   },
   credentials: true,
 }));
@@ -1291,9 +1321,9 @@ const CONFLICT_KEYWORDS = [
 
 // Lebanon survey areas — for location matching in alerts
 const LEBANON_AREAS = [
-  'بيروت', 'الضاحية', 'جنوب', 'بعلبك', 'البقاع', 'النبطية', 'صيدا', 'صور',
+  'بيروت', 'الضاحية', 'الجنوب', 'بنت جبيل', 'بعلبك', 'البقاع', 'النبطية', 'صيدا', 'صور',
   'زحلة', 'طرابلس', 'عكار', 'كسروان', 'المتن', 'الشوف', 'عاليه',
-  'Beirut', 'South', 'Bekaa', 'Nabatieh', 'Sidon', 'Tyre', 'Baalbek',
+  'Beirut', 'Bekaa', 'Nabatieh', 'Sidon', 'Tyre', 'Baalbek',
   'Zahle', 'Tripoli', 'Akkar',
 ];
 
@@ -1394,18 +1424,18 @@ function pruneExpiredAlerts() {
 }
 
 // Map overlay — active alerts only
-app.get('/api/security-alerts/active', (req, res) => {
+app.get('/api/security-alerts/active', requireAuth, (req, res) => {
   pruneExpiredAlerts();
   res.json(activeSecurityAlerts);
 });
 
 // Security card — full permanent history
-app.get('/api/security-alerts/history', (req, res) => {
+app.get('/api/security-alerts/history', requireAuth, (req, res) => {
   res.json(alertHistory);
 });
 
 // Backfill endpoint — fetches all matching messages from Telegram since a given date
-app.post('/api/security-alerts/backfill', async (req, res) => {
+app.post('/api/security-alerts/backfill', requireAuth, async (req, res) => {
   const since = req.body?.since ? new Date(req.body.since).getTime() / 1000 : new Date('2026-05-20').getTime() / 1000;
   res.json({ started: true, since: new Date(since * 1000).toISOString() });
   // Run in background
