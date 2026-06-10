@@ -1567,7 +1567,12 @@ function detectConflictKeywords(text) {
 
 function extractMentionedAreas(text) {
   const normalized = normalizeArabic(text);
-  return LEBANON_AREAS.filter(area => normalized.includes(normalizeArabic(area)));
+  const matches = LEBANON_AREAS.filter(area => normalized.includes(normalizeArabic(area)));
+  // Drop shorter matches that are just substrings of a longer match already found
+  // (e.g. "جبيل" inside "بنت جبيل" — Bint Jbeil in the South, not Jbeil/Byblos)
+  return matches.filter(area =>
+    !matches.some(other => other !== area && other.includes(area))
+  );
 }
 
 // ── Telegram client (GramJS) ───────────────────────────────────────────────
