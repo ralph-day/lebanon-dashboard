@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Alert Demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f1f5f9; }
+
+  .dashboard {
+    max-width: 960px;
+    margin: 32px auto;
+    padding: 0 16px;
+  }
+
+  .card {
+    background: white;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+
+  /* Alert banner */
+  .alert-banner {
+    display: none;
+    background: #dc2626;
+    color: white;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    align-items: center;
+    gap: 8px;
+    animation: pulseBg 1.5s ease-in-out infinite;
+  }
+  .alert-banner.active { display: flex; }
+  @keyframes pulseBg {
+    0%, 100% { background: #dc2626; }
+    50%       { background: #b91c1c; }
+  }
+  .alert-banner .areas {
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .alert-banner .timer {
+    margin-right: auto;
+    font-size: 12px;
+    opacity: 0.85;
+    font-weight: 400;
+    direction: ltr;
+  }
+
+  /* Legend bar */
+  .legend {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .legend .title { font-weight: 600; color: #1e293b; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend .right { margin-right: auto; font-size: 11px; color: #94a3b8; }
+
+  #map { height: 480px; width: 100%; }
+
+  /* Alert info card below map */
+  .alert-info {
+    display: none;
+    padding: 14px 16px;
+    border-top: 1px solid #fee2e2;
+    background: #fff7f7;
+  }
+  .alert-info.active { display: block; }
+  .alert-info h4 { font-size: 13px; font-weight: 700; color: #dc2626; margin-bottom: 6px; }
+  .alert-info p  { font-size: 12px; color: #64748b; line-height: 1.6; }
+  .alert-info .kw {
+    display: inline-block;
+    background: #fee2e2;
+    color: #b91c1c;
+    border-radius: 99px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 2px;
+  }
+
+  /* Trigger button */
+  .controls {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  button {
+    padding: 9px 20px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: opacity .15s;
+  }
+  button:hover { opacity: .85; }
+  .btn-trigger { background: #dc2626; color: white; }
+  .btn-clear   { background: #e2e8f0; color: #475569; }
+  .note { font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <div class="controls">
+    <button class="btn-trigger" onclick="triggerAlert()">🚨 Simulate Evacuation Alert</button>
+    <button class="btn-clear"   onclick="clearAlert()">Clear</button>
+    <span class="note">Demo — simulates what happens when Lebanon24 publishes a security alert</span>
+  </div>
+
+  <div class="card">
+    <!-- Alert banner (hidden until triggered) -->
+    <div class="alert-banner" id="alertBanner">
+      <span>🚨 تنبيه أمني نشط — المناطق المتأثرة:</span>
+      <span class="areas" id="areasText"></span>
+      <span class="timer" id="timerText"></span>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <span class="title">Survey Locations</span>
+      <span class="legend-item"><span class="dot" style="background:#22c55e"></span>≥90% done</span>
+      <span class="legend-item"><span class="dot" style="background:#3b82f6"></span>50–89%</span>
+      <span class="legend-item"><span class="dot" style="background:#f59e0b"></span>1–49%</span>
+      <span class="legend-item"><span class="dot" style="background:#94a3b8"></span>Not started</span>
+      <span class="legend-item"><span class="dot" style="background:#7c3aed"></span>Palestinian camp</span>
+      <span class="legend-item" id="alertLegend" style="display:none">
+        <span class="dot" style="background:#ef4444;opacity:.7"></span>Security alert zone
+      </span>
+      <span class="right">Circle size = target</span>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Alert details below map -->
+    <div class="alert-info" id="alertInfo">
+      <h4>⚠️ آخر تنبيه — لبنان 24</h4>
+      <p id="alertTitle" style="font-weight:600;color:#1e293b;margin-bottom:6px;font-size:13px"></p>
+      <p id="alertKeywords"></p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Map setup ──────────────────────────────────────────────────────────────
+const map = L.map('map').setView([33.6, 35.6], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// ── Sample survey locations ────────────────────────────────────────────────
+const locations = [
+  { name: 'Saida - Ain El Helwe', lat: 33.542, lng: 35.370, pct: 92, target: 80,  color: '#22c55e', r: 14 },
+  { name: 'Tyre - El Bass',       lat: 33.272, lng: 35.203, pct: 71, target: 60,  color: '#22c55e', r: 11 },
+  { name: 'Nabatieh',             lat: 33.378, lng: 35.484, pct: 45, target: 50,  color: '#3b82f6', r: 11 },
+  { name: 'Bint Jbeil',           lat: 33.119, lng: 35.433, pct: 18, target: 40,  color: '#f59e0b', r: 11 },
+  { name: 'Bekaa - Qab Elias',    lat: 33.605, lng: 35.862, pct: 60, target: 45,  color: '#3b82f6', r: 11 },
+  { name: 'Baalbek - Taalabaya',  lat: 33.813, lng: 35.985, pct: 0,  target: 30,  color: '#94a3b8', r:  8 },
+  { name: 'Beirut - Burj Barajneh', lat: 33.851, lng: 35.506, pct: 55, target: 70, color: '#3b82f6', r: 14, palestinian: true },
+  { name: 'Tripoli - Beddawi',    lat: 34.473, lng: 35.851, pct: 30, target: 35,  color: '#f59e0b', r:  8, palestinian: true },
+];
+
+locations.forEach(loc => {
+  const c = loc.palestinian ? '#7c3aed' : loc.color;
+  L.circleMarker([loc.lat, loc.lng], {
+    radius: loc.r,
+    fillColor: c, fillOpacity: 0.85,
+    color: '#fff', weight: 1.5,
+  }).bindPopup(`<b>${loc.name}</b><br>Progress: ${loc.pct}% | Target: ${loc.target}`).addTo(map);
+});
+
+// ── Area zones ─────────────────────────────────────────────────────────────
+const AREA_ZONES = {
+  'صور':      { lat: 33.272, lng: 35.203, r: 8000  },
+  'بنت جبيل': { lat: 33.119, lng: 35.433, r: 10000 },
+  'النبطية':  { lat: 33.378, lng: 35.484, r: 10000 },
+  'الجنوب':   { lat: 33.200, lng: 35.350, r: 30000 },
+  'بعلبك':    { lat: 34.004, lng: 36.212, r: 12000 },
+  'البقاع':   { lat: 33.750, lng: 35.950, r: 35000 },
+  'بيروت':    { lat: 33.890, lng: 35.502, r: 8000  },
+  'الضاحية':  { lat: 33.845, lng: 35.508, r: 6000  },
+  'صيدا':     { lat: 33.563, lng: 35.370, r: 8000  },
+};
+
+// ── Alert state ────────────────────────────────────────────────────────────
+let alertCircles = [];
+let timerInterval = null;
+let expiresAt = null;
+
+const DEMO_ALERTS = [
+  {
+    areas: ['صور', 'بنت جبيل', 'النبطية'],
+    title: 'غارات إسرائيلية استهدفت بلدات في صور وبنت جبيل والنبطية — أدرعي يحذر السكان من البقاء',
+    keywords: ['غارة', 'استهداف', 'تحذير', 'إخلاء', 'أدرعي'],
+  },
+  {
+    areas: ['بعلبك', 'البقاع'],
+    title: 'قصف مدفعي إسرائيلي يستهدف بلدات في البقاع الشمالي — إنذار بالإخلاء الفوري',
+    keywords: ['قصف', 'استهداف', 'إخلاء', 'إنذار', 'الجيش الإسرائيلي'],
+  },
+  {
+    areas: ['الضاحية', 'بيروت'],
+    title: 'الناطق باسم الجيش الإسرائيلي يوجه إنذاراً للسكان في الضاحية الجنوبية',
+    keywords: ['إنذار', 'إخلاء', 'أفيخاي', 'أدرعي', 'الناطق باسم'],
+  },
+];
+
+let demoIndex = 0;
+
+function triggerAlert() {
+  clearAlert();
+
+  const alert = DEMO_ALERTS[demoIndex % DEMO_ALERTS.length];
+  demoIndex++;
+
+  // Draw pulsing circles
+  alert.areas.forEach(area => {
+    const z = AREA_ZONES[area];
+    if (!z) return;
+    const circle = L.circle([z.lat, z.lng], {
+      radius: z.r,
+      color: '#ef4444',
+      fillColor: '#ef4444',
+      fillOpacity: 0.3,
+      weight: 2,
+      dashArray: '6 4',
+    }).addTo(map);
+    circle.bindPopup(`<b style="color:#dc2626">⚠️ تنبيه أمني</b><br>${area}`);
+    alertCircles.push(circle);
+  });
+
+  // Pulse animation via interval
+  let opacity = 0.3, dir = 1;
+  const pulse = setInterval(() => {
+    opacity += dir * 0.025;
+    if (opacity >= 0.55) dir = -1;
+    if (opacity <= 0.1)  dir =  1;
+    alertCircles.forEach(c => c.setStyle({ fillOpacity: opacity }));
+  }, 80);
+  alertCircles._pulse = pulse;
+
+  // Zoom to affected area
+  if (alertCircles.length > 0) {
+    const bounds = L.latLngBounds(alertCircles.map(c => c.getLatLng()));
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 11 });
+  }
+
+  // Show banner
+  expiresAt = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
+  document.getElementById('areasText').textContent = alert.areas.join(' · ');
+  document.getElementById('alertBanner').classList.add('active');
+  document.getElementById('alertLegend').style.display = 'flex';
+
+  // Show details
+  document.getElementById('alertTitle').textContent = alert.title;
+  document.getElementById('alertKeywords').innerHTML =
+    alert.keywords.map(k => `<span class="kw">${k}</span>`).join('');
+  document.getElementById('alertInfo').classList.add('active');
+
+  // Countdown timer
+  updateTimer();
+  timerInterval = setInterval(updateTimer, 1000);
+}
+
+function updateTimer() {
+  if (!expiresAt) return;
+  const ms = expiresAt - Date.now();
+  if (ms <= 0) { clearAlert(); return; }
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  document.getElementById('timerText').textContent =
+    `ينتهي خلال ${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function clearAlert() {
+  if (alertCircles._pulse) clearInterval(alertCircles._pulse);
+  alertCircles.forEach(c => map.removeLayer(c));
+  alertCircles = [];
+  clearInterval(timerInterval);
+  expiresAt = null;
+  document.getElementById('alertBanner').classList.remove('active');
+  document.getElementById('alertLegend').style.display = 'none';
+  document.getElementById('alertInfo').classList.remove('active');
+  document.getElementById('timerText').textContent = '';
+}
+</script>
+</body>
+</html>

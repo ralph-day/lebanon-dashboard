@@ -209,7 +209,7 @@ export default function SecurityAlertsPanel() {
           <span className="text-2xl animate-bounce">🚨</span>
           <div>
             <p className="font-bold text-sm">
-              {active.length} active evacuation {active.length === 1 ? 'alert' : 'alerts'}
+              {active.length} active security {active.length === 1 ? 'alert' : 'alerts'}
             </p>
             <p className="text-xs opacity-85 mt-0.5">
               Affected areas: {[...new Set(active.flatMap(a => a.areas))].join(' · ')}
