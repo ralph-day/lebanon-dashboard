@@ -698,11 +698,121 @@ async function parseExcel(filePath) {
     return { ...a, totalIssues: a.critical.length + a.warnings.length, latestAt: latestTs ? new Date(latestTs).toISOString() : null };
   }).sort((a, b) => b.critical.length - a.critical.length || b.totalIssues - a.totalIssues);
 
+  // Full raw responses + per-section timing, keyed by instanceID — used by
+  // the survey detail view (Data Quality → click a row).
+  const rawByInstance = {};
+  rawData.forEach(r => {
+    const id = r.instanceID || r['KEY'] || '';
+    if (id) rawByInstance[id] = r;
+  });
+  const sectionTimingByInstance = {};
+  qaSections.forEach(r => {
+    const id = r.instanceID || '';
+    if (id) sectionTimingByInstance[id] = r;
+  });
+
   return {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
     qa: { rows: qaRows, pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
     sectionTimings, natTotals, genderTotals, gpsPoints,
+    rawByInstance, sectionTimingByInstance,
   };
+}
+
+// Section groupings for the survey detail view — maps the raw "data" sheet
+// columns into the same sections used by the survey form / QA timing sheets.
+const SURVEY_SECTIONS = [
+  { key: 'demo',        label: 'Demographics',          timeField: 'time_demo',         startField: 'loc_1',                endField: 'living_situation_text', extraFields: [] },
+  { key: 'priorities',  label: 'Priorities & Coping',   timeField: 'time_priorities',   startField: 'current_priorities',   endField: 'tension_source_text',   extraFields: [] },
+  { key: 'mutualaid',   label: 'Mutual Aid & Assistance', timeField: 'time_mutualaid',  startField: 'mutual_aid',            endField: 'aid_who_text',           extraFields: ['group_mutualaid[1]/mutual_aid_health','group_mutualaid[1]/mutual_aid_childcare','group_mutualaid[1]/mutual_aid_foodwater','group_mutualaid[1]/mutual_aid_shelter','group_mutualaid[1]/mutual_aid_psycho','group_mutualaid[1]/mutual_aid_elec','group_mutualaid[1]/mutual_aid_transport','group_mutualaid[1]/mutual_aid_info','group_mutualaid[1]/mutual_aid_accessaid','group_mutualaid[1]/mutual_aid_money','group_mutualaid[1]/mutual_aid_loan','group_mutualaid[1]/mutual_aid_nfi'] },
+  { key: 'accesstrust', label: 'Access & Trust',        timeField: 'time_access_trust', startField: 'perception_coverneeds', endField: 'perception_action',     extraFields: ['group_info[1]/trust_info_social_media','group_info[1]/trust_info_messaging','group_info[1]/trust_info_radio_tv','group_info[1]/trust_info_friends_family','group_info[1]/trust_info_local_ngo','group_info[1]/trust_info_ingo','group_info[1]/trust_info_govt'] },
+  { key: 'expectations', label: 'Expectations',         timeField: 'time_expectations', startField: 'expect_consult',       endField: 'expect_action',          extraFields: [] },
+  { key: 'info',        label: 'Information & Communication', timeField: 'time_info',  startField: 'info_how',              endField: 'info_pref_from_text',    extraFields: ['group_info[1]/info_pref_channel','group_info[1]/info_pref_channel_text'] },
+  { key: 'future',      label: 'Future, Plans & Closing', timeField: 'time_future',     startField: 'main_fears',            endField: 'enumerator_notes',       extraFields: [] },
+];
+
+function fieldLabel(key) {
+  return key
+    .replace(/^group_\w+\[\d+\]\//, '')
+    .replace(/[_\-]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildSurveyDetail(raw, sectionTiming) {
+  const keys = Object.keys(raw);
+
+  const isEmpty = v => v === null || v === undefined || v === '' || v === 'n/a' || v === 'NA';
+
+  const meta = {
+    instanceID:     raw.instanceID || raw['KEY'] || '',
+    name:           raw.NameCode || '',
+    status:         (raw.SurveyStatus_New || '').trim(),
+    submissionDate: toISO(raw.SubmissionDate),
+    start:          toISO(raw.start),
+    end:            toISO(raw.end),
+    appTime:        raw.apptimemint || null,
+    fullTime:       sectionTiming?.['Full Time All Sections'] ?? null,
+    location:       raw['Fixed Location'] || raw.loc_4 || '',
+    district:       raw.loc_3 || '',
+    region:         raw.loc_2 || '',
+    deviceId:       raw.deviceid || '',
+    enumeratorPhone:raw.phone || '',
+    surveyType:     raw.surveytype || '',
+  };
+
+  const gps = {
+    lat:      parseFloat(raw['gps-Latitude'])  || null,
+    lng:      parseFloat(raw['gps-Longitude']) || null,
+    altitude: parseFloat(raw['gps-Altitude'])  || null,
+    accuracy: parseFloat(raw['gps-Accuracy'])  || null,
+  };
+
+  const usedKeys = new Set();
+  const sections = SURVEY_SECTIONS.map(sec => {
+    const startIdx = keys.indexOf(sec.startField);
+    const endIdx   = keys.indexOf(sec.endField);
+    let fields = [];
+    if (startIdx >= 0 && endIdx >= startIdx) fields = keys.slice(startIdx, endIdx + 1);
+    fields = [...fields, ...sec.extraFields.filter(f => keys.includes(f))];
+    fields.forEach(f => usedKeys.add(f));
+
+    const answers = fields
+      .filter(f => !isEmpty(raw[f]))
+      .map(f => ({ key: f, label: fieldLabel(f), value: raw[f] }));
+
+    const timeMins = sectionTiming ? parseFloat(String(sectionTiming[sec.timeField] || '').split(' ')[0]) : NaN;
+
+    return {
+      key: sec.key,
+      label: sec.label,
+      timeMinutes: isNaN(timeMins) ? null : timeMins,
+      answerCount: answers.length,
+      answers,
+    };
+  });
+
+  // Anything not claimed by a section and not metadata/timing/system fields —
+  // surfaced so nothing is silently hidden.
+  const META_KEYS = new Set([
+    'SurveyStatus_New','instanceID','NameCode','Fixed Location','LocationOn','surveytype',
+    'apptimemint','AppTime','enumerator','SubmissionDate','start','end','deviceid','device_info',
+    'text_audit','today','loc_1','loc_2','loc_3','loc_4','gps-Latitude','gps-Longitude','gps-Altitude','gps-Accuracy',
+    'phone','formdef_version','KEY','isValidated','audio_audit',
+    'start_demo','end_demo','start_group_priorities','end_group_priorities','start_group_mutualaid','end_group_mutualaid',
+    'start_group_accesstrust','end_group_accesstrust','start_group_expectations','end_group_expectations',
+    'start_group_info','end_group_info','start_group_future','end_group_future',
+    'start_demo_sec','start_prio','start_mutualaid','start_accesstrust','start_expectations','start_info','start_future',
+    'end_demo_sec','end_prio','end_mutualaid','end_accesstrust','end_expectations','end_info','end_future',
+    'time_demo','time_main','time_priorities','time_mutualaid','time_access_trust','time_expectations','time_info','time_future',
+  ]);
+  const otherAnswers = keys
+    .filter(f => !usedKeys.has(f) && !META_KEYS.has(f) && !isEmpty(raw[f]))
+    .map(f => ({ key: f, label: fieldLabel(f), value: raw[f] }));
+  if (otherAnswers.length > 0) {
+    sections.push({ key: 'other', label: 'Other', timeMinutes: null, answerCount: otherAnswers.length, answers: otherAnswers });
+  }
+
+  return { meta, gps, sections };
 }
 
 // ── WhatsApp Notifications via Green API ─────────────────────────────────────
@@ -911,7 +1021,20 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
   const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
   // Send most-recent 2000 rows to client — prevents large payloads freezing the UI
   const clientRows = approvedRows.slice(-2000);
-  res.json({ ...cache.data, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
+  const { rawByInstance, sectionTimingByInstance, ...publicData } = cache.data;
+  res.json({ ...publicData, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
+});
+
+// Full survey detail (all questions/answers, GPS, timing) for one submission
+app.get('/api/survey/:id', requireAuth, async (req, res) => {
+  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
+    await refreshCache();
+  }
+  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+  const raw = cache.data.rawByInstance?.[req.params.id];
+  if (!raw) return res.status(404).json({ error: 'Survey not found' });
+  const sectionTiming = cache.data.sectionTimingByInstance?.[req.params.id] || null;
+  res.json(buildSurveyDetail(raw, sectionTiming));
 });
 
 app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {
@@ -1299,8 +1422,9 @@ function saveSecurityAlerts() {
   catch(e) { console.error('[Security] Could not save alert history:', e.message); }
 }
 
-// Conflict keywords — Arabic + English
-const CONFLICT_KEYWORDS = [
+// Primary conflict keywords — actual events/orders, not just commentary about actors.
+// At least one of these must match for an alert to fire (see checkSecurityNews).
+const PRIMARY_KEYWORDS = [
   // Arabic — strikes & attacks
   'غارة', 'غارات', 'قصف', 'استهداف', 'هجوم', 'انفجار', 'صاروخ', 'صواريخ',
   'مسيّرة', 'مسيرة', 'طائرة مسيرة', 'اغتيال', 'سقط', 'سقوط',
@@ -1311,29 +1435,65 @@ const CONFLICT_KEYWORDS = [
   // Arabic — road closures & protests
   'تسكير', 'تسكير طرق', 'إغلاق طريق', 'إغلاق الطريق', 'قطع طريق', 'قطع الطريق',
   'إعتصام', 'اعتصام', 'تجمع', 'بدأ تجمع', 'محتجون', 'محتجين', 'مسيرة احتجاجية',
-  // Arabic — conflict actors only (no place names — those are in LEBANON_AREAS)
-  'الجيش الإسرائيلي', 'إسرائيل', 'حزب الله', 'المقاومة',
   // English
   'strike', 'airstrike', 'explosion', 'attack', 'rocket', 'missile', 'drone',
-  'evacuation', 'warning', 'IDF', 'Israeli army', 'Hezbollah', 'hostilities',
-  'shelling', 'bombardment', 'targeted', 'killed', 'wounded',
+  'evacuation', 'warning', 'shelling', 'bombardment', 'targeted', 'killed', 'wounded',
 ];
+
+// Context keywords — conflict actors. Useful for tagging, but not enough on
+// their own to trigger an alert (e.g. speculative Israeli media commentary
+// naming "الجيش الإسرائيلي" / "إسرائيل" without an actual strike/warning/evacuation).
+const CONTEXT_KEYWORDS = [
+  'الجيش الإسرائيلي', 'إسرائيل', 'حزب الله', 'المقاومة',
+  'IDF', 'Israeli army', 'Hezbollah', 'hostilities',
+];
+
+const CONFLICT_KEYWORDS = [...PRIMARY_KEYWORDS, ...CONTEXT_KEYWORDS];
 
 // Lebanon survey areas — for location matching in alerts
 const LEBANON_AREAS = [
   'بيروت', 'الضاحية', 'الجنوب', 'بنت جبيل', 'بعلبك', 'البقاع', 'النبطية', 'صيدا', 'صور',
   'زحلة', 'طرابلس', 'عكار', 'كسروان', 'المتن', 'الشوف', 'عاليه',
+  'البقاع الغربي', 'راشيا', 'جبيل', 'لاسا',
+  // South Lebanon villages frequently named in evacuation/strike warnings
+  'انصارية', 'الانصارية', 'عيتا الشعب', 'كفركلا', 'الخيام', 'مارون الراس',
+  'يارون', 'رميش', 'عيناتا', 'بيت ليف', 'طير حرفا', 'الطيري',
+  'الناقورة', 'علما الشعب', 'دبل', 'حولا', 'ميس الجبل', 'الدوير',
+  'مجدل سلم', 'كفرشوبا', 'شبعا', 'العديسة', 'القنطرة', 'الوزاني',
+  'الخردلي', 'ابل القمح', 'القليلة', 'صريفا', 'برعشيت', 'الزرارية',
+  'الغازية', 'دير قانون النهر', 'عبا', 'جويا', 'صددين', 'تبنين',
+  'حاريص', 'شقرا', 'الجبين', 'الشهابية', 'القصير', 'النميرية',
+  'الزهراني', 'كفررمان', 'حانين', 'دير كيفا', 'العباسية',
   'Beirut', 'Bekaa', 'Nabatieh', 'Sidon', 'Tyre', 'Baalbek',
-  'Zahle', 'Tripoli', 'Akkar',
+  'Zahle', 'Tripoli', 'Akkar', 'West Bekaa', 'Rashaya', 'Jbeil', 'Kesserwan', 'Lassa',
 ];
 
+// Districts for which alerts are actually sent over WhatsApp to managers.
+// Other districts still show up in the dashboard's security history/map.
+const WHATSAPP_ALERT_AREAS = [
+  'بيروت', 'الضاحية', 'الشوف', 'عاليه', 'زحلة', 'البقاع الغربي', 'راشيا', 'كسروان', 'جبيل', 'لاسا',
+  'Beirut', 'Chouf', 'Aley', 'Zahle', 'West Bekaa', 'Rashaya', 'Jbeil', 'Kesserwan', 'Lassa',
+];
+
+// Normalize Arabic text for matching: unify hamza/alef variants and strip
+// punctuation/diacritics that are sometimes inserted mid-word (e.g. "الاحـ.. ـتلال")
+function normalizeArabic(text) {
+  return text
+    .replace(/[ً-ٰٟ]/g, '')          // strip diacritics (tashkeel)
+    .replace(/[أإآا]/g, 'ا')                         // unify alef variants
+    .replace(/ة/g, 'ه')                              // unify ta marbuta / ha
+    .replace(/ى/g, 'ي')                              // unify alef maqsura / ya
+    .replace(/[^\p{L}\p{N}\s]/gu, '');               // strip punctuation/symbols
+}
+
 function detectConflictKeywords(text) {
-  const lower = text.toLowerCase();
-  return CONFLICT_KEYWORDS.filter(kw => lower.includes(kw.toLowerCase()));
+  const lower = normalizeArabic(text.toLowerCase());
+  return CONFLICT_KEYWORDS.filter(kw => lower.includes(normalizeArabic(kw.toLowerCase())));
 }
 
 function extractMentionedAreas(text) {
-  return LEBANON_AREAS.filter(area => text.includes(area));
+  const normalized = normalizeArabic(text);
+  return LEBANON_AREAS.filter(area => normalized.includes(normalizeArabic(area)));
 }
 
 // ── Telegram client (GramJS) ───────────────────────────────────────────────
@@ -1531,6 +1691,13 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
     `${areaText}\n\n` +
     `المصدر: ${sourceName} | ${link}`;
 
+  // Only notify managers over WhatsApp for alerts in the watched districts
+  const inWhatsAppArea = mentionedAreas.some(area => WHATSAPP_ALERT_AREAS.includes(area));
+  if (!inWhatsAppArea) {
+    console.log(`[Security] Skipping WhatsApp — areas (${mentionedAreas.join(', ') || 'none'}) not in watched districts`);
+    return;
+  }
+
   console.log(`[Security] Sending alert to managers`);
 
   // Send to managers only
@@ -1563,6 +1730,12 @@ async function checkSecurityNews(seedOnly = false) {
     const fullText = `${title} ${description}`;
     const matchedKeywords = detectConflictKeywords(fullText);
     if (matchedKeywords.length < 2) {
+      sentSecurityAlerts.add(id);
+      continue;
+    }
+
+    const hasPrimaryKeyword = matchedKeywords.some(kw => PRIMARY_KEYWORDS.includes(kw));
+    if (!hasPrimaryKeyword) {
       sentSecurityAlerts.add(id);
       continue;
     }

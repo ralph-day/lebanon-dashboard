@@ -44,7 +44,7 @@ function ActiveBadge({ name, code, lastSeen, recentCount, isActive, onClick }) {
   )
 }
 
-function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
+function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighlightEnumerator }) {
   const [offset, setOffset]           = useState(0) // 0 = today, -1 = yesterday, etc.
   const [showAccepted, setShowAccepted] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
@@ -200,7 +200,14 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate }) {
                   <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${a.totalTarget > 0 ? Math.min(a.completed / a.totalTarget * 100, 100) : 0}%` }} />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="text-sm font-bold text-emerald-600">+{a.dayAccepted}</span>
+                  <span
+                    className="text-sm font-bold text-emerald-600 hover:underline"
+                    title="Show on map"
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (a.dayAccepted > 0) onHighlightEnumerator?.(`${a.name} (${a.code})`, lbDateStr)
+                    }}
+                  >+{a.dayAccepted}</span>
                   <span className="text-xs text-slate-400">accepted</span>
                   {a.dayRejected > 0 && (
                     <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded ml-1" title="Rejected by supervisor">
@@ -387,6 +394,8 @@ export default function OverviewPanel({ data }) {
 
   const activeCount = assignments.filter(a => a.isActive).length
 
+  const [highlight, setHighlight] = useState(null) // { enumerator, date }
+
   return (
     <div className="space-y-6">
 
@@ -421,8 +430,8 @@ export default function OverviewPanel({ data }) {
 
       {/* ── Daily Progress + Mini Map ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} gpsPoints={gpsPoints} navigate={navigate} />
-        <MiniMap gpsPoints={gpsPoints} />
+        <DailyProgress assignments={assignments} qaRows={data.qa?.rows || []} gpsPoints={gpsPoints} navigate={navigate} onHighlightEnumerator={(enumerator, date) => setHighlight({ enumerator, date })} />
+        <MiniMap gpsPoints={gpsPoints} highlight={highlight} />
       </div>
 
       {/* ── Big numbers ───────────────────────────────────────────────────── */}

@@ -20,9 +20,40 @@ const TYPE_LABEL = {
   'Missing GPS':         { icon: '📍', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
 }
 
+function IssueModal({ enumeratorName, issue, onClose }) {
+  if (!issue) return null
+  const style = TYPE_LABEL[issue.type] || { icon: '⚠', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{style.icon}</span>
+            <div>
+              <p className="font-bold text-slate-800 text-sm">{issue.type}</p>
+              <p className="text-xs text-slate-400">{enumeratorName}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        </div>
+        <div className={`text-sm border rounded-lg px-3 py-2 ${style.cls}`}>
+          {issue.detail}
+        </div>
+        <p className="text-xs text-slate-400 mt-3">Submission: {timeAgo(issue.submissionDate)}</p>
+        <div className="mt-4 flex justify-end">
+          <button onClick={onClose} className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AnomalyAlerts({ anomalies = [] }) {
   const [expanded, setExpanded] = useState(null)
   const [dismissed, setDismissed] = useState(new Set())
+  const [activeIssue, setActiveIssue] = useState(null)
 
   const visible = anomalies.filter(a => !dismissed.has(a.name))
   const criticalCount = visible.filter(a => a.critical.length > 0).length
@@ -134,7 +165,11 @@ export default function AnomalyAlerts({ anomalies = [] }) {
                   {allIssues.slice(0, 8).map((issue, i) => {
                     const style = TYPE_LABEL[issue.type] || { icon: '⚠', cls: 'bg-slate-100 text-slate-600 border-slate-200' }
                     return (
-                      <div key={i} className={`flex items-start gap-2 text-xs border rounded-lg px-3 py-2 ${style.cls}`}>
+                      <div
+                        key={i}
+                        onClick={() => setActiveIssue({ enumeratorName: a.name.split('(')[0].trim(), issue })}
+                        className={`flex items-start gap-2 text-xs border rounded-lg px-3 py-2 cursor-pointer hover:opacity-80 ${style.cls}`}
+                      >
                         <span className="shrink-0 mt-0.5">{style.icon}</span>
                         <div className="flex-1 min-w-0">
                           <span className="font-semibold">{issue.type}</span>
@@ -162,6 +197,12 @@ export default function AnomalyAlerts({ anomalies = [] }) {
           </button>
         </div>
       )}
+
+      <IssueModal
+        enumeratorName={activeIssue?.enumeratorName}
+        issue={activeIssue?.issue}
+        onClose={() => setActiveIssue(null)}
+      />
     </div>
   )
 }

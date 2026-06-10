@@ -6,9 +6,9 @@ const SOURCE_LABEL = {
 }
 
 const ALL_AREAS = [
-  'بيروت','الضاحية','جنوب','الجنوب','بعلبك','البقاع','النبطية',
+  'بيروت','الضاحية','الجنوب','بنت جبيل','بعلبك','البقاع','النبطية',
   'صيدا','صور','زحلة','طرابلس','عكار','كسروان','المتن','الشوف','عاليه',
-  'Beirut','South','Bekaa','Nabatieh','Sidon','Tyre','Baalbek','Zahle','Tripoli','Akkar',
+  'Beirut','Bekaa','Nabatieh','Sidon','Tyre','Baalbek','Zahle','Tripoli','Akkar',
 ]
 
 function timeAgo(ms) {

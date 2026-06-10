@@ -74,13 +74,14 @@ function computeSameDayDuplicates(points) {
   return ids
 }
 
-export default function MiniMap({ gpsPoints = [] }) {
+export default function MiniMap({ gpsPoints = [], highlight = null }) {
   useEffect(injectStyle, [])
 
   const [filterEnum,    setFilterEnum]   = useState('all')
   const [showTooClose,  setShowTooClose] = useState(false)
   const [showAccepted,  setShowAccepted] = useState(false)
   const [selectedPoint, setSelectedPoint] = useState(null)
+  const [forcedDate,    setForcedDate]   = useState(null)
 
   // React-driven blink toggle
   const [blinkOn, setBlinkOn] = useState(true)
@@ -95,6 +96,7 @@ export default function MiniMap({ gpsPoints = [] }) {
 
   // Find the most recent date that has GPS data — fall back if today has none
   const activeDate = useMemo(() => {
+    if (forcedDate && gpsPoints.some(p => toLebanonDateStr(p.date) === forcedDate)) return forcedDate
     const hasToday = gpsPoints.some(p => toLebanonDateStr(p.date) === today)
     if (hasToday) return today
     // find latest date in dataset
@@ -103,7 +105,7 @@ export default function MiniMap({ gpsPoints = [] }) {
       .filter(Boolean)
       .sort()
     return dates[dates.length - 1] || today
-  }, [gpsPoints, today])
+  }, [gpsPoints, today, forcedDate])
 
   const isToday = activeDate === today
 
@@ -123,6 +125,21 @@ export default function MiniMap({ gpsPoints = [] }) {
     // Return points with corrected duplicate flag (same-day only)
     return pts.map(p => ({ ...p, duplicate: sameDayDupIds.has(p.id) }))
   }, [gpsPoints, activeDate])
+
+  // React to "show on map" clicks from the Progress by Enumerator panel
+  useEffect(() => {
+    if (!highlight?.enumerator) return
+    setForcedDate(highlight.date || null)
+    setFilterEnum(highlight.enumerator)
+    setShowAccepted(true)
+    setShowTooClose(false)
+    const match = gpsPoints.find(p =>
+      p.enumerator === highlight.enumerator &&
+      p.status === 'accepted' &&
+      (!highlight.date || toLebanonDateStr(p.date) === highlight.date)
+    )
+    if (match) setSelectedPoint(match)
+  }, [highlight])
 
   const visiblePoints = useMemo(() =>
     filterEnum === 'all' ? datePoints : datePoints.filter(p => p.enumerator === filterEnum),

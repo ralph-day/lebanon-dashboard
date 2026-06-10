@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import NotesBubble from './NotesBubble'
+import SurveyDetailModal from './SurveyDetailModal'
 
 const QA_STYLE = {
   '✅ PASS': 'bg-emerald-100 text-emerald-700',
@@ -56,6 +57,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
   const [dateTo, setDateTo]               = useState('')
   const [rows, setRows]               = useState(initialQa.rows)
   const [approving, setApproving]     = useState(null)
+  const [selectedSurveyId, setSelectedSurveyId] = useState(null)
 
   const pass     = rows.filter(r => r.qaStatus === '✅ PASS').length
   const review   = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
@@ -320,6 +322,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
           <table className="w-full text-sm" style={{ minWidth: '700px' }}>
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Survey ID</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">Enumerator</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">District</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Date</th>
@@ -333,13 +336,21 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={canApprove ? 9 : 8} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
+                <tr><td colSpan={canApprove ? 10 : 9} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
               )}
               {filtered.map((row, i) => (
-                <tr key={i} className={`hover:bg-slate-50 transition-colors ${
-                  row.approvedByManager ? 'bg-emerald-50/40' :
-                  row.totalFlags >= 2 ? 'bg-red-50/40' : ''
-                }`}>
+                <tr
+                  key={i}
+                  onClick={() => row.id && setSelectedSurveyId(row.id)}
+                  className={`transition-colors ${row.id ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-slate-50'} ${
+                    row.approvedByManager ? 'bg-emerald-50/40' :
+                    row.totalFlags >= 2 ? 'bg-red-50/40' : ''
+                  }`}
+                  title={row.id ? 'Click to view full survey' : undefined}
+                >
+                  <td className="px-3 py-2.5 text-xs text-slate-400 font-mono whitespace-nowrap">
+                    {row.id ? row.id.replace(/^uuid:/, '').slice(0, 8) + '…' : '—'}
+                  </td>
                   <td className="px-4 py-2.5 font-medium text-slate-800 text-xs whitespace-nowrap">{row.name}</td>
                   <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.district || '—'}</td>
                   <td className="px-3 py-2.5 text-xs text-slate-500 text-center whitespace-nowrap">
@@ -366,7 +377,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 text-xs">
+                  <td className="px-3 py-2.5 text-xs" onClick={e => e.stopPropagation()}>
                     <div className="flex flex-wrap gap-1 items-center">
                       <FlagBadge value={row.tooFast} />
                       <FlagBadge value={row.tooSlow} />
@@ -382,7 +393,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
                     </div>
                   </td>
                   {canApprove && (
-                    <td className="px-3 py-2.5 text-center">
+                    <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
                       {row.approvedByManager ? (
                         <button
                           onClick={() => handleUnapprove(row)}
@@ -413,8 +424,10 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
       </div>
 
       <p className="text-xs text-slate-400 text-center">
-        Approvals by manager are saved and persist across data refreshes. Click a card above to filter by status.
+        Approvals by manager are saved and persist across data refreshes. Click a card above to filter by status. Click any row to view the full survey.
       </p>
+
+      <SurveyDetailModal surveyId={selectedSurveyId} onClose={() => setSelectedSurveyId(null)} />
     </div>
   )
 }
