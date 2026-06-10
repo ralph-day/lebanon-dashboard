@@ -933,8 +933,9 @@ const NISRINE_PHONE = process.env.NISRINE_PHONE || '9613046612'; // +961 3 046 6
 const MOE_PHONE    = process.env.MOE_PHONE    || '96176999503'; // +961 76 999 503
 const RALPH_PHONE  = process.env.RALPH_PHONE  || '96176979198'; // +961 76 979 198
 const ALAA_PHONE   = process.env.ALAA_PHONE   || '9613480629';  // +961 3 480 629
+const AHMAD_PHONE  = process.env.AHMAD_PHONE  || '96170823546'; // +961 70 823 546
 
-const TEAM_ALERT_PHONES = [RALPH_PHONE, NISRINE_PHONE, MOE_PHONE, ALAA_PHONE];
+const TEAM_ALERT_PHONES = [RALPH_PHONE, NISRINE_PHONE, MOE_PHONE, ALAA_PHONE, AHMAD_PHONE];
 
 function buildAcceptedMessage(row) {
   const flagEmoji = row.tooClose || row.missingGPS === '✗ Missing GPS' ? '⚠️' : '✅';
@@ -1031,6 +1032,7 @@ async function notifyAnomalies(anomalies) {
     await sendWhatsApp(MOE_PHONE,    null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
     await sendWhatsApp(RALPH_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
     await sendWhatsApp(ALAA_PHONE,   null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
+    await sendWhatsApp(AHMAD_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
 
     sentAlerts.add(alertKey);
     newAlerts++;
@@ -1777,6 +1779,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   await sendWhatsApp(NISRINE_PHONE, managerMsg);
   await sendWhatsApp(MOE_PHONE,    managerMsg);
   await sendWhatsApp(ALAA_PHONE,   managerMsg);
+  await sendWhatsApp(AHMAD_PHONE,  managerMsg);
 }
 
 let securityMonitorSeeded = false;
