@@ -82,6 +82,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
   const [loading, setLoading]   = useState(true)
   const [savingCheckpoint, setSavingCheckpoint] = useState(false)
   const [showLog, setShowLog]   = useState(false)
+  const [error, setError]       = useState(null)
 
   useEffect(() => {
     fetch('/api/payments', { credentials: 'include' })
@@ -138,7 +139,10 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
-    if (!res.ok) return
+    if (!res.ok) {
+      setError(res.status === 403 ? "You don't have permission to edit payments." : 'Failed to save change — please try again.')
+      return
+    }
     const updated = await res.json()
     setPayments(prev => ({ ...prev, enumerators: [...prev.enumerators.filter(e => e.code !== code), updated] }))
   }
@@ -149,7 +153,10 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
     })
-    if (!res.ok) return
+    if (!res.ok) {
+      setError(res.status === 403 ? "You don't have permission to edit payments." : 'Failed to save change — please try again.')
+      return
+    }
     const updated = await res.json()
     setPayments(prev => ({ ...prev, flatFees: prev.flatFees.map(f => f.id === id ? updated : f) }))
   }
@@ -187,6 +194,13 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
 
   return (
     <div className="space-y-4">
+
+      {error && (
+        <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700">
+          <span>⚠️ {error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-lg leading-none">✕</button>
+        </div>
+      )}
 
       {/* ── Header ───────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
