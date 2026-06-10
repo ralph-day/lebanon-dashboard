@@ -26,31 +26,15 @@ function fmtDate(ms) {
   return new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function countdown(expiresAt) {
-  const ms = expiresAt - Date.now()
-  if (ms <= 0) return null
-  const h = Math.floor(ms / 3600000)
-  const m = Math.floor((ms % 3600000) / 60000)
-  const s = Math.floor((ms % 60000) / 1000)
-  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-}
-
 function AlertCard({ alert }) {
-  const [cd, setCd] = useState(() => countdown(alert.expiresAt))
   const isActive = alert.expiresAt && Date.now() < alert.expiresAt
 
-  useEffect(() => {
-    if (!isActive) return
-    const id = setInterval(() => setCd(countdown(alert.expiresAt)), 1000)
-    return () => clearInterval(id)
-  }, [alert.expiresAt, isActive])
-
   return (
-    <div className={`rounded-xl border p-4 ${isActive ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-white'}`}>
+    <div className={`rounded-xl border p-4 ${isActive ? 'border-pink-200 bg-pink-50' : 'border-slate-100 bg-white'}`}>
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           {isActive && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white animate-pulse">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-pink-500 text-white animate-pulse">
               🔴 ACTIVE
             </span>
           )}
@@ -63,11 +47,6 @@ function AlertCard({ alert }) {
             <span className="text-xs text-slate-300 italic">backfilled</span>
           )}
         </div>
-        {isActive && cd && (
-          <span className="text-xs font-mono text-red-500 font-semibold shrink-0">
-            {cd} left
-          </span>
-        )}
       </div>
 
       <p className="text-sm font-semibold text-slate-800 leading-snug mb-3" dir="rtl">
@@ -205,7 +184,7 @@ export default function SecurityAlertsPanel() {
 
       {/* Active alert banner */}
       {hasActiveAlerts && (
-        <div className="rounded-xl bg-red-600 text-white p-4 flex items-center gap-3">
+        <div className="rounded-xl bg-pink-500 text-white p-4 flex items-center gap-3">
           <span className="text-2xl animate-bounce">🚨</span>
           <div>
             <p className="font-bold text-sm">

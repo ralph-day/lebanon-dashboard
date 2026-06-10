@@ -1638,7 +1638,7 @@ async function fetchAllNewsItems() {
 
 // ── Security alert store ───────────────────────────────────────────────────
 const activeSecurityAlerts = [];   // in-memory, for map overlay (expires 2h)
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const ALERT_ACTIVE_MS = 30 * 60 * 1000;
 
 const SECURITY_HISTORY_PATH = path.join(DATA_DIR, 'security_history.json');
 let alertHistory = [];  // permanent, persisted to disk
@@ -1753,7 +1753,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
     source: article._source || 'telegram',
     link,
     triggeredAt: now,
-    expiresAt: now + TWO_HOURS_MS,
+    expiresAt: now + ALERT_ACTIVE_MS,
   };
   activeSecurityAlerts.push(alertEntry);
   alertHistory.unshift(alertEntry); // newest first
