@@ -529,6 +529,7 @@ async function parseExcel(filePath) {
     gap: r.GAP || '',
     timeRange: r['time range accepted'] || '',
     locationOn: r.LocationOn || '',
+    tooClose: duplicateIds.has(r.instanceID || ''),
   }; });
 
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
@@ -936,8 +937,9 @@ const ALAA_PHONE   = process.env.ALAA_PHONE   || '9613480629';  // +961 3 480 62
 const TEAM_ALERT_PHONES = [RALPH_PHONE, NISRINE_PHONE, MOE_PHONE, ALAA_PHONE];
 
 function buildAcceptedMessage(row) {
+  const flagEmoji = row.tooClose || row.missingGPS === '✗ Missing GPS' ? '⚠️' : '✅';
   const lines = [
-    `✅ استبيان جديد مقبول`,
+    `${flagEmoji} استبيان جديد مقبول`,
     ``,
     `المستطلِع: ${row.name || '—'}`,
     `الموقع: ${row.locationName || row.district || '—'}`,
@@ -947,6 +949,12 @@ function buildAcceptedMessage(row) {
     if (!isNaN(d)) lines.push(`الوقت: ${d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
   }
   lines.push(`نتيجة الجودة: ${row.qaStatus || '—'}`);
+  if (row.tooClose) {
+    lines.push(``, `⚠️ تنبيه: الموقع قريب جدًا (Too Close) من استبيان آخر — يرجى التحقق.`);
+  }
+  if (row.missingGPS === '✗ Missing GPS') {
+    lines.push(``, `⚠️ تنبيه: بيانات الموقع (GPS) مفقودة.`);
+  }
   return lines.join('\n');
 }
 
