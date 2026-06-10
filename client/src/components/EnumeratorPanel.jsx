@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import NotesBubble from './NotesBubble'
 import SurveyDetailModal from './SurveyDetailModal'
@@ -31,14 +31,51 @@ function SectionCell({ value, min }) {
 }
 
 // ── Enumerator detail subpage ─────────────────────────────────────────────────
+const DATE_RANGES = [
+  { key: 'all',     label: 'All time' },
+  { key: 'today',   label: 'Today' },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: '7d',      label: 'Last 7 days' },
+  { key: '30d',     label: 'Last 30 days' },
+]
+
 function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack }) {
-  const myRows = qaRows.filter(r => r.name === e.name)
+  const allRows = qaRows.filter(r => r.name === e.name)
+  const [dateRange, setDateRange] = useState('all')
+
+  const myRows = useMemo(() => {
+    if (dateRange === 'all') return allRows
+    const now = new Date()
+    let start, end
+    if (dateRange === 'today') {
+      start = new Date(now); start.setHours(0,0,0,0)
+      end = new Date(start); end.setDate(end.getDate() + 1)
+    } else if (dateRange === 'yesterday') {
+      end = new Date(now); end.setHours(0,0,0,0)
+      start = new Date(end); start.setDate(start.getDate() - 1)
+    } else {
+      const days = dateRange === '7d' ? 7 : 30
+      end = new Date(now)
+      start = new Date(now); start.setDate(start.getDate() - days)
+    }
+    return allRows.filter(r => {
+      if (!r.submissionDate) return false
+      const ts = new Date(r.submissionDate).getTime()
+      return ts >= start.getTime() && ts < end.getTime()
+    })
+  }, [allRows, dateRange])
+
   // Match Data Quality tab: classify by automated qaStatus (PASS/REVIEW/FAIL)
   const pass    = myRows.filter(r => r.qaStatus === '✅ PASS').length
   const review  = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
   const fail    = myRows.filter(r => r.qaStatus === '❌ FAIL').length
   const pending = myRows.length - pass - fail - review
   const total50 = myRows.length || 1
+
+  const missingGPSCount = myRows.filter(r => r.missingGPS === '✗ Missing GPS').length
+  const durations = myRows.filter(r => r.appTime > 0).map(r => r.appTime)
+  const avgDurationFiltered = durations.length > 0 ? durations.reduce((s, v) => s + v, 0) / durations.length : null
+  const qualityPctFiltered = myRows.length > 0 ? (pass / myRows.length) * 100 : null
 
   // Recent 15 survey durations for bar chart
   const recentDurations = myRows
@@ -82,13 +119,27 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
         )}
       </div>
 
+      {/* Date range filter */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-400 font-medium">Filter:</span>
+        <div className="flex gap-1.5 flex-wrap">
+          {DATE_RANGES.map(r => (
+            <button
+              key={r.key}
+              onClick={() => setDateRange(r.key)}
+              className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${dateRange === r.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >{r.label}</button>
+          ))}
+        </div>
+      </div>
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Surveys', value: e.totalSurveys, color: 'text-blue-600' },
-          { label: 'Avg Duration', value: e.avgDuration != null ? `${parseFloat(e.avgDuration).toFixed(1)} min` : '—', color: 'text-slate-700' },
-          { label: 'Missing GPS', value: e.missingGPS ?? 0, color: e.missingGPS > 0 ? 'text-red-500' : 'text-emerald-500', bg: e.missingGPS > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100' },
-          { label: 'Quality', value: e.qualityPct != null ? `${parseFloat(e.qualityPct).toFixed(0)}%` : '—', color: e.qualityPct >= 90 ? 'text-emerald-600' : e.qualityPct >= 70 ? 'text-yellow-600' : 'text-red-500' },
+          { label: 'Total Surveys', value: dateRange === 'all' ? e.totalSurveys : myRows.length, color: 'text-blue-600' },
+          { label: 'Avg Duration', value: dateRange === 'all' ? (e.avgDuration != null ? `${parseFloat(e.avgDuration).toFixed(1)} min` : '—') : (avgDurationFiltered != null ? `${avgDurationFiltered.toFixed(1)} min` : '—'), color: 'text-slate-700' },
+          { label: 'Missing GPS', value: dateRange === 'all' ? (e.missingGPS ?? 0) : missingGPSCount, color: (dateRange === 'all' ? e.missingGPS : missingGPSCount) > 0 ? 'text-red-500' : 'text-emerald-500', bg: (dateRange === 'all' ? e.missingGPS : missingGPSCount) > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100' },
+          { label: 'Quality', value: dateRange === 'all' ? (e.qualityPct != null ? `${parseFloat(e.qualityPct).toFixed(0)}%` : '—') : (qualityPctFiltered != null ? `${qualityPctFiltered.toFixed(0)}%` : '—'), color: (dateRange === 'all' ? e.qualityPct : qualityPctFiltered) >= 90 ? 'text-emerald-600' : (dateRange === 'all' ? e.qualityPct : qualityPctFiltered) >= 70 ? 'text-yellow-600' : 'text-red-500' },
         ].map(s => (
           <div
             key={s.label}
