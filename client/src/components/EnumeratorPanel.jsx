@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import NotesBubble from './NotesBubble'
+import SurveyDetailModal from './SurveyDetailModal'
 
 const SECTIONS = [
   { key: 'time_demo',         label: 'Demographics', min: 3 },
@@ -52,6 +53,9 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
   const codeMatch = e.name.match(/\((\w+)\)/)
   const code = codeMatch ? codeMatch[1] : ''
 
+  const [showAllSurveys, setShowAllSurveys] = useState(false)
+  const [selectedSurveyId, setSelectedSurveyId] = useState(null)
+
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -86,7 +90,12 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
           { label: 'Missing GPS', value: e.missingGPS ?? 0, color: e.missingGPS > 0 ? 'text-red-500' : 'text-emerald-500', bg: e.missingGPS > 0 ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100' },
           { label: 'Quality', value: e.qualityPct != null ? `${parseFloat(e.qualityPct).toFixed(0)}%` : '—', color: e.qualityPct >= 90 ? 'text-emerald-600' : e.qualityPct >= 70 ? 'text-yellow-600' : 'text-red-500' },
         ].map(s => (
-          <div key={s.label} className={`bg-white rounded-xl border p-4 ${s.bg || 'border-slate-200'}`}>
+          <div
+            key={s.label}
+            className={`bg-white rounded-xl border p-4 ${s.bg || 'border-slate-200'} ${s.label === 'Total Surveys' ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+            onClick={s.label === 'Total Surveys' ? () => setShowAllSurveys(true) : undefined}
+            title={s.label === 'Total Surveys' ? 'Click to view all surveys' : undefined}
+          >
             <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">{s.label}</p>
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
           </div>
@@ -203,6 +212,42 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
           </div>
         </div>
       )}
+
+      {showAllSurveys && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 overflow-y-auto" onClick={() => setShowAllSurveys(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 p-5 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
+              <h3 className="font-bold text-slate-800 text-base">All Surveys — {e.name.split('(')[0].trim()} ({myRows.length})</h3>
+              <button onClick={() => setShowAllSurveys(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+            </div>
+            <div className="p-3 space-y-1.5 max-h-[70vh] overflow-y-auto">
+              {myRows.map((r, i) => (
+                <div
+                  key={r.id || i}
+                  className={`border border-slate-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3 ${r.id ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                  onClick={() => r.id && setSelectedSurveyId(r.id)}
+                  title={r.id ? 'Click to view full survey' : undefined}
+                >
+                  <div className="min-w-0">
+                    <p className="font-mono text-slate-500 truncate">{r.id ? r.id.replace(/^uuid:/, '') : '—'}</p>
+                    <p className="text-slate-500">{r.locationName || r.district || '—'}</p>
+                  </div>
+                  <div className="text-right shrink-0 text-slate-400">
+                    {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleString([], { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>}
+                    <p className={
+                      r.qaStatus === '✅ PASS' ? 'text-emerald-600 font-medium' :
+                      r.qaStatus === '❌ FAIL' ? 'text-red-500 font-medium' :
+                      r.qaStatus === '⚠️ REVIEW' ? 'text-amber-600 font-medium' : 'font-medium'
+                    }>{r.qaStatus || '—'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SurveyDetailModal surveyId={selectedSurveyId} onClose={() => setSelectedSurveyId(null)} />
     </div>
   )
 }
