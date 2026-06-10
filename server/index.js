@@ -929,7 +929,7 @@ function buildManagerMessage(anomaly) {
   return lines.join('\n');
 }
 
-const NISRINE_PHONE = process.env.NISRINE_PHONE || '96130466612'; // +961 3 046 612
+const NISRINE_PHONE = process.env.NISRINE_PHONE || '9613046612'; // +961 3 046 612
 const MOE_PHONE    = process.env.MOE_PHONE    || '96176999503'; // +961 76 999 503
 const RALPH_PHONE  = process.env.RALPH_PHONE  || '96176979198'; // +961 76 979 198
 const ALAA_PHONE   = process.env.ALAA_PHONE   || '9613480629';  // +961 3 480 629
