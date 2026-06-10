@@ -32,12 +32,11 @@ function SectionCell({ value, min }) {
 // ── Enumerator detail subpage ─────────────────────────────────────────────────
 function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack }) {
   const myRows = qaRows.filter(r => r.name === e.name)
-  // Use SurveyStatus_New (r.status) as the source of truth for accepted/rejected
-  // review = flagged for review by QA tool but not yet given a final status (no overlap with fail)
-  const pass    = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
-  const fail    = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
-  const review  = myRows.filter(r => r.qaStatus === '⚠️ REVIEW' && !(r.status || '').trim()).length
-  const pending = myRows.length - pass - fail - review  // no status, not in review
+  // Match Data Quality tab: classify by automated qaStatus (PASS/REVIEW/FAIL)
+  const pass    = myRows.filter(r => r.qaStatus === '✅ PASS').length
+  const review  = myRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
+  const fail    = myRows.filter(r => r.qaStatus === '❌ FAIL').length
+  const pending = myRows.length - pass - fail - review
   const total50 = myRows.length || 1
 
   // Recent 15 survey durations for bar chart
