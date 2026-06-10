@@ -931,6 +931,68 @@ function buildManagerMessage(anomaly) {
 const NISRINE_PHONE = process.env.NISRINE_PHONE || '96130466612'; // +961 3 046 612
 const MOE_PHONE    = process.env.MOE_PHONE    || '96176999503'; // +961 76 999 503
 const RALPH_PHONE  = process.env.RALPH_PHONE  || '96176979198'; // +961 76 979 198
+const ALAA_PHONE   = process.env.ALAA_PHONE   || '9613480629';  // +961 3 480 629
+
+const TEAM_ALERT_PHONES = [RALPH_PHONE, NISRINE_PHONE, MOE_PHONE, ALAA_PHONE];
+
+function buildAcceptedMessage(row) {
+  const lines = [
+    `✅ استبيان جديد مقبول`,
+    ``,
+    `المستطلِع: ${row.name || '—'}`,
+    `الموقع: ${row.locationName || row.district || '—'}`,
+  ];
+  if (row.submissionDate) {
+    const d = new Date(row.submissionDate);
+    if (!isNaN(d)) lines.push(`الوقت: ${d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
+  }
+  lines.push(`نتيجة الجودة: ${row.qaStatus || '—'}`);
+  return lines.join('\n');
+}
+
+async function notifyAcceptedSubmissions(qaRows) {
+  if (!process.env.META_WA_TOKEN) return;
+
+  // First run: seed all currently-accepted rows as already-notified so we
+  // don't flood WhatsApp with hundreds of historical submissions. Only
+  // newly-accepted rows from this point on will trigger a message.
+  const hasAnySubmissionKey = [...sentAlerts].some(k => k.startsWith('submission::'));
+  if (!hasAnySubmissionKey) {
+    let seeded = 0;
+    for (const row of qaRows) {
+      if (!row.id) continue;
+      if ((row.status || '').trim().toLowerCase() !== 'accepted') continue;
+      sentAlerts.add(`submission::${row.id}`);
+      seeded++;
+    }
+    if (seeded > 0) {
+      saveNotifications();
+      console.log(`[WhatsApp] Seeded ${seeded} existing accepted submission(s) — only new ones will notify`);
+    }
+    return;
+  }
+
+  let sent = 0;
+  for (const row of qaRows) {
+    if (!row.id) continue;
+    if ((row.status || '').trim().toLowerCase() !== 'accepted') continue;
+    if (/test/i.test(row.name || '')) continue;
+    const key = `submission::${row.id}`;
+    if (sentAlerts.has(key)) continue;
+
+    const msg = buildAcceptedMessage(row);
+    for (const phone of TEAM_ALERT_PHONES) {
+      await sendWhatsApp(phone, msg);
+    }
+    sentAlerts.add(key);
+    sent++;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  if (sent > 0) {
+    saveNotifications();
+    console.log(`[WhatsApp] Sent ${sent} new accepted-submission notification(s)`);
+  }
+}
 
 async function notifyAnomalies(anomalies) {
   if (!process.env.META_WA_TOKEN) return; // skip if not configured
@@ -956,10 +1018,11 @@ async function notifyAnomalies(anomalies) {
       await sendWhatsApp(anomaly.phone, null, 'survey_enumerator_alert', [firstName, issueList]);
     }
 
-    // Message to field managers (Nisrine + Moe + Ralph)
+    // Message to field managers (Nisrine + Moe + Ralph + Alaa)
     await sendWhatsApp(NISRINE_PHONE, null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
     await sendWhatsApp(MOE_PHONE,    null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
     await sendWhatsApp(RALPH_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
+    await sendWhatsApp(ALAA_PHONE,   null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
 
     sentAlerts.add(alertKey);
     newAlerts++;
@@ -984,6 +1047,7 @@ async function refreshCache() {
     console.log(`[${new Date().toISOString()}] Data refreshed from: ${filename}`);
     // Fire-and-forget anomaly notifications (don't block the cache update)
     notifyAnomalies(parsed.anomalies || []).catch(e => console.error('[WhatsApp] Notify error:', e.message));
+    notifyAcceptedSubmissions(parsed.qa?.rows || []).catch(e => console.error('[WhatsApp] Accepted-notify error:', e.message));
   } catch (err) {
     console.error('Cache refresh error:', err.message);
   } finally {
@@ -1704,6 +1768,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   await sendWhatsApp(RALPH_PHONE,  managerMsg);
   await sendWhatsApp(NISRINE_PHONE, managerMsg);
   await sendWhatsApp(MOE_PHONE,    managerMsg);
+  await sendWhatsApp(ALAA_PHONE,   managerMsg);
 }
 
 let securityMonitorSeeded = false;
