@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import AnomalyAlerts from './AnomalyAlerts'
 import MiniMap from './MiniMap'
+import SurveyDetailModal from './SurveyDetailModal'
 import { useNavigate } from 'react-router-dom'
 
 const NAT_COLORS = { Palestinian: '#3b82f6', Lebanese: '#10b981', Syrian: '#f59e0b' }
@@ -48,6 +49,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
   const [offset, setOffset]           = useState(0) // 0 = today, -1 = yesterday, etc.
   const [showAccepted, setShowAccepted] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
+  const [selectedSurveyId, setSelectedSurveyId] = useState(null)
 
   // Day = 8 AM Lebanon (UTC+3) to 8 AM next day
   const LEBANON_OFFSET_MS = 3 * 60 * 60 * 1000
@@ -151,10 +153,16 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
           <p className="text-xs font-semibold text-green-700 mb-2">✅ Accepted surveys — {label}</p>
           <div className="space-y-1.5 max-h-52 overflow-y-auto">
             {dayAcceptedRows.map((r, i) => (
-              <div key={r.id || i} className="bg-white border border-green-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3">
+              <div
+                key={r.id || i}
+                className={`bg-white border border-green-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3 ${r.id ? 'cursor-pointer hover:bg-green-50' : ''}`}
+                onClick={() => r.id && setSelectedSurveyId(r.id)}
+                title={r.id ? 'Click to view full survey' : undefined}
+              >
                 <div>
                   <p className="font-semibold text-slate-800">{r.name || '—'}</p>
                   <p className="text-slate-500">{r.locationName || r.district || '—'}</p>
+                  {r.id && <p className="text-slate-400 font-mono mt-0.5">{r.id.replace(/^uuid:/, '').slice(0, 8)}…</p>}
                 </div>
                 <div className="text-right shrink-0 text-slate-400">
                   {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
@@ -229,6 +237,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
           </div>
         </>
       )}
+      <SurveyDetailModal surveyId={selectedSurveyId} onClose={() => setSelectedSurveyId(null)} />
     </div>
   )
 }
