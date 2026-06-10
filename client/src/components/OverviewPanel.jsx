@@ -49,6 +49,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
   const [offset, setOffset]           = useState(0) // 0 = today, -1 = yesterday, etc.
   const [showAccepted, setShowAccepted] = useState(false)
   const [showRejected, setShowRejected] = useState(false)
+  const [showQaFail, setShowQaFail] = useState(false)
   const [selectedSurveyId, setSelectedSurveyId] = useState(null)
 
   // Day = 8 AM Lebanon (UTC+3) to 8 AM next day
@@ -106,6 +107,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
     const st = (r.status || '').trim().toLowerCase()
     return st && st !== 'accepted'
   })
+  const dayQaFailRows = dayQaRows.filter(r => r.qaStatus === '❌ FAIL')
 
   // totalAccepted uses gpsPoints with Lebanon midnight-to-midnight boundary —
   // identical to the field map's date filter — so both numbers always agree.
@@ -195,6 +197,33 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
         </div>
       )}
 
+      {/* QA Fail dropdown */}
+      {showQaFail && dayQaFailRows.length > 0 && (
+        <div className="mb-3 border border-amber-100 rounded-lg bg-amber-50 px-3 py-2.5">
+          <p className="text-xs font-semibold text-amber-700 mb-2">⚠️ QA fail surveys — {label}</p>
+          <div className="space-y-1.5 max-h-52 overflow-y-auto">
+            {dayQaFailRows.map((r, i) => (
+              <div
+                key={r.id || i}
+                className={`bg-white border border-amber-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3 ${r.id ? 'cursor-pointer hover:bg-amber-100' : ''}`}
+                onClick={() => r.id && setSelectedSurveyId(r.id)}
+                title={r.id ? 'Click to view full survey' : undefined}
+              >
+                <div>
+                  <p className="font-semibold text-slate-800">{r.name || '—'}</p>
+                  <p className="text-slate-500">{r.locationName || r.district || '—'}</p>
+                  {r.id && <p className="text-slate-400 font-mono mt-0.5">{r.id.replace(/^uuid:/, '').slice(0, 8)}…</p>}
+                </div>
+                <div className="text-right shrink-0 text-slate-400">
+                  {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
+                  <p className="text-amber-600 font-medium">{r.qaStatus || '—'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <p className="text-sm text-slate-400 text-center py-4">No submissions recorded for {label.toLowerCase()}</p>
       ) : (
@@ -223,7 +252,11 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                     </span>
                   )}
                   {a.dayQaFail > 0 && (
-                    <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-1" title="Failed automated QA quality check">
+                    <span
+                      className="text-xs font-semibold text-amber-600 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded ml-1 cursor-pointer"
+                      title="Failed automated QA quality check — click to view"
+                      onClick={e => { e.stopPropagation(); setShowQaFail(v => !v); setShowAccepted(false); setShowRejected(false) }}
+                    >
                       {a.dayQaFail} QA fail
                     </span>
                   )}
@@ -409,7 +442,7 @@ export default function OverviewPanel({ data }) {
     <div className="space-y-6">
 
       {/* ── Anomaly Alerts ────────────────────────────────────────────────── */}
-      <AnomalyAlerts anomalies={anomalies} />
+      <AnomalyAlerts anomalies={anomalies} navigate={navigate} />
 
       {/* ── Active Field Team ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">

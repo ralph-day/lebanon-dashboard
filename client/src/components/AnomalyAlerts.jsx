@@ -50,7 +50,7 @@ function IssueModal({ enumeratorName, issue, onClose }) {
   )
 }
 
-export default function AnomalyAlerts({ anomalies = [] }) {
+export default function AnomalyAlerts({ anomalies = [], navigate }) {
   const [expanded, setExpanded] = useState(null)
   const [dismissed, setDismissed] = useState(new Set())
   const [activeIssue, setActiveIssue] = useState(null)
@@ -96,7 +96,14 @@ export default function AnomalyAlerts({ anomalies = [] }) {
           return (
             <div key={a.name} className={`rounded-lg border bg-white ${hasCritical ? 'border-red-200' : 'border-amber-200'}`}>
               {/* Card header */}
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 rounded-t-lg"
+                onClick={() => {
+                  const code = a.name.match(/\((\w+)\)/)?.[1]
+                  if (code) navigate?.(`/enumerator/${code}`)
+                }}
+                title="View enumerator stats"
+              >
                 <span className="text-lg shrink-0">{hasCritical ? '🔴' : '🟡'}</span>
 
                 <div className="flex-1 min-w-0">
@@ -147,13 +154,13 @@ export default function AnomalyAlerts({ anomalies = [] }) {
 
                 {/* Expand + dismiss */}
                 <button
-                  onClick={() => setExpanded(isExpanded ? null : a.name)}
+                  onClick={e => { e.stopPropagation(); setExpanded(isExpanded ? null : a.name) }}
                   className="text-xs text-slate-400 hover:text-slate-600 shrink-0 px-1"
                 >
                   {isExpanded ? '▲' : '▼'}
                 </button>
                 <button
-                  onClick={() => setDismissed(s => new Set([...s, a.name]))}
+                  onClick={e => { e.stopPropagation(); setDismissed(s => new Set([...s, a.name])) }}
                   className="text-xs text-slate-300 hover:text-slate-500 shrink-0"
                   title="Dismiss"
                 >✕</button>
@@ -167,7 +174,7 @@ export default function AnomalyAlerts({ anomalies = [] }) {
                     return (
                       <div
                         key={i}
-                        onClick={() => setActiveIssue({ enumeratorName: a.name.split('(')[0].trim(), issue })}
+                        onClick={e => { e.stopPropagation(); setActiveIssue({ enumeratorName: a.name.split('(')[0].trim(), issue }) }}
                         className={`flex items-start gap-2 text-xs border rounded-lg px-3 py-2 cursor-pointer hover:opacity-80 ${style.cls}`}
                       >
                         <span className="shrink-0 mt-0.5">{style.icon}</span>
