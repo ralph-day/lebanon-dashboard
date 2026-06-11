@@ -471,9 +471,9 @@ def enumerator_summary(qa_dash: pd.DataFrame, column_order: list[str]) -> pd.Dat
         rows.append({
             "NameCode": name_code,
             "Total_Surveys": total,
-            "Avg_Duration": round(g["Full Time All Sections"].mean(), 1),
-            "Min_Duration": round(g["Full Time All Sections"].min(), 1),
-            "Max_Duration": round(g["Full Time All Sections"].max(), 1),
+            "Avg_Duration": round(g["apptimemint"].mean(), 1),
+            "Min_Duration": round(g["apptimemint"].min(), 1),
+            "Max_Duration": round(g["apptimemint"].max(), 1),
             "Too_Fast": too_fast,
             "Too_Slow": too_slow,
             "App_Left_Open": int((g["GAP"] == "App left open / long pause").sum()),
