@@ -34,19 +34,31 @@ def load_config():
 # ──────────────────────────────────────────────────────────────────
 
 def _parse_cto_datetime(value):
-    """SurveyCTO start/end strings look like
-    'Wed Jun 10 2026 15:19:08 GMT+0300 (Eastern European Summer Time)'.
-    The M code drops the weekday (everything before the first space) and
-    everything from ' GMT' on, then parses 'Jun 10 2026 15:19:08'."""
+    """Parses SurveyCTO start/end timestamps from either source format:
+
+    - Excel WIDE export: 'Wed Jun 10 2026 15:19:08 GMT+0300 (Eastern
+      European Summer Time)' — already in local (Beirut, UTC+3) time. The
+      M code drops the weekday and everything from ' GMT' on, then parses
+      'Jun 10 2026 15:19:08'.
+    - SurveyCTO REST API (json, with `key=` decryption): 'May 19, 2026
+      5:11:04 PM' — in UTC, so it needs +3h to match the Excel/local time
+      the rest of the pipeline (and overrides.json thresholds) expect.
+    """
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return None
-    s = str(value)
-    after = s.split(" ", 1)
-    if len(after) < 2:
-        return None
-    core = after[1].split(" GMT", 1)[0].strip()
+    s = str(value).strip()
+    if " GMT" in s:
+        after = s.split(" ", 1)
+        if len(after) < 2:
+            return None
+        core = after[1].split(" GMT", 1)[0].strip()
+        try:
+            return datetime.strptime(core, "%b %d %Y %H:%M:%S")
+        except ValueError:
+            return None
     try:
-        return datetime.strptime(core, "%b %d %Y %H:%M:%S")
+        from datetime import timedelta
+        return datetime.strptime(s, "%b %d, %Y %I:%M:%S %p") + timedelta(hours=3)
     except ValueError:
         return None
 

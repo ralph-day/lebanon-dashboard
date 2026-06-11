@@ -35,6 +35,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 
@@ -51,28 +52,45 @@ QUERY_SHEETS = ["data", "GTS DATA", "QA_TimingSections", "QA_Dashboard", "QA_ByG
 # ──────────────────────────────────────────────────────────────────
 
 def fetch_wide_from_surveycto() -> pd.DataFrame:
-    """Pull all submissions for the form via the SurveyCTO REST API —
-    replaces the local `Lebanon 2026_WIDE.xlsx` export so the pipeline
-    no longer depends on a laptop running SurveyCTO Desktop sync.
+    """Pull all submissions for the form via the SurveyCTO REST API and
+    decrypt them with the form's private key — replaces the local
+    `Lebanon 2026_WIDE.xlsx` export so the pipeline no longer depends on
+    a laptop running SurveyCTO Desktop sync.
 
     Environment:
-      SURVEYCTO_SERVER     server subdomain, e.g. 'gts'
-      SURVEYCTO_FORM_ID    form id, e.g. 'lebanon_2026'
-      SURVEYCTO_USER       account email (must have API data access)
-      SURVEYCTO_PASSWORD   account password
+      SURVEYCTO_SERVER             server subdomain, e.g. 'gts'
+      SURVEYCTO_FORM_ID            form id, e.g. 'lebanon_2026'
+      SURVEYCTO_USER               account email (must have API data access)
+      SURVEYCTO_PASSWORD           account password
+      SURVEYCTO_PRIVATE_KEY_PATH   path to the form's RSA private key (.csprivatekey)
     """
-    import requests
+    import pysurveycto
 
     server = os.environ["SURVEYCTO_SERVER"]
     form_id = os.environ["SURVEYCTO_FORM_ID"]
     user = os.environ["SURVEYCTO_USER"]
     password = os.environ["SURVEYCTO_PASSWORD"]
+    key_path = os.environ["SURVEYCTO_PRIVATE_KEY_PATH"]
 
-    url = f"https://{server}.surveycto.com/api/v2/forms/data/wide/json/{form_id}"
-    resp = requests.get(url, params={"date": "0"}, auth=(user, password), timeout=120)
-    resp.raise_for_status()
-    rows = resp.json()
-    return pd.DataFrame(rows)
+    scto = pysurveycto.SurveyCTOObject(server, user, password)
+    with open(key_path, "rb") as key_file:
+        rows = scto.get_form_data(form_id, format="json", key=key_file)
+    df = pd.DataFrame(rows)
+    # The API returns SubmissionDate in UTC ("May 19, 2026 5:30:26 PM");
+    # the rest of the pipeline (and overrides.json thresholds) expect
+    # Beirut local time (UTC+3), as in the old Excel WIDE export.
+    df["SubmissionDate"] = pd.to_datetime(df["SubmissionDate"]) + pd.Timedelta(hours=3)
+
+    # The API returns geopoint fields as a single space-separated string
+    # "lat lon alt acc"; the Excel WIDE export splits these into separate
+    # gps-Latitude/gps-Longitude/gps-Altitude/gps-Accuracy columns.
+    if "gps" in df.columns:
+        parts = df["gps"].str.split(" ", expand=True)
+        for i, suffix in enumerate(["Latitude", "Longitude", "Altitude", "Accuracy"]):
+            df[f"gps-{suffix}"] = pd.to_numeric(parts[i], errors="coerce") if i in parts else np.nan
+        df = df.drop(columns=["gps"])
+
+    return df
 
 
 def drive_client():
