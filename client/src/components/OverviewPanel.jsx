@@ -135,7 +135,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                 <button
                   onClick={() => { setShowAccepted(v => !v); setShowRejected(false) }}
                   className={`text-sm font-bold px-3 py-1 rounded-lg border transition-colors ${showAccepted ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
-                >{totalAccepted} accepted</button>
+                >{totalAccepted} pass</button>
                 {dayRejectedRows.length > 0 && (
                   <button
                     onClick={() => { setShowRejected(v => !v); setShowAccepted(false) }}
@@ -245,7 +245,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                       if (a.dayAccepted > 0) onHighlightEnumerator?.(`${a.name} (${a.code})`, lbDateStr)
                     }}
                   >+{a.dayAccepted}</span>
-                  <span className="text-xs text-slate-400">accepted</span>
+                  <span className="text-xs text-slate-400">pass</span>
                   {a.dayRejected > 0 && (
                     <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded ml-1" title="Rejected by supervisor">
                       {a.dayRejected} rejected

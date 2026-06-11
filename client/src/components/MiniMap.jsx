@@ -94,6 +94,13 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
   const TWO_HOURS = 2 * 60 * 60 * 1000
   const now = Date.now()
 
+  // All dates with GPS data, most recent first — for the date filter dropdown
+  const availableDates = useMemo(() => {
+    const dates = new Set(gpsPoints.map(p => toLebanonDateStr(p.date)).filter(Boolean))
+    dates.add(today)
+    return [...dates].sort().reverse()
+  }, [gpsPoints, today])
+
   // Find the most recent date that has GPS data — fall back if today has none
   const activeDate = useMemo(() => {
     if (forcedDate && gpsPoints.some(p => toLebanonDateStr(p.date) === forcedDate)) return forcedDate
@@ -187,6 +194,22 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
           <p className="text-xs text-slate-400 mt-0.5">{visiblePoints.length} GPS surveys</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Date filter */}
+          <select
+            value={activeDate}
+            onChange={e => {
+              const d = e.target.value
+              setForcedDate(d === today ? null : d)
+              setSelectedPoint(null)
+            }}
+            className="text-xs border border-slate-200 rounded-lg px-2 py-1 text-slate-700 bg-white"
+          >
+            {availableDates.map(d => (
+              <option key={d} value={d}>
+                {d === today ? 'Today' : new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+              </option>
+            ))}
+          </select>
           {/* Enumerator filter */}
           <select
             value={filterEnum}
