@@ -630,7 +630,7 @@ async function parseExcel(filePath) {
     const completed = enumCompletedMap[fullName] || 0;
     const totalTarget = e.locations.reduce((s, l) => s + l.target, 0);
     const isActive = !!recentByName[fullName];
-    const lastSeen = enumerators.find(en => en?.name?.includes(`(${e.code})`))?.lastSubmission || null;
+    const lastSeen = enumerators.find(en => en.name.includes(`(${e.code})`))?.lastSubmission || null;
     return {
       code: e.code, name: e.name, fullName, entity: e.entity,
       governorate: e.governorate, locations: e.locations,
@@ -1059,7 +1059,7 @@ async function refreshCache() {
     notifyAnomalies(parsed.anomalies || []).catch(e => console.error('[WhatsApp] Notify error:', e.message));
     notifyAcceptedSubmissions(parsed.qa?.rows || []).catch(e => console.error('[WhatsApp] Accepted-notify error:', e.message));
   } catch (err) {
-    console.error('Cache refresh error:', err.stack || err.message);
+    console.error('Cache refresh error:', err.message);
   } finally {
     _refreshing = false;
   }
