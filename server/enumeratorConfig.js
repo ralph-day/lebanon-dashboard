@@ -145,7 +145,10 @@ const ENUMERATOR_ASSIGNMENTS = [
     entity: 'Through Alaa Abbas',
     governorate: 'Mount Lebanon',
     district: 'Jbeil',
-    locations: [],
+    locations: [
+      { name: 'Lassa', target: 49, deadline: '2026-06-12' },
+      { name: 'Aalmat Ech-Chamliyeh', target: 25, deadline: '2026-06-12' },
+    ],
   },
   {
     code: 'SH15',
