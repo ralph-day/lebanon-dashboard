@@ -306,7 +306,7 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
 // ── Main panel (list view) ────────────────────────────────────────────────────
 export default function EnumeratorPanel({ enumerators, sectionTimings, assignments = [], qaRows = [], notes = [], onNoteAdded, onNoteDeleted }) {
   const [selected, setSelected] = useState(null)
-  const sorted = [...enumerators].sort((a, b) => b.totalSurveys - a.totalSurveys)
+  const sorted = [...enumerators].sort((a, b) => new Date(b.lastSubmission || 0) - new Date(a.lastSubmission || 0))
 
   function enumStatus(e) {
     const codeMatch = e.name.match(/\((\w+)\)/)
@@ -379,6 +379,7 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Surveys</th>
                 <th className="text-center text-xs font-semibold text-emerald-600 uppercase tracking-wide px-3 py-2.5">Accepted</th>
                 <th className="text-center text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Rejected</th>
+                <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide px-3 py-2.5">Not Available</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Avg (min)</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
@@ -403,20 +404,14 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                   <td className="px-3 py-2.5 text-center" onClick={ev => ev.stopPropagation()}>
                     {(() => { const s = enumStatus(e); return <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${s.cls}`}>{s.label}</span> })()}
                   </td>
-                  <td className="px-3 py-2.5 text-center text-blue-600 font-semibold">{e.totalSurveys}</td>
-                  {(() => {
-                    const rows = qaRows.filter(r => r.name === e.name)
-                    const acc = rows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
-                    const rej = rows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
-                    return (
-                      <>
-                        <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{acc || <span className="text-slate-300">—</span>}</td>
-                        <td className="px-3 py-2.5 text-center font-semibold">
-                          {rej > 0 ? <span className="text-red-500">{rej}</span> : <span className="text-slate-300">—</span>}
-                        </td>
-                      </>
-                    )
-                  })()}
+                  <td className="px-3 py-2.5 text-center text-blue-600 font-semibold">{e.surveys}</td>
+                  <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{e.accepted || <span className="text-slate-300">—</span>}</td>
+                  <td className="px-3 py-2.5 text-center font-semibold">
+                    {e.rejected > 0 ? <span className="text-red-500">{e.rejected}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-semibold">
+                    {e.notAvailable > 0 ? <span className="text-amber-600">{e.notAvailable}</span> : <span className="text-slate-300">—</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-center text-slate-600">{e.avgDuration != null ? parseFloat(e.avgDuration).toFixed(1) : '—'}</td>
                   <td className="px-3 py-2.5 text-center text-slate-500">{e.minDuration != null ? parseFloat(e.minDuration).toFixed(1) : '—'}</td>
                   <td className="px-3 py-2.5 text-center text-slate-500">{e.maxDuration != null ? parseFloat(e.maxDuration).toFixed(1) : '—'}</td>
