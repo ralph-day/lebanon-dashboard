@@ -73,17 +73,17 @@ function EnumeratorDetail({ enumerator: e, timing, qaRows, assignment, onBack })
   const total50 = myRows.length || 1
 
   const missingGPSCount = myRows.filter(r => r.missingGPS === '✗ Missing GPS').length
-  const durations = myRows.filter(r => r.appTime > 0).map(r => r.appTime)
+  const durations = myRows.filter(r => r.fullTime > 0).map(r => r.fullTime)
   const avgDurationFiltered = durations.length > 0 ? durations.reduce((s, v) => s + v, 0) / durations.length : null
   const qualityPctFiltered = myRows.length > 0 ? (pass / myRows.length) * 100 : null
 
   // Recent 15 survey durations for bar chart
   const recentDurations = myRows
-    .filter(r => r.appTime > 0)
+    .filter(r => r.fullTime > 0)
     .slice(-15)
     .map((r, i) => ({
       idx: i + 1,
-      mins: parseFloat((r.appTime || 0).toFixed(1)),
+      mins: parseFloat((r.fullTime || 0).toFixed(1)),
       flag: r.tooFast === '✗ Too Fast',
     }))
 
