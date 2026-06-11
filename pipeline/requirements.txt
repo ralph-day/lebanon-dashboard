@@ -3,4 +3,7 @@ openpyxl>=3.1
 numpy>=1.24
 google-api-python-client>=2.100
 google-auth>=2.20
+# requests + pysurveycto are only needed for the (currently unused)
+# fetch_wide_from_surveycto() API path — see README "Architecture decision"
 requests>=2.28
+pysurveycto>=0.0.15
