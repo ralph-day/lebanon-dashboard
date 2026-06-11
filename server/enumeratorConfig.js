@@ -131,10 +131,11 @@ const ENUMERATOR_ASSIGNMENTS = [
     code: 'GO13',
     name: 'Ghinwa Ouneissi',
     phone: phone('GO13', null),
-    governorate: 'North',
-    district: 'El Batroun',
+    governorate: 'North / Mount Lebanon',
+    district: 'El Batroun / Jbeil',
     locations: [
       { name: 'Batroun', target: 22, deadline: '2026-06-12' },
+      { name: 'Aalmat Ej-Jnoubiyeh', target: 21, deadline: '2026-06-12' },
     ],
   },
   {
