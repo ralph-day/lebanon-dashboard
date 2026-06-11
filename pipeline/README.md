@@ -19,7 +19,7 @@ reconcile. Deferred — see `fetch_wide_from_surveycto()` in
 **Current approach**: keep using SurveyCTO Desktop's auto-sync to produce
 `Lebanon 2026_WIDE.xlsx` (same format Moe's pipeline used — proven
 column-compatible), but run the sync + this pipeline on **Ralph's Mac**
-instead of Moe's laptop, via `launchd` every 5 minutes. This moves the
+instead of Moe's laptop, via `launchd` every 2 minutes. This moves the
 single point of failure from Moe's machine to Ralph's, but doesn't yet
 remove the laptop dependency entirely — see "Future: fully cloud" below.
 
@@ -28,7 +28,7 @@ remove the laptop dependency entirely — see "Future: fully cloud" below.
 - [x] `transforms.py` — all 9 query transforms ported from M code
 - [x] `run_pipeline.py` — reads local WIDE export, GTS sheet, writes output
       workbook to Drive
-- [x] launchd job (`com.influeanswers.lebanon-pipeline.plist`) for 5-min runs
+- [x] launchd job (`com.influeanswers.lebanon-pipeline.plist`) for 2-min runs
 - [x] Validated against current `Lebanon 2026 - Analysis.xlsx`: 552/553
       rows match exactly across all 9 sheets. The 1 mismatch (row 440,
       `uuid:370f45a5-...`) is right at the 19-minute QA threshold — likely
@@ -49,7 +49,7 @@ remove the laptop dependency entirely — see "Future: fully cloud" below.
 | `config/overrides.json` | Per-UUID corrections (testing flags, locations, statuses) |
 | `config/columns.json` | Exact output column order per sheet |
 | `queries_m/*.m` | The original Power Query M source (reference) |
-| `com.influeanswers.lebanon-pipeline.plist` | launchd job, runs every 5 min |
+| `com.influeanswers.lebanon-pipeline.plist` | launchd job, runs every 2 min |
 | `.secrets/lebanon2026.csprivatekey` | Form encryption private key (gitignored, only needed for the API path) |
 
 ## Setup (on Ralph's Mac)

@@ -49,7 +49,7 @@ from openpyxl import load_workbook
 import transforms
 
 OUTPUT_FILE_NAME = os.environ.get("OUTPUT_FILE_NAME", "Lebanon 2026 - Analysis.xlsx")
-GTS_SHEET_NAME = os.environ.get("GTS_SHEET_NAME", "GTS Master sheet")
+GTS_SHEET_NAME = os.environ.get("GTS_SHEET_NAME", "GTS Master sheet.xlsx")
 QUERY_SHEETS = ["data", "GTS DATA", "QA_TimingSections", "QA_Dashboard", "QA_ByGroupSection",
                 "Query_All_Rules", "Enumerator_Summary", "Target_Tracker", "Survey Comparison"]
 

@@ -15,7 +15,7 @@
     <string>/Users/ralphbaydoun/lebanon-dashboard/pipeline</string>
 
     <key>StartInterval</key>
-    <integer>300</integer>
+    <integer>120</integer>
 
     <key>RunAtLoad</key>
     <true/>
