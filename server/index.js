@@ -368,6 +368,24 @@ async function parseExcel(filePath) {
   const qaDashboard = sheet('QA_Dashboard');
   const qaSections  = sheet('QA_ByGroupSection');
   const rawData     = sheet('data');
+  const surveyComparison = sheet('Survey Comparison');
+  const gpsCheck    = sheet('GPS_Check');
+
+  // instanceID -> GTS match comment (Accepted / Rejected - ... / Not Available in GTS Data)
+  const gtsMatchByInstance = {};
+  surveyComparison.forEach(r => {
+    const id = r.instanceID || '';
+    if (!id) return;
+    gtsMatchByInstance[id] = r.GTS_Match_Comment || '';
+  });
+
+  // instanceID -> Close Count (15m) from GPS_Check
+  const closeCountByInstance = {};
+  gpsCheck.forEach(r => {
+    const id = r.instanceID || '';
+    if (!id) return;
+    closeCountByInstance[id] = Number(r['Close Count (15m)']) || 0;
+  });
 
   // Per-location rejection counts from the raw data sheet
   const rejByLoc = {};
@@ -530,6 +548,8 @@ async function parseExcel(filePath) {
     timeRange: r['time range accepted'] || '',
     locationOn: r.LocationOn || '',
     tooClose: duplicateIds.has(r.instanceID || ''),
+    gtsMatch: gtsMatchByInstance[r.instanceID || ''] || '',
+    closeCount15m: closeCountByInstance[r.instanceID || ''] || 0,
   }; });
 
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;

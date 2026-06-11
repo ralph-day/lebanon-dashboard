@@ -169,6 +169,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                 <div className="text-right shrink-0 text-slate-400">
                   {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                   <p className="text-green-600 font-medium">{r.qaStatus || '—'}</p>
+                  {r.gtsMatch && <p className="text-[10px] text-slate-400">{r.gtsMatch}</p>}
                 </div>
               </div>
             ))}
@@ -190,6 +191,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                 <div className="text-right shrink-0 text-slate-400">
                   {r.submissionDate && <p>{new Date(r.submissionDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>}
                   <p className="text-red-500 font-medium">{(r.status || '').trim() || 'rejected'}</p>
+                  {r.gtsMatch && <p className="text-[10px] text-slate-400">{r.gtsMatch}</p>}
                 </div>
               </div>
             ))}
