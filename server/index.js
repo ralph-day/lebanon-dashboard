@@ -484,27 +484,18 @@ async function parseExcel(filePath) {
   }).sort((a, b) => a.regionOrder - b.regionOrder || a.location.localeCompare(b.location));
 
   // Enumerators
-  // Per-enumerator Surveys/Accepted/Rejected/Not Available — from Survey Comparison's
-  // SurveyStatus_New, keyed by NameCode. "Not Available" = submissions in the data
-  // sheet that don't yet have a corresponding row in Survey Comparison.
+  // Per-enumerator Surveys/Accepted/Rejected/Not Available — all from Survey
+  // Comparison's SurveyStatus_New, keyed by NameCode.
   const scStatusByEnum = {};
-  const scIds = new Set();
   surveyComparison.forEach(r => {
     const name = r.NameCode || '';
-    if (r.instanceID) scIds.add(r.instanceID);
     if (!name) return;
-    if (!scStatusByEnum[name]) scStatusByEnum[name] = { total: 0, accepted: 0, rejected: 0 };
+    if (!scStatusByEnum[name]) scStatusByEnum[name] = { total: 0, accepted: 0, rejected: 0, notAvailable: 0 };
     const status = (r.SurveyStatus_New || '').trim().toLowerCase();
     scStatusByEnum[name].total++;
     if (status === 'accepted') scStatusByEnum[name].accepted++;
+    else if (status === 'not available') scStatusByEnum[name].notAvailable++;
     else if (status) scStatusByEnum[name].rejected++;
-  });
-  const notAvailableByEnum = {};
-  rawData.forEach(r => {
-    const name = r.NameCode || '';
-    const id = r.instanceID || r['KEY'] || '';
-    if (!name || !id || scIds.has(id)) return;
-    notAvailableByEnum[name] = (notAvailableByEnum[name] || 0) + 1;
   });
 
   const enumerators = enumSummary.map(r => ({
@@ -513,7 +504,7 @@ async function parseExcel(filePath) {
     surveys:     scStatusByEnum[r.NameCode]?.total || 0,
     accepted:    scStatusByEnum[r.NameCode]?.accepted || 0,
     rejected:    scStatusByEnum[r.NameCode]?.rejected || 0,
-    notAvailable: notAvailableByEnum[r.NameCode] || 0,
+    notAvailable: scStatusByEnum[r.NameCode]?.notAvailable || 0,
     avgDuration: r.Avg_Duration != null ? parseFloat(r.Avg_Duration) : null,
     minDuration: r.Min_Duration != null ? parseFloat(r.Min_Duration) : null,
     maxDuration: r.Max_Duration != null ? parseFloat(r.Max_Duration) : null,
