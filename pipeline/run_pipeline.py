@@ -2,7 +2,8 @@
 """Lebanon 2026 survey pipeline — replaces the Excel/VBS refresh loop.
 
 Every run:
-  1. pulls all submissions for the form from the SurveyCTO REST API
+  1. reads `Lebanon 2026_WIDE.xlsx` (kept fresh by SurveyCTO Desktop's
+     auto-sync, running on this machine instead of Moe's laptop)
   2. reads the GTS Google Sheet (manual updates by Moe) via the Drive API
   3. rebuilds all 9 query outputs in pandas (transforms.py)
   4. rewrites the output workbook's query sheets + Dashboard values,
@@ -10,14 +11,20 @@ Every run:
   5. uploads the workbook back to the shared Drive folder (same file id,
      so the dashboard's newest-file lookup keeps working)
 
-Designed to finish in seconds and to run every 5 minutes from a cloud
-scheduler (e.g. Railway cron) — no Excel, no VBS, no laptop required.
+Designed to finish in seconds and to run every 5 minutes via cron/launchd.
+No Excel, no VBS, no lock files — just SurveyCTO Desktop's sync (for the
+WIDE export) plus this script.
+
+A SurveyCTO REST API + decryption path (`fetch_wide_from_surveycto`,
+using `pysurveycto` and the form's private key in `.secrets/`) was
+prototyped but is NOT used by run_live() — the API's "wide" JSON export
+uses different field names/structure than the Desktop WIDE export
+(repeat-group prefixes, select_multiple option codes, geopoint splitting)
+and would need a field-mapping layer to match. See git history on
+etl-pipeline branch if revisiting this.
 
 Environment (or .env next to this script):
-  SURVEYCTO_SERVER             SurveyCTO server subdomain, e.g. 'gts'
-  SURVEYCTO_FORM_ID            form id, e.g. 'lebanon_2026'
-  SURVEYCTO_USER               SurveyCTO account email (API access enabled)
-  SURVEYCTO_PASSWORD           SurveyCTO account password
+  WIDE_XLSX_PATH               local path to Lebanon 2026_WIDE.xlsx
   GOOGLE_SERVICE_ACCOUNT_JSON  path to the service-account key file
   DRIVE_FOLDER_ID              shared folder id (same one the dashboard reads)
   OUTPUT_FILE_NAME             default: Lebanon 2026 - Analysis.xlsx
@@ -220,9 +227,10 @@ def run_offline(wide_path, gts_path, workbook_path, out_path):
 def run_live():
     started = time.time()
     folder_id = os.environ["DRIVE_FOLDER_ID"]
+    wide_path = os.environ["WIDE_XLSX_PATH"]
 
-    wide = fetch_wide_from_surveycto()
-    print(f"[{datetime.now():%H:%M:%S}] WIDE: {len(wide)} rows from SurveyCTO API")
+    wide = pd.read_excel(wide_path, sheet_name="data")
+    print(f"[{datetime.now():%H:%M:%S}] WIDE: {len(wide)} rows from {wide_path}")
 
     drive = drive_client()
     gts_file = find_file(drive, folder_id, GTS_SHEET_NAME)

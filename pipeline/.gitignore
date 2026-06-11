@@ -1,3 +1,4 @@
 *.csprivatekey
 .secrets/
 .env
+logs/
