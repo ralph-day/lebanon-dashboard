@@ -382,7 +382,7 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Avg (min)</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
-                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Missing GPS</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">GPS Anomaly</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Last Submission</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
