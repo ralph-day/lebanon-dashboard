@@ -398,6 +398,11 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
                       <FlagBadge value={row.appLeftOpen} />
                       <FlagBadge value={row.belowRange} />
                       <FlagBadge value={row.missingGPS} />
+                      {row.tooClose && (
+                        <span className="inline-block bg-orange-50 border border-orange-200 text-orange-600 text-xs px-1.5 py-0.5 rounded mr-1 mb-1 whitespace-nowrap">
+                          ⚠ Too close
+                        </span>
+                      )}
                       {row.gap && row.gap !== 'OK' && (
                         <span className="inline-block bg-orange-50 border border-orange-200 text-orange-600 text-xs px-1.5 py-0.5 rounded">
                           {row.gap}
