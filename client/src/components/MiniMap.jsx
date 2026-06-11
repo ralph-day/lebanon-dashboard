@@ -202,7 +202,7 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
             <button
               onClick={() => { setShowAccepted(v => !v); setShowTooClose(false) }}
               className={`px-2 py-0.5 rounded-full transition-colors border ${showAccepted ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-transparent hover:bg-green-100'}`}
-            >{accepted} accepted</button>
+            >{accepted} ✅ PASS</button>
             <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} rejected</span>
             {tooClose > 0 && (
               <button
