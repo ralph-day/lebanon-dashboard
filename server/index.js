@@ -609,7 +609,10 @@ async function parseExcel(filePath) {
   const recentByName = {};
   qaRows.forEach(r => {
     if (!r.submissionDate) return;
-    const ts = new Date(r.submissionDate).getTime();
+    // submissionDate holds Excel's raw Lebanon-local digits as a naive UTC
+    // string, so it's 3h ahead of the real UTC instant — adjust before
+    // comparing to Date.now().
+    const ts = new Date(r.submissionDate).getTime() - 3 * 3600000;
     if (now - ts <= FOUR_HOURS_MS) {
       if (!recentByName[r.name]) recentByName[r.name] = { count: 0, lastSeen: null };
       recentByName[r.name].count++;
