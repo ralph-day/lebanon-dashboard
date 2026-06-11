@@ -38,6 +38,19 @@ const FLAG_ICON = {
   '✗ Missing GPS': '📍 No GPS',
 }
 
+function GtsMatchBadge({ value }) {
+  if (!value) return <span className="text-xs text-slate-300">—</span>
+  let style = 'bg-slate-100 text-slate-500 border-slate-200'
+  if (value.toLowerCase().startsWith('accepted')) style = 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  else if (value.toLowerCase().startsWith('rejected')) style = 'bg-red-50 text-red-700 border-red-200'
+  else if (value.toLowerCase().startsWith('not available')) style = 'bg-amber-50 text-amber-700 border-amber-200'
+  return (
+    <span className={`inline-block border text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap ${style}`}>
+      {value}
+    </span>
+  )
+}
+
 function FlagBadge({ value }) {
   if (!value || value === '✓ OK') return null
   const label = FLAG_ICON[value] || value
@@ -331,12 +344,13 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Flags</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">{filter === '__REJECTED__' ? 'Rejection Reason' : 'Status'}</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Issues</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Accepted by GTS</th>
                 {canApprove && <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
-                <tr><td colSpan={canApprove ? 10 : 9} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
+                <tr><td colSpan={canApprove ? 11 : 10} className="text-center text-slate-400 py-8">No surveys match this filter</td></tr>
               )}
               {filtered.map((row, i) => (
                 <tr
@@ -391,6 +405,9 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
                       )}
                       {row.id && <NotesBubble entityType="survey" entityId={row.id} entityLabel={`${row.name} · ${row.submissionDate ? new Date(row.submissionDate).toLocaleDateString('en-GB') : ''}`} allNotes={notes} onNoteAdded={onNoteAdded} onNoteDeleted={onNoteDeleted} />}
                     </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <GtsMatchBadge value={row.gtsMatch} />
                   </td>
                   {canApprove && (
                     <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>

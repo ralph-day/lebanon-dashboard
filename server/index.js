@@ -368,6 +368,15 @@ async function parseExcel(filePath) {
   const qaDashboard = sheet('QA_Dashboard');
   const qaSections  = sheet('QA_ByGroupSection');
   const rawData     = sheet('data');
+  const surveyComparison = sheet('Survey Comparison');
+
+  // instanceID -> GTS match comment (Accepted / Rejected - ... / Not Available in GTS Data)
+  const gtsMatchByInstance = {};
+  surveyComparison.forEach(r => {
+    const id = r.instanceID || '';
+    if (!id) return;
+    gtsMatchByInstance[id] = r.GTS_Match_Comment || '';
+  });
 
   // Per-location rejection counts from the raw data sheet
   const rejByLoc = {};
@@ -530,6 +539,7 @@ async function parseExcel(filePath) {
     timeRange: r['time range accepted'] || '',
     locationOn: r.LocationOn || '',
     tooClose: duplicateIds.has(r.instanceID || ''),
+    gtsMatch: gtsMatchByInstance[r.instanceID || ''] || '',
   }; });
 
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
