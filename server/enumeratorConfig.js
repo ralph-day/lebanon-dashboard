@@ -128,6 +128,16 @@ const ENUMERATOR_ASSIGNMENTS = [
     ],
   },
   {
+    code: 'GO13',
+    name: 'Ghinwa Ouneissi',
+    phone: phone('GO13', null),
+    governorate: 'North',
+    district: 'El Batroun',
+    locations: [
+      { name: 'Batroun', target: 22, deadline: '2026-06-12' },
+    ],
+  },
+  {
     code: 'SO12',
     name: 'Shada Ouneissi',
     phone: phone('SO12', '81658381'),
