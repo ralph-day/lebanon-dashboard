@@ -889,9 +889,11 @@ try {
   if (fs.existsSync(NOTIFICATIONS_PATH)) {
     const saved = JSON.parse(fs.readFileSync(NOTIFICATIONS_PATH, 'utf8'));
     sentAlerts = new Set(saved);
-    console.log(`Loaded ${sentAlerts.size} sent alert keys`);
+    const submissionKeys = [...sentAlerts].filter(k => k.startsWith('submission::')).length;
+    console.log(`Loaded ${sentAlerts.size} sent alert keys (${submissionKeys} submission keys)`);
   }
 } catch(e) { console.error('Could not load notifications:', e.message); }
+console.log(`[WhatsApp] configured: ${process.env.META_WA_TOKEN && process.env.META_WA_PHONE_ID ? 'yes' : 'NO — META_WA_TOKEN/META_WA_PHONE_ID missing, all alerts disabled'}`);
 
 function saveNotifications() {
   try { atomicWrite(NOTIFICATIONS_PATH, JSON.stringify([...sentAlerts])); } catch(e) { console.error('Could not save notifications:', e.message); }
