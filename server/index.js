@@ -268,7 +268,10 @@ async function fetchLatestExcel() {
   const dl = await drive.files.get({ fileId: file.id, alt: 'media' }, { responseType: 'stream' });
   await new Promise((resolve, reject) => {
     dl.data.pipe(dest);
-    dl.data.on('end', resolve);
+    // Wait for the write stream to flush — resolving on the download
+    // stream's 'end' lets parseExcel read a truncated file.
+    dest.on('finish', resolve);
+    dest.on('error', reject);
     dl.data.on('error', reject);
   });
 
