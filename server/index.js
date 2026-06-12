@@ -450,6 +450,23 @@ async function parseExcel(filePath) {
     totalCompleted: (overviewRow[4] || 0) - (overviewRow[7] || 0),
   };
 
+  // Per-location nationality/gender tallies from the raw data sheet — the
+  // Target_Tracker's Palestinian/Lebanese/Syrian/man/woman columns are not
+  // populated, so derive these from accepted submissions instead.
+  const demoByLoc = {};
+  rawData.forEach(r => {
+    if (String(r.SurveyStatus_New || '').trim().toLowerCase() !== 'accepted') return;
+    const code = r.loc_4 || '';
+    if (!demoByLoc[code]) demoByLoc[code] = { palestinian: 0, lebanese: 0, syrian: 0, men: 0, women: 0 };
+    const nat = String(r.nationality || '').trim().toLowerCase();
+    if (nat === 'palestinian') demoByLoc[code].palestinian++;
+    else if (nat === 'lebanese') demoByLoc[code].lebanese++;
+    else if (nat === 'syrian') demoByLoc[code].syrian++;
+    const g = String(r.gender || '').trim().toLowerCase();
+    if (g === 'man') demoByLoc[code].men++;
+    else if (g === 'woman') demoByLoc[code].women++;
+  });
+
   // Location tracker — enriched with proper names
   const locations = tracker.map(r => {
     const code = r.location || r.loc_4 || '';
@@ -469,12 +486,12 @@ async function parseExcel(filePath) {
       remaining: r['Actual Remaining'] || 0,
       pctComplete: r.Pct_Complete || 0,
       status: r.Status || '',
-      palestinian: r.Palestinian || 0,
-      lebanese: r.Lebanese || 0,
-      syrian: r.Syrian || 0,
+      palestinian: r.Palestinian || demoByLoc[code]?.palestinian || 0,
+      lebanese: r.Lebanese || demoByLoc[code]?.lebanese || 0,
+      syrian: r.Syrian || demoByLoc[code]?.syrian || 0,
       rejected: rejByLoc[code] || 0,
-      men: r.man || 0,
-      women: r.woman || 0,
+      men: r.man || demoByLoc[code]?.men || 0,
+      women: r.woman || demoByLoc[code]?.women || 0,
       locationOn: r.LocationOn || 0,
       lat: cfg.lat || null,
       lng: cfg.lng || null,
@@ -602,6 +619,18 @@ async function parseExcel(filePath) {
     acc.women += l.women;
     return acc;
   }, { men: 0, women: 0 });
+
+  // Accepted surveys whose loc_4 isn't a tracker location (e.g. transfer
+  // locations) would otherwise drop out of the totals — add them back.
+  const trackerCodes = new Set(locations.map(l => l.code));
+  Object.entries(demoByLoc).forEach(([code, d]) => {
+    if (trackerCodes.has(code)) return;
+    natTotals.palestinian += d.palestinian;
+    natTotals.lebanese += d.lebanese;
+    natTotals.syrian += d.syrian;
+    genderTotals.men += d.men;
+    genderTotals.women += d.women;
+  });
 
   // ── Active enumerators (last 4 hours) ────────────────────────────────────
   const now = Date.now();
