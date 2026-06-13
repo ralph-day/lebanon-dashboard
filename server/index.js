@@ -944,7 +944,9 @@ async function sendWhatsApp(phone, message, templateName, templateParams) {
       const err = await res.text();
       console.error(`[WhatsApp] Failed to send to ${to}: ${err}`);
     } else {
-      console.log(`[WhatsApp] Sent to ${to}`);
+      const json = await res.json().catch(() => null);
+      const id = json?.messages?.[0]?.id;
+      console.log(`[WhatsApp] Sent to ${to}${id ? ` (id ${id})` : ''}`);
     }
   } catch(e) {
     console.error(`[WhatsApp] Network error sending to ${to}:`, e.message);
@@ -1945,6 +1947,40 @@ cron.schedule('*/3 * * * *', () => {
 console.log('[Security] News monitor started — watching MTV Lebanon + Bint Jbeil on Telegram every 3 minutes');
 
 // ── End Security Alert System ─────────────────────────────────────────────────
+
+// ── WhatsApp delivery-status webhook ──────────────────────────────────────────
+// Meta calls GET once to verify (echoes hub.challenge if the token matches),
+// then POSTs delivery-status updates (sent/delivered/read/failed) for each
+// message we send. Lets us see real delivery in the logs instead of just "queued".
+app.get('/api/whatsapp/webhook', (req, res) => {
+  const verifyToken = process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
+  if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === verifyToken) {
+    return res.status(200).send(req.query['hub.challenge']);
+  }
+  return res.sendStatus(403);
+});
+
+app.post('/api/whatsapp/webhook', (req, res) => {
+  // Always 200 fast so Meta doesn't retry; processing is best-effort.
+  res.sendStatus(200);
+  try {
+    const entries = req.body?.entry || [];
+    for (const entry of entries) {
+      for (const change of entry.changes || []) {
+        for (const st of change.value?.statuses || []) {
+          if (st.status === 'failed') {
+            const err = (st.errors || []).map(e => `${e.code} ${e.title}`).join('; ');
+            console.error(`[WhatsApp] Delivery FAILED to ${st.recipient_id} (id ${st.id}): ${err || 'unknown'}`);
+          } else {
+            console.log(`[WhatsApp] Delivery ${st.status} to ${st.recipient_id} (id ${st.id})`);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[WhatsApp] Webhook processing error:', e.message);
+  }
+});
 
 // Serve built client in production
 if (process.env.NODE_ENV === 'production') {
