@@ -531,7 +531,8 @@ async function parseExcel(filePath) {
 
   const enumerators = enumSummary.map(r => ({
     name: r.NameCode || '',
-    totalSurveys: Number(r.Total_Surveys) || 0,
+    // Moe's sheet has shipped this column as both 'Total_Surveys' and 'Total Surveys'.
+    totalSurveys: Number(r.Total_Surveys ?? r['Total Surveys']) || 0,
     surveys:     scStatusByEnum[r.NameCode]?.total || 0,
     accepted:    scStatusByEnum[r.NameCode]?.accepted || 0,
     rejected:    scStatusByEnum[r.NameCode]?.rejected || 0,
@@ -595,6 +596,24 @@ async function parseExcel(filePath) {
   const qaReview = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
   const qaRejected = qaRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
+
+  // Quality% and Missing-GPS per enumerator — computed from qaRows so they
+  // survive Moe dropping the Quality_% / Missing_GPS columns from
+  // Enumerator_Summary. Matches the Data Quality tab's pass/total logic.
+  const qaByEnum = {};
+  qaRows.forEach(r => {
+    const name = r.name || '';
+    if (!name) return;
+    if (!qaByEnum[name]) qaByEnum[name] = { total: 0, pass: 0, missingGPS: 0 };
+    qaByEnum[name].total++;
+    if (r.qaStatus === '✅ PASS') qaByEnum[name].pass++;
+    if (String(r.missingGPS || '').startsWith('✗')) qaByEnum[name].missingGPS++;
+  });
+  enumerators.forEach(e => {
+    const q = qaByEnum[e.name];
+    if (e.qualityPct == null && q && q.total > 0) e.qualityPct = +(q.pass / q.total * 100).toFixed(0);
+    if (!e.missingGPS && q) e.missingGPS = q.missingGPS;
+  });
 
   // Section timing averages per enumerator
   const sectionFields = ['time_demo', 'time_priorities', 'time_mutualaid', 'time_access_trust', 'time_expectations', 'time_info', 'time_future'];
