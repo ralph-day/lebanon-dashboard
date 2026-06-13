@@ -935,7 +935,7 @@ function toMetaPhone(phone) {
   return digits.startsWith('961') ? digits : `961${digits}`;
 }
 
-async function sendWhatsApp(phone, message, templateName, templateParams) {
+async function sendWhatsApp(phone, message, templateName, templateParams, lang = 'ar') {
   const token   = process.env.META_WA_TOKEN;
   const phoneId = process.env.META_WA_PHONE_ID;
   if (!token || !phoneId) return; // silently skip if not configured
@@ -950,7 +950,7 @@ async function sendWhatsApp(phone, message, templateName, templateParams) {
         type: 'template',
         template: {
           name: templateName,
-          language: { code: 'ar' },
+          language: { code: lang },
           components: [{
             type: 'body',
             parameters: templateParams.map(p => ({ type: 'text', text: p })),
@@ -1112,11 +1112,12 @@ async function notifyAcceptedSubmissions(qaRows) {
     if (sentAlerts.has(key)) continue;
 
     const acceptedTemplate = process.env.SURVEY_ACCEPTED_TEMPLATE;
+    const acceptedLang = process.env.SURVEY_ACCEPTED_TEMPLATE_LANG || 'ar';
     const msg = buildAcceptedMessage(row);
     const params = buildAcceptedTemplateParams(row);
     for (const phone of TEAM_ALERT_PHONES) {
       // Template delivers regardless of the 24h window; free-form only inside it.
-      if (acceptedTemplate) await sendWhatsApp(phone, null, acceptedTemplate, params);
+      if (acceptedTemplate) await sendWhatsApp(phone, null, acceptedTemplate, params, acceptedLang);
       else await sendWhatsApp(phone, msg);
     }
     sentAlerts.add(key);
