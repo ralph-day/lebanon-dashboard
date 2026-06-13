@@ -1024,6 +1024,31 @@ function buildAcceptedMessage(row) {
   return lines.join('\n');
 }
 
+// Body params for the `survey_accepted` WhatsApp template (used when
+// SURVEY_ACCEPTED_TEMPLATE is set). Template body should have 4 placeholders:
+//   {{1}} المستطلِع  {{2}} الموقع  {{3}} الوقت  {{4}} نتيجة الجودة / ملاحظات
+// Suggested Arabic body:
+//   ✅ استبيان جديد مقبول
+//
+//   المستطلِع: {{1}}
+//   الموقع: {{2}}
+//   الوقت: {{3}}
+//   نتيجة الجودة: {{4}}
+function buildAcceptedTemplateParams(row) {
+  let timeStr = '—';
+  if (row.submissionDate) {
+    const d = new Date(row.submissionDate);
+    if (!isNaN(d)) timeStr = d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+  const notes = [];
+  if (row.tooClose) notes.push('⚠️ الموقع قريب جدًا (Too Close)');
+  if (row.missingGPS === '✗ Missing GPS') notes.push('⚠️ بيانات GPS مفقودة');
+  const quality = (row.qaStatus || '—') + (notes.length ? ` — ${notes.join(' · ')}` : '');
+  // WhatsApp template params can't contain newlines or 4+ consecutive spaces.
+  const clean = s => String(s || '—').replace(/\s+/g, ' ').trim() || '—';
+  return [clean(row.name), clean(row.locationName || row.district), clean(timeStr), clean(quality)];
+}
+
 async function notifyAcceptedSubmissions(qaRows) {
   if (!process.env.META_WA_TOKEN) return;
 
@@ -1054,9 +1079,13 @@ async function notifyAcceptedSubmissions(qaRows) {
     const key = `submission::${row.id}`;
     if (sentAlerts.has(key)) continue;
 
+    const acceptedTemplate = process.env.SURVEY_ACCEPTED_TEMPLATE;
     const msg = buildAcceptedMessage(row);
+    const params = buildAcceptedTemplateParams(row);
     for (const phone of TEAM_ALERT_PHONES) {
-      await sendWhatsApp(phone, msg);
+      // Template delivers regardless of the 24h window; free-form only inside it.
+      if (acceptedTemplate) await sendWhatsApp(phone, null, acceptedTemplate, params);
+      else await sendWhatsApp(phone, msg);
     }
     sentAlerts.add(key);
     sent++;
