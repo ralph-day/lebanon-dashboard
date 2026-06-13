@@ -973,13 +973,17 @@ async function sendWhatsApp(phone, message, templateName, templateParams, lang =
     if (!res.ok) {
       const err = await res.text();
       console.error(`[WhatsApp] Failed to send to ${to}: ${err}`);
-    } else {
-      const json = await res.json().catch(() => null);
-      const id = json?.messages?.[0]?.id;
-      console.log(`[WhatsApp] Sent to ${to}${id ? ` (id ${id})` : ''}`);
+      let code = null;
+      try { code = JSON.parse(err)?.error?.code ?? null; } catch {}
+      return { ok: false, code };
     }
+    const json = await res.json().catch(() => null);
+    const id = json?.messages?.[0]?.id;
+    console.log(`[WhatsApp] Sent to ${to}${id ? ` (id ${id})` : ''}`);
+    return { ok: true };
   } catch(e) {
     console.error(`[WhatsApp] Network error sending to ${to}:`, e.message);
+    return { ok: false, code: null };
   }
 }
 
@@ -1117,8 +1121,14 @@ async function notifyAcceptedSubmissions(qaRows) {
     const params = buildAcceptedTemplateParams(row);
     for (const phone of TEAM_ALERT_PHONES) {
       // Template delivers regardless of the 24h window; free-form only inside it.
-      if (acceptedTemplate) await sendWhatsApp(phone, null, acceptedTemplate, params, acceptedLang);
-      else await sendWhatsApp(phone, msg);
+      // If the template send fails (e.g. not yet approved / wrong language),
+      // fall back to free-form so notifications still go out.
+      if (acceptedTemplate) {
+        const r = await sendWhatsApp(phone, null, acceptedTemplate, params, acceptedLang);
+        if (!r.ok) await sendWhatsApp(phone, msg);
+      } else {
+        await sendWhatsApp(phone, msg);
+      }
     }
     sentAlerts.add(key);
     sent++;
