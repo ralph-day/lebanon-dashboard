@@ -434,24 +434,35 @@ async function parseExcel(filePath) {
   }
   gpsPoints.forEach(p => { p.duplicate = duplicateIds.has(p.id); });
 
-  // Dashboard sheet as arrays (first sheet fallback)
-  const dashWs = wb.getWorksheet('Dashboard') || wb.worksheets[0];
-  const dashboardSheet = wsToArrays(dashWs);
+  // Overview totals — derived from Target_Tracker (always present) rather than
+  // the optional 'Dashboard' summary tab, which Moe's workbook sometimes ships
+  // without. Keeps the top-line numbers consistent with the Locations tab.
+  const overviewTotals = tracker.reduce((acc, r) => {
+    const code = r.location || r.loc_4 || '';
+    if (!code) return acc;
+    acc.totalLocations++;
+    acc.totalTarget += Number(r.target) || 0;
+    acc.remaining += Number(r['Actual Remaining']) || 0;
+    acc.totalCompleted += Number(r.Completed) || 0;
+    return acc;
+  }, { totalLocations: 0, totalTarget: 0, remaining: 0, totalCompleted: 0 });
 
-  // Parse overview from Dashboard sheet
-  // Find the values row dynamically (contains numbers for target/remaining)
-  const overviewRow = dashboardSheet.find(row =>
-    row && typeof row[4] === 'number' && row[4] > 100 && typeof row[7] === 'number'
-  ) || dashboardSheet.find(row =>
-    row && typeof row[1] === 'number' && row[1] > 0
-  ) || dashboardSheet[4] || [];
-  const overview = {
-    totalLocations: overviewRow[1] || 0,
-    totalTarget: overviewRow[4] || 0,
-    remaining: overviewRow[7] || 0,
-    completedToday: overviewRow[10] || 0,
-    totalCompleted: (overviewRow[4] || 0) - (overviewRow[7] || 0),
-  };
+  // Completed today = accepted submissions since the start of today's working
+  // day (8 AM Lebanon / UTC+3). submissionDate is naive Lebanon-local digits.
+  const ovToday = new Date(Date.now() + 3 * 3600000);
+  if (ovToday.getUTCHours() < 8) ovToday.setUTCDate(ovToday.getUTCDate() - 1);
+  ovToday.setUTCHours(8, 0, 0, 0);
+  const ovTodayStart = ovToday.getTime() - 3 * 3600000;
+  let completedToday = 0;
+  rawData.forEach(r => {
+    if (String(r.SurveyStatus_New || '').trim().toLowerCase() !== 'accepted') return;
+    const iso = toISO(r.SubmissionDate);
+    if (!iso) return;
+    const ts = new Date(iso).getTime() - 3 * 3600000;
+    if (ts >= ovTodayStart) completedToday++;
+  });
+
+  const overview = { ...overviewTotals, completedToday };
 
   // Per-location nationality/gender tallies from the raw data sheet — the
   // Target_Tracker's Palestinian/Lebanese/Syrian/man/woman columns are not
