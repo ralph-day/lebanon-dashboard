@@ -269,9 +269,9 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
         <div className="px-5 py-2.5 bg-slate-50 border-b border-slate-100">
           <p className="text-xs text-slate-400">Click <strong>Rate / Survey</strong> to set each enumerator's rate · Rate applies to <strong>accepted</strong> surveys only · Participant cost = total surveys × $8</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm" style={{ minWidth: 900 }}>
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                 <th className="text-center text-xs font-semibold text-emerald-600 uppercase tracking-wide px-3 py-2.5">Accepted</th>
@@ -343,9 +343,9 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
         badge={currency(flatTotalOwed) + ' total'}
         badgeColor="bg-blue-50 text-blue-600"
       >
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-5 py-2.5">Name</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Role</th>

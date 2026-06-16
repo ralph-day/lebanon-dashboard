@@ -331,9 +331,9 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
 
       {/* QA table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto -mx-0">
+        <div className="overflow-auto max-h-[70vh] -mx-0">
           <table className="w-full text-sm" style={{ minWidth: '700px' }}>
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5 whitespace-nowrap">Survey ID</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">Enumerator</th>

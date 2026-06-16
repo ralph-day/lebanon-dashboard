@@ -59,9 +59,9 @@ function RejectedDetail({ locationName, rows, onBack }) {
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400 text-sm">No rejected surveys found for this location</div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full text-sm" style={{ minWidth: 700 }}>
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Date</th>
@@ -274,9 +274,9 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
       {showMap && <LebanonMap locations={filtered} />}
 
       {/* District-grouped table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-auto max-h-[75vh]">
         {/* Header */}
-        <div className="grid gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(5,1fr) 2fr 1fr 1fr 2fr'}}>
+        <div className="grid gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide sticky top-0 z-10" style={{gridTemplateColumns:'2fr repeat(5,1fr) 2fr 1fr 1fr 2fr'}}>
           <div>District / Location</div>
           <div className="text-center">Target</div>
           <div className="text-center">Accepted</div>

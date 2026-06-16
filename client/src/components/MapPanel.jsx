@@ -178,9 +178,9 @@ function AuditTable({ gpsPoints }) {
         {rows.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-10">No GPS data for {auditDate}</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[70vh]">
             <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <SortTh k="id"         label="Survey ID" />
                   <SortTh k="enumerator" label="Enumerator" />

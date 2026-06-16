@@ -370,9 +370,9 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
         <div className="px-5 py-3 border-b border-slate-100">
           <h3 className="text-sm font-semibold text-slate-700">Enumerator Performance</h3>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Status</th>
@@ -456,9 +456,9 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
           <h3 className="text-sm font-semibold text-slate-700">Avg Section Duration (minutes)</h3>
           <span className="text-xs text-red-500">⚠ = below minimum threshold</span>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
               <tr>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                 {SECTIONS.map(s => (
