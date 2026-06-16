@@ -735,6 +735,31 @@ async function parseExcel(filePath) {
     };
   });
 
+  // Dynamically include enumerators who appear in the live data but aren't in
+  // the static config — so the Field Team Status / Progress lists reflect
+  // everyone actually submitting, not just the hand-maintained roster. These
+  // have no location targets (config-only), so totalTarget stays 0.
+  const configCodes = new Set(ENUMERATOR_ASSIGNMENTS.map(e => e.code));
+  enumerators.forEach(e => {
+    const code = (e.name.match(/\(([^)]+)\)\s*$/) || [])[1];
+    if (!code || configCodes.has(code)) return;
+    if (/test/i.test(e.name)) return; // skip test accounts
+    configCodes.add(code);
+    const fullName = e.name;
+    const completed = e.totalSurveys || 0;
+    assignments.push({
+      code,
+      name: fullName.replace(/\s*\([^)]+\)\s*$/, '').trim(),
+      fullName, entity: null, governorate: null, locations: [],
+      totalTarget: 0, completed, remaining: 0, pct: 0,
+      isActive: !!recentByName[fullName],
+      lastSeen: e.lastSubmission || null,
+      recentCount: recentByName[fullName]?.count || 0,
+      todayAccepted: todayByName[fullName]?.accepted || 0,
+      todayTotal: todayByName[fullName]?.total || 0,
+    });
+  });
+
   // ── Anomalies (active enumerators only) ───────────────────────────────────
   const activeNames = new Set(Object.keys(recentByName));
   const anomalyMap = {};
