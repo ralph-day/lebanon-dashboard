@@ -28,8 +28,10 @@ const ENUMERATOR_ASSIGNMENTS = [
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'Beirut',
+    // Covers all Beirut localities (Moussaytbeh/Ras Beyrouth/Mazraa/Ain el-Mreisseh),
+    // splitting the 178 Beirut total with Majd Khatib (89 each). No per-locality split given.
     locations: [
-      { name: 'Ain el Mreisseh', target: 34, deadline: '2026-06-08' },
+      { name: 'Beirut (all localities)', target: 89, district: 'Beirut' },
     ],
   },
   {
@@ -39,8 +41,9 @@ const ENUMERATOR_ASSIGNMENTS = [
     entity: 'Jafra',
     governorate: 'Beirut',
     district: 'Beirut',
+    // Covers all Beirut localities, splitting the 178 Beirut total with Ahmad Zaabouty (89 each).
     locations: [
-      { name: 'Mazraa', target: 20, deadline: '2026-06-06' },
+      { name: 'Beirut (all localities)', target: 89, district: 'Beirut' },
     ],
   },
   {
@@ -48,14 +51,13 @@ const ENUMERATOR_ASSIGNMENTS = [
     name: 'Abed Mohamad',
     phone: phone('AM06', '71646552'),
     entity: 'Jafra',
-    governorate: 'Beirut / Mount Lebanon',
-    district: 'Beirut / Chouf',
+    governorate: 'Mount Lebanon',
+    district: 'Chouf',
     locations: [
-      { name: 'Ras Beirut', target: 47, deadline: '2026-06-12' },
-      { name: 'Barja',      target: 20, deadline: '2026-06-08' },
-      { name: 'Dibbiyeh',   target: 24, deadline: '2026-06-08' },
-      { name: 'Jiyeh',      target: 17, deadline: '2026-06-08' },
-      { name: 'Naameh',     target: 13, deadline: '2026-06-08' },
+      { name: 'Naameh',   target: 13, district: 'Chouf', deadline: '2026-06-08' },
+      { name: 'Jiyeh',    target: 17, district: 'Chouf', deadline: '2026-06-08' },
+      { name: 'Dibbiyeh', target: 24, district: 'Chouf', deadline: '2026-06-08' },
+      { name: 'Barja',    target: 20, district: 'Chouf', deadline: '2026-06-08' },
     ],
   },
   {
@@ -64,10 +66,10 @@ const ENUMERATOR_ASSIGNMENTS = [
     phone: phone('IM07', '71657053'),
     entity: 'Jafra',
     governorate: 'North',
-    district: 'El Minieh-Dennie',
+    district: 'North',
     locations: [
-      { name: 'Beddawi',      target: 48, deadline: '2026-06-13' },
-      { name: 'Beddawi Camp', target: 71, deadline: '2026-06-13' },
+      { name: 'Beddawi',      target: 48, district: 'North', deadline: '2026-06-13' },
+      { name: 'Beddawi Camp', target: 71, district: 'North', deadline: '2026-06-13' },
     ],
   },
   {
@@ -76,11 +78,11 @@ const ENUMERATOR_ASSIGNMENTS = [
     phone: phone('AA08', '70859365'),
     entity: 'Jafra',
     governorate: 'North / Akkar',
-    district: 'El Minieh-Dennie / Akkar',
+    district: 'North / Akkar',
     locations: [
-      { name: 'Zouk Bhannine',      target: 22, deadline: '2026-06-12' },
-      { name: 'Mhammaret',          target: 47, deadline: '2026-06-12' },
-      { name: 'Nahr el Bared Camp', target: 29, deadline: '2026-06-12' },
+      { name: 'Zouk Bhannine',      target: 22, district: 'North', deadline: '2026-06-12' },
+      { name: 'Mhammaret',          target: 47, district: 'Akkar', deadline: '2026-06-12' },
+      { name: 'Nahr el Bared Camp', target: 29, district: 'North', deadline: '2026-06-12' },
     ],
   },
   {
@@ -91,7 +93,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Shatila Camp', target: 23, deadline: '2026-06-04' },
+      { name: 'Shatila Camp', target: 18, deadline: '2026-06-04' },
     ],
   },
   {
@@ -102,7 +104,7 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Beirut',
     district: 'P Camp',
     locations: [
-      { name: 'Shatila Camp', target: 23, deadline: '2026-06-05' },
+      { name: 'Shatila Camp', target: 18, deadline: '2026-06-05' },
     ],
   },
   {
@@ -193,8 +195,8 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'South',
     district: 'Saida',
     locations: [
-      { name: 'Saida Wastany', target: 21, deadline: '2026-06-08' },
-      { name: 'Saida Derkman', target: 23, deadline: '2026-06-08' },
+      { name: 'Saida El-Oustani',   target: 21, district: 'Saida', deadline: '2026-06-08' },
+      { name: 'Saida Ed-Dekermane', target: 23, district: 'Saida', deadline: '2026-06-08' },
     ],
   },
 ];
