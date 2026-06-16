@@ -208,6 +208,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
   const regions = ['All', ...REGION_ORDER.filter(r => locations.some(l => l.region === r))]
   const totalTarget   = filtered.reduce((s, l) => s + (l.target || 0), 0)
   const totalAccepted = filtered.reduce((s, l) => s + (l.accepted || 0), 0)
+  const totalRemaining = filtered.reduce((s, l) => s + (l.remaining || 0), 0)
 
   // Rejected detail subpage
   if (rejectedDetail) {
@@ -265,7 +266,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
         <span className="text-slate-500">Showing: <strong className="text-slate-800">{districtRows.length} districts</strong> · {filtered.length} locations</span>
         <span className="text-slate-500">Target: <strong className="text-slate-800">{totalTarget.toLocaleString()}</strong></span>
         <span className="text-slate-500">Accepted: <strong className="text-emerald-600">{totalAccepted.toLocaleString()}</strong></span>
-        <span className="text-slate-500">Remaining: <strong className="text-amber-600">{(totalTarget - totalAccepted).toLocaleString()}</strong></span>
+        <span className="text-slate-500">Remaining: <strong className="text-amber-600">{totalRemaining.toLocaleString()}</strong></span>
         <span className="text-slate-500">Completion: <strong className="text-blue-600">{totalTarget > 0 ? Math.round(totalAccepted / totalTarget * 100) : 0}%</strong></span>
       </div>
 

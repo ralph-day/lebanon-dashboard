@@ -491,6 +491,10 @@ async function parseExcel(filePath) {
     const cfg = LOCATION_MAP[code] || {};
     const regionIdx = REGION_ORDER.indexOf(cfg.region || '');
     const groupIdx  = GROUP_ORDER.indexOf(cfg.group || '');
+    const tgt = Number(r.target) || 0;
+    const acc = Number(r.Accepted) || 0;
+    const notAvail = r.Not_Available != null ? (Number(r.Not_Available) || 0) : (gtsByLoc[code]?.notAvailable || 0);
+    const rej      = r.Rejected != null      ? (Number(r.Rejected) || 0)      : (gtsByLoc[code]?.rejected || 0);
     return {
       code,
       location: cfg.name || code.replace(/_/g, ' '),
@@ -501,7 +505,9 @@ async function parseExcel(filePath) {
       target: r.target || 0,
       completed: r.Completed || 0,
       accepted: r.Accepted || 0,
-      remaining: r['Actual Remaining'] || 0,
+      // Surveys enumerators still have to fill = target − accepted − notAvailable
+      // (Not Available = already submitted, just pending GTS review, so not "to do").
+      remaining: tgt - acc - notAvail,
       // Computed from accepted/target (fraction 0–1) so it survives Moe renaming
       // the sheet's Pct_Complete column (now 'Completion_Pct') and matches the
       // district-level aggregate. status derived from the same thresholds.
@@ -510,8 +516,8 @@ async function parseExcel(filePath) {
       palestinian: r.Palestinian || demoByLoc[code]?.palestinian || 0,
       lebanese: r.Lebanese || demoByLoc[code]?.lebanese || 0,
       syrian: r.Syrian || demoByLoc[code]?.syrian || 0,
-      rejected:     r.Rejected != null      ? (Number(r.Rejected) || 0)      : (gtsByLoc[code]?.rejected || 0),
-      notAvailable: r.Not_Available != null  ? (Number(r.Not_Available) || 0) : (gtsByLoc[code]?.notAvailable || 0),
+      rejected: rej,
+      notAvailable: notAvail,
       men: r.man || demoByLoc[code]?.men || 0,
       women: r.woman || demoByLoc[code]?.women || 0,
       locationOn: r.LocationOn || 0,
