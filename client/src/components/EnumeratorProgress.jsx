@@ -135,7 +135,7 @@ export default function EnumeratorProgress({ assignments = [] }) {
 
                   {/* Remaining stat */}
                   <div className="hidden sm:flex flex-col items-center shrink-0 w-16">
-                    <span className={`text-xl font-bold ${a.remaining > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{a.remaining}</span>
+                    <span className={`text-xl font-bold ${a.remaining > 0 ? 'text-amber-500' : a.remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>{a.remaining}</span>
                     <span className="text-xs text-slate-400">left</span>
                   </div>
 
@@ -158,7 +158,7 @@ export default function EnumeratorProgress({ assignments = [] }) {
                 <div className="sm:hidden mt-2 flex gap-4 items-center">
                   <span className="text-sm font-bold text-emerald-600">{a.completed} done</span>
                   <span className="text-sm text-slate-500">/ {a.totalTarget} target</span>
-                  <span className={`text-sm font-bold ${a.remaining > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{a.remaining} left</span>
+                  <span className={`text-sm font-bold ${a.remaining > 0 ? 'text-amber-500' : a.remaining < 0 ? 'text-red-500' : 'text-emerald-500'}`}>{a.remaining} left</span>
                 </div>
                 <div className="sm:hidden mt-1">
                   <ProgressBar pct={a.pct} />
