@@ -1216,20 +1216,34 @@ async function notifyAnomalies(anomalies) {
     const firstName = anomaly.name.split(' ')[0];
     const issueCount = `${anomaly.totalIssues} (حرجة: ${anomaly.critical.length} / تحذيرات: ${anomaly.warnings.length})`;
 
+    // Send a template, falling back to free-form text if it fails. Track whether
+    // anything actually delivered so we only dedup on real success.
+    let delivered = false;
+    const send = async (phone, templateName, params, freeformMsg) => {
+      const r = await sendWhatsApp(phone, null, templateName, params);
+      if (r && r.ok) { delivered = true; return; }
+      const r2 = await sendWhatsApp(phone, freeformMsg);
+      if (r2 && r2.ok) delivered = true;
+    };
+
     // Message to enumerator
     if (anomaly.phone) {
-      await sendWhatsApp(anomaly.phone, null, 'survey_enumerator_alert', [firstName, issueList]);
+      await send(anomaly.phone, 'survey_enumerator_alert', [firstName, issueList], buildEnumeratorMessage(anomaly));
     }
 
-    // Message to field managers (Nisrine + Moe + Ralph + Alaa)
-    await sendWhatsApp(NISRINE_PHONE, null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
-    await sendWhatsApp(MOE_PHONE,    null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
-    await sendWhatsApp(RALPH_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
-    await sendWhatsApp(ALAA_PHONE,   null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
-    await sendWhatsApp(AHMAD_PHONE,  null, 'survey_manager_alert', [anomaly.name, issueCount, issueList]);
+    // Message to field managers (Nisrine + Moe + Ralph + Alaa + Ahmad)
+    const managerMsg = buildManagerMessage(anomaly);
+    for (const ph of [NISRINE_PHONE, MOE_PHONE, RALPH_PHONE, ALAA_PHONE, AHMAD_PHONE]) {
+      await send(ph, 'survey_manager_alert', [anomaly.name, issueCount, issueList], managerMsg);
+    }
 
-    sentAlerts.add(alertKey);
-    newAlerts++;
+    // Only mark as sent if at least one message delivered — otherwise retry next refresh.
+    if (delivered) {
+      sentAlerts.add(alertKey);
+      newAlerts++;
+    } else {
+      console.error(`[WhatsApp] Alert for ${anomaly.name} not delivered — will retry next refresh`);
+    }
 
     // Small delay between messages to avoid rate limiting
     await new Promise(r => setTimeout(r, 1000));
