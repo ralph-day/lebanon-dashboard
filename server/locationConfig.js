@@ -73,4 +73,22 @@ const LOCATION_MAP = {
 
 const REGION_ORDER = ['Beirut', 'Mount Lebanon', 'North', 'South', 'Bekaa', 'Akkar'];
 
-module.exports = { LOCATION_MAP, REGION_ORDER, GROUP_ORDER };
+// Bulletproof lookups: SurveyCTO codes occasionally differ from our keys only by
+// case or hyphen-vs-underscore (e.g. 'cultural_club_al-qaraoun'). Normalize both
+// sides so any such variant still resolves to the right location.
+const _norm = s => String(s).toLowerCase().replace(/[-_]+/g, '_');
+const _normIndex = {};
+for (const [key, val] of Object.entries(LOCATION_MAP)) _normIndex[_norm(key)] = val;
+
+const LOCATION_MAP_PROXY = new Proxy(LOCATION_MAP, {
+  get(target, prop) {
+    if (typeof prop === 'string' && !(prop in target)) return _normIndex[_norm(prop)];
+    return target[prop];
+  },
+  has(target, prop) {
+    if (typeof prop === 'string') return (prop in target) || (_norm(prop) in _normIndex);
+    return prop in target;
+  },
+});
+
+module.exports = { LOCATION_MAP: LOCATION_MAP_PROXY, REGION_ORDER, GROUP_ORDER };
