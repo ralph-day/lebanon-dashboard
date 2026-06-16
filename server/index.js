@@ -748,10 +748,14 @@ async function parseExcel(filePath) {
     const totalTarget = e.locations.reduce((s, l) => s + l.target, 0);
     const isActive = !!recentByName[fullName];
     const lastSeen = enumerators.find(en => en?.name?.includes(`(${e.code})`))?.lastSubmission || null;
+    // Remaining mirrors the Locations page: target − accepted − notAvailable
+    // (Not Available = already submitted, pending GTS review, so not "to do").
+    const acc = scStatusByEnum[fullName]?.accepted || 0;
+    const na  = scStatusByEnum[fullName]?.notAvailable || 0;
     return {
       code: e.code, name: e.name, fullName, entity: e.entity,
       governorate: e.governorate, locations: e.locations,
-      totalTarget, completed, remaining: Math.max(0, totalTarget - completed),
+      totalTarget, completed, remaining: totalTarget > 0 ? (totalTarget - acc - na) : 0,
       pct: totalTarget > 0 ? +(completed / totalTarget * 100).toFixed(1) : 0,
       isActive, lastSeen, recentCount: recentByName[fullName]?.count || 0,
       todayAccepted: todayByName[fullName]?.accepted || 0,
