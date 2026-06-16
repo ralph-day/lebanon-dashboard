@@ -531,16 +531,26 @@ async function parseExcel(filePath) {
   // Enumerators
   // Per-enumerator Surveys/Accepted/Rejected/Not Available — all from Survey
   // Comparison's SurveyStatus_New, keyed by NameCode.
+  // Accepted/Rejected/Not Available per enumerator come from GTS_Match_Comment
+  // (the client's verdict) so the Enumerators page always matches the Locations
+  // page. Falls back to SurveyStatus_New only when GTS_Match_Comment is blank.
   const scStatusByEnum = {};
   surveyComparison.forEach(r => {
     const name = r.NameCode || '';
     if (!name) return;
     if (!scStatusByEnum[name]) scStatusByEnum[name] = { total: 0, accepted: 0, rejected: 0, notAvailable: 0 };
-    const status = (r.SurveyStatus_New || '').trim().toLowerCase();
     scStatusByEnum[name].total++;
-    if (status === 'accepted') scStatusByEnum[name].accepted++;
-    else if (status === 'not available') scStatusByEnum[name].notAvailable++;
-    else if (status) scStatusByEnum[name].rejected++;
+    const gts = String(r.GTS_Match_Comment || '').trim();
+    if (gts) {
+      if (gts.startsWith('Accepted')) scStatusByEnum[name].accepted++;
+      else if (gts.startsWith('Rejected')) scStatusByEnum[name].rejected++;
+      else if (gts.startsWith('Not Available')) scStatusByEnum[name].notAvailable++;
+    } else {
+      const status = (r.SurveyStatus_New || '').trim().toLowerCase();
+      if (status === 'accepted') scStatusByEnum[name].accepted++;
+      else if (status === 'not available') scStatusByEnum[name].notAvailable++;
+      else if (status) scStatusByEnum[name].rejected++;
+    }
   });
 
   const enumerators = enumSummary.map(r => ({
