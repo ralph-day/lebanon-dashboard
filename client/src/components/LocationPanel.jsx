@@ -33,10 +33,9 @@ function StatusBadge({ status }) {
 
 // ── Rejected surveys subpage ──────────────────────────────────────────────────
 function RejectedDetail({ locationName, rows, onBack }) {
-  const rejected = rows.filter(r => {
-    const s = (r.status || '').trim().toLowerCase()
-    return s && s !== 'accepted'
-  }).sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
+  // GTS rejections — match the Rejected count, which comes from GTS_Match_Comment
+  const rejected = rows.filter(r => String(r.gtsMatch || '').startsWith('Rejected'))
+    .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
 
   const flags = r => [r.tooFast, r.belowRange, r.missingGPS]
     .filter(f => f && f.startsWith('✗'))
@@ -276,12 +275,13 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
       {/* District-grouped table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-13 gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr 2fr'}}>
+        <div className="grid gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wide" style={{gridTemplateColumns:'2fr repeat(5,1fr) 2fr 1fr 1fr 2fr'}}>
           <div>District / Location</div>
           <div className="text-center">Target</div>
           <div className="text-center">Accepted</div>
           <div className="text-center">Remaining</div>
           <div className="text-center text-red-400">Rejected</div>
+          <div className="text-center text-amber-400">Not Available</div>
           <div>Progress</div>
           <div className="text-center">Status</div>
           <div></div>
@@ -295,7 +295,8 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
         {districtRows.map(({ key, group, region, locations, target, accepted, remaining, pct, hasPalestinian }) => {
           const isExpanded = expandedDistricts.has(key)
           const rejected = locations.reduce((s, l) => s + (l.rejected || 0), 0)
-          const gridStyle = {gridTemplateColumns:'2fr repeat(4,1fr) 2fr 1fr 1fr 2fr'}
+          const notAvailable = locations.reduce((s, l) => s + (l.notAvailable || 0), 0)
+          const gridStyle = {gridTemplateColumns:'2fr repeat(5,1fr) 2fr 1fr 1fr 2fr'}
           return (
             <div key={key} className="border-b border-slate-100 last:border-0">
               {/* District row */}
@@ -319,6 +320,11 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                 <div className="text-center self-center" onClick={e => { if (rejected > 0) { e.stopPropagation(); const districtRows = qaRows.filter(r => locations.some(l => l.location === r.locationName)); setRejectedDetail({ locationName: group, rows: districtRows }) } }}>
                   {rejected > 0
                     ? <span className="text-sm font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{rejected}</span>
+                    : <span className="text-slate-300 text-sm">—</span>}
+                </div>
+                <div className="text-center self-center">
+                  {notAvailable > 0
+                    ? <span className="text-sm font-semibold text-amber-600">{notAvailable}</span>
                     : <span className="text-slate-300 text-sm">—</span>}
                 </div>
                 <div className="self-center"><ProgressBar pct={pct} /></div>
@@ -345,6 +351,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                     <div className="text-center">Accepted</div>
                     <div className="text-center">Remaining</div>
                     <div className="text-center text-red-300">Rejected</div>
+                    <div className="text-center text-amber-300">Not Available</div>
                     <div>Progress</div>
                     <div className="text-center">Status</div>
                     <div></div>
@@ -352,6 +359,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                   </div>
                   {locations.map((loc, i) => {
                     const locRejected = loc.rejected || 0
+                    const locNotAvailable = loc.notAvailable || 0
                     return (
                       <div key={i} className={`grid gap-2 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-white transition-colors ${loc.type === 'Palestinian' ? 'bg-purple-50/30' : ''}`} style={gridStyle}>
                         <div className="pl-6 flex items-center gap-2 min-w-0">
@@ -366,6 +374,11 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                           onClick={e => { if (locRejected > 0) { e.stopPropagation(); setRejectedDetail({ locationName: loc.location, rows: qaRows.filter(r => r.locationName === loc.location) }) } }}>
                           {locRejected > 0
                             ? <span className="font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{locRejected}</span>
+                            : <span className="text-slate-300">—</span>}
+                        </div>
+                        <div className="text-center text-sm self-center">
+                          {locNotAvailable > 0
+                            ? <span className="font-semibold text-amber-600">{locNotAvailable}</span>
                             : <span className="text-slate-300">—</span>}
                         </div>
                         <div className="self-center"><ProgressBar pct={loc.pctComplete} /></div>

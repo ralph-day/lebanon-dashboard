@@ -381,14 +381,18 @@ async function parseExcel(filePath) {
     gtsMatchByInstance[id] = r.GTS_Match_Comment || '';
   });
 
-  // Per-location rejection counts from the raw data sheet
-  const rejByLoc = {};
-  rawData.forEach(r => {
+  // Per-location GTS review tallies from Survey Comparison's GTS_Match_Comment
+  // (Accepted / Rejected / Not Available in GTS Data). Used as a fallback when
+  // Target_Tracker's own Rejected/Not_Available columns are absent — keeps the
+  // Locations page on GTS verdicts, never the raw-data QA flags.
+  const gtsByLoc = {};
+  surveyComparison.forEach(r => {
     const loc = r.loc_4 || r['Fixed Location'] || '';
-    const status = (r.SurveyStatus_New || '').trim().toLowerCase();
     if (!loc) return;
-    if (!rejByLoc[loc]) rejByLoc[loc] = 0;
-    if (status && status !== 'accepted') rejByLoc[loc]++;
+    if (!gtsByLoc[loc]) gtsByLoc[loc] = { rejected: 0, notAvailable: 0 };
+    const c = String(r.GTS_Match_Comment || '');
+    if (c.startsWith('Rejected')) gtsByLoc[loc].rejected++;
+    else if (c.startsWith('Not Available')) gtsByLoc[loc].notAvailable++;
   });
 
   // GPS survey points — extract from raw data sheet
@@ -503,7 +507,8 @@ async function parseExcel(filePath) {
       palestinian: r.Palestinian || demoByLoc[code]?.palestinian || 0,
       lebanese: r.Lebanese || demoByLoc[code]?.lebanese || 0,
       syrian: r.Syrian || demoByLoc[code]?.syrian || 0,
-      rejected: rejByLoc[code] || 0,
+      rejected:     r.Rejected != null      ? (Number(r.Rejected) || 0)      : (gtsByLoc[code]?.rejected || 0),
+      notAvailable: r.Not_Available != null  ? (Number(r.Not_Available) || 0) : (gtsByLoc[code]?.notAvailable || 0),
       men: r.man || demoByLoc[code]?.men || 0,
       women: r.woman || demoByLoc[code]?.women || 0,
       locationOn: r.LocationOn || 0,
