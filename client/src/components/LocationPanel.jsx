@@ -382,7 +382,17 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                             : <span className="text-slate-300">—</span>}
                         </div>
                         <div className="self-center"><ProgressBar pct={loc.pctComplete} /></div>
-                        <div className="self-center text-center"><StatusBadge status={loc.status} /></div>
+                        <div className="self-center text-center">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            loc.pctComplete >= 1 ? 'bg-blue-100 text-blue-700' :
+                            loc.pctComplete >= 0.9 ? 'bg-emerald-100 text-emerald-700' :
+                            loc.pctComplete >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                            loc.pctComplete > 0 ? 'bg-orange-100 text-orange-700' :
+                            'bg-slate-100 text-slate-500'
+                          }`}>
+                            {loc.pctComplete >= 1 ? 'Complete' : loc.pctComplete >= 0.9 ? 'On Track' : loc.pctComplete >= 0.5 ? 'In Progress' : loc.pctComplete > 0 ? 'Started' : 'Not Started'}
+                          </span>
+                        </div>
                         <div></div>
                         <div className="self-center">
                           <ResponsibleCell

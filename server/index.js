@@ -502,7 +502,10 @@ async function parseExcel(filePath) {
       completed: r.Completed || 0,
       accepted: r.Accepted || 0,
       remaining: r['Actual Remaining'] || 0,
-      pctComplete: r.Pct_Complete || 0,
+      // Computed from accepted/target (fraction 0–1) so it survives Moe renaming
+      // the sheet's Pct_Complete column (now 'Completion_Pct') and matches the
+      // district-level aggregate. status derived from the same thresholds.
+      pctComplete: (Number(r.target) > 0) ? (Number(r.Accepted) || 0) / Number(r.target) : 0,
       status: r.Status || '',
       palestinian: r.Palestinian || demoByLoc[code]?.palestinian || 0,
       lebanese: r.Lebanese || demoByLoc[code]?.lebanese || 0,
