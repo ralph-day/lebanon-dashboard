@@ -380,6 +380,7 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                 <th className="text-center text-xs font-semibold text-emerald-600 uppercase tracking-wide px-3 py-2.5">Accepted</th>
                 <th className="text-center text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Rejected</th>
                 <th className="text-center text-xs font-semibold text-amber-600 uppercase tracking-wide px-3 py-2.5">Not Available</th>
+                <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Remaining</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Avg (min)</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Min</th>
                 <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Max</th>
@@ -411,6 +412,16 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                   </td>
                   <td className="px-3 py-2.5 text-center font-semibold">
                     {e.notAvailable > 0 ? <span className="text-amber-600">{e.notAvailable}</span> : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-semibold">
+                    {(() => {
+                      const code = (e.name.match(/\((\w+)\)/) || [])[1]
+                      const a = assignments.find(x => x.code === code)
+                      if (!a || a.totalTarget === 0) return <span className="text-slate-300">—</span>
+                      return a.remaining > 0
+                        ? <span className="text-orange-600">{a.remaining}</span>
+                        : <span className="text-emerald-600">0</span>
+                    })()}
                   </td>
                   <td className="px-3 py-2.5 text-center text-slate-600">{e.avgDuration != null ? parseFloat(e.avgDuration).toFixed(1) : '—'}</td>
                   <td className="px-3 py-2.5 text-center text-slate-500">{e.minDuration != null ? parseFloat(e.minDuration).toFixed(1) : '—'}</td>
