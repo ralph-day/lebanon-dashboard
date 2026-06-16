@@ -418,9 +418,9 @@ export default function EnumeratorPanel({ enumerators, sectionTimings, assignmen
                       const code = (e.name.match(/\((\w+)\)/) || [])[1]
                       const a = assignments.find(x => x.code === code)
                       if (!a || a.totalTarget === 0) return <span className="text-slate-300">—</span>
-                      return a.remaining > 0
-                        ? <span className="text-orange-600">{a.remaining}</span>
-                        : <span className="text-emerald-600">0</span>
+                      if (a.remaining > 0) return <span className="text-orange-600">{a.remaining}</span>
+                      if (a.remaining < 0) return <span className="text-red-500">{a.remaining}</span>
+                      return <span className="text-emerald-600">0</span>
                     })()}
                   </td>
                   <td className="px-3 py-2.5 text-center text-slate-600">{e.avgDuration != null ? parseFloat(e.avgDuration).toFixed(1) : '—'}</td>
