@@ -252,14 +252,18 @@ async function fetchLatestExcel() {
   const auth = await getDriveAuth();
   const drive = google.drive({ version: 'v3', auth });
 
+  // Pin to the analysis workbook by name. The folder also holds other .xlsx
+  // files (e.g. "GTS Master sheet.xlsx"); picking merely the newest by date
+  // grabbed the wrong file when one of those was updated, blanking the dashboard.
+  const WORKBOOK_NAME_MATCH = process.env.WORKBOOK_NAME_MATCH || 'Analysis';
   const list = await drive.files.list({
-    q: `'${DRIVE_FOLDER_ID}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and trashed=false`,
+    q: `'${DRIVE_FOLDER_ID}' in parents and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' and name contains '${WORKBOOK_NAME_MATCH}' and trashed=false`,
     orderBy: 'modifiedTime desc',
     pageSize: 1,
     fields: 'files(id, name, modifiedTime)',
   });
 
-  if (!list.data.files.length) throw new Error('No Excel file found in Drive folder');
+  if (!list.data.files.length) throw new Error(`No Excel file matching "${WORKBOOK_NAME_MATCH}" found in Drive folder`);
 
   const file = list.data.files[0];
   const destPath = path.join(__dirname, 'tmp_data.xlsx');
