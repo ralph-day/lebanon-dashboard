@@ -115,7 +115,10 @@ export default function EnumeratorProgress({ assignments = [] }) {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{a.governorate} · {a.locations.length} location{a.locations.length > 1 ? 's' : ''}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">{(() => {
+                      const districts = [...new Set(a.locations.map(l => l.district).filter(Boolean))]
+                      return districts.length ? districts.join(' · ') : a.governorate
+                    })()} · {a.locations.length} location{a.locations.length > 1 ? 's' : ''}</p>
                   </div>
 
                   {/* Completed stat */}
@@ -169,6 +172,7 @@ export default function EnumeratorProgress({ assignments = [] }) {
                     <thead>
                       <tr className="text-left text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100">
                         <th className="pb-2">Location</th>
+                        <th className="pb-2">District</th>
                         <th className="pb-2 text-center">Target</th>
                         <th className="pb-2 text-center">Deadline</th>
                         <th className="pb-2 text-center">Status</th>
@@ -180,6 +184,7 @@ export default function EnumeratorProgress({ assignments = [] }) {
                         return (
                           <tr key={i} className="hover:bg-slate-50">
                             <td className="py-2.5 font-medium text-slate-700">{loc.name}</td>
+                            <td className="py-2.5 text-slate-500">{loc.district || a.district || '—'}</td>
                             <td className="py-2.5 text-center text-slate-600">{loc.target}</td>
                             <td className="py-2.5 text-center text-slate-600">{formatDate(loc.deadline)}</td>
                             <td className="py-2.5 text-center">

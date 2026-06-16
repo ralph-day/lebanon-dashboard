@@ -130,12 +130,12 @@ const ENUMERATOR_ASSIGNMENTS = [
   {
     code: 'GO13',
     name: 'Ghinwa Ouneissi',
-    phone: phone('GO13', null),
-    governorate: 'North / Mount Lebanon',
-    district: 'El Batroun / Jbeil',
+    phone: phone('GO13', '3724473'),
+    governorate: 'Mount Lebanon / North',
+    district: 'Jbeil / El Batroun',
     locations: [
-      { name: 'Batroun', target: 22, deadline: '2026-06-12' },
-      { name: 'Aalmat Ej-Jnoubiyeh', target: 21, deadline: '2026-06-12' },
+      { name: 'Lassa',   target: 24, governorate: 'Mount Lebanon', district: 'Jbeil' },
+      { name: 'Batroun', target: 22, governorate: 'North',         district: 'El Batroun' },
     ],
   },
   {
@@ -146,8 +146,43 @@ const ENUMERATOR_ASSIGNMENTS = [
     governorate: 'Mount Lebanon',
     district: 'Jbeil',
     locations: [
-      { name: 'Lassa', target: 49, deadline: '2026-06-12' },
-      { name: 'Aalmat Ech-Chamliyeh', target: 25, deadline: '2026-06-12' },
+      { name: 'Lassa',                target: 25, district: 'Jbeil' },
+      { name: 'Aalmat Ech-Chamliyeh', target: 25, district: 'Jbeil' },
+      { name: 'Aalmat Ej-Jnoubiyeh',  target: 21, district: 'Jbeil' },
+    ],
+  },
+  {
+    code: 'MAK16',
+    name: 'Mostafa Khatib',
+    phone: phone('MAK16', '70637021'),
+    governorate: 'Mount Lebanon',
+    district: 'Aley',
+    locations: [
+      { name: 'Bchamoun',                target: 21, district: 'Aley' },
+      { name: 'Choueifat El-Quoubbeh',   target: 12, district: 'Aley' },
+      { name: 'Keyfoun',                 target: 8,  district: 'Aley' },
+    ],
+  },
+  {
+    code: 'MM11',
+    name: 'Mohammad Midani',
+    phone: phone('MM11', '76987431'),
+    governorate: 'Mount Lebanon',
+    district: 'Aley',
+    locations: [
+      { name: 'Bchamoun',                target: 20, district: 'Aley' },
+      { name: 'Choueifat El-Quoubbeh',   target: 12, district: 'Aley' },
+      { name: 'Keyfoun',                 target: 8,  district: 'Aley' },
+    ],
+  },
+  {
+    code: 'NK14',
+    name: 'Nour Kamel',
+    phone: phone('NK14', '70912714'),
+    governorate: 'Mount Lebanon',
+    district: 'Aley',
+    locations: [
+      { name: 'Bchamoun', target: 17, district: 'Aley' },
     ],
   },
   {
