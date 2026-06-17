@@ -199,6 +199,46 @@ const ENUMERATOR_ASSIGNMENTS = [
       { name: 'Saida Ed-Dekermane', target: 23, district: 'Saida', deadline: '2026-06-08' },
     ],
   },
+  {
+    code: 'TM20',
+    name: 'Toni Mourani',
+    phone: phone('TM20', '70006655'),
+    governorate: 'Bekaa',
+    district: 'Rachaya',
+    locations: [
+      { name: 'Kfarmeshki', target: 25, district: 'Rachaya' },
+    ],
+  },
+  {
+    code: 'CG21',
+    name: 'Adham Jamal',
+    phone: phone('CG21', '71693260'),
+    governorate: 'Bekaa',
+    district: 'Rachaya',
+    locations: [
+      { name: 'Daher el-Ahmar', target: 15, district: 'Rachaya' },
+    ],
+  },
+  {
+    code: 'WA22',
+    name: 'Tarek Saidy',
+    phone: phone('WA22', '79300985'),
+    governorate: 'Bekaa',
+    district: 'Rachaya',
+    locations: [
+      { name: 'Rachaya', target: 5, district: 'Rachaya' },
+    ],
+  },
+  {
+    code: 'HK23',
+    name: 'Halim Kaii',
+    phone: phone('HK23', '71908554'),
+    governorate: 'Bekaa',
+    district: 'Rachaya',
+    locations: [
+      { name: 'Kaukaba', target: 5, district: 'Rachaya' },
+    ],
+  },
 ];
 
 module.exports = { ENUMERATOR_ASSIGNMENTS };
