@@ -1208,6 +1208,21 @@ async function notifyAcceptedSubmissions(qaRows) {
     return;
   }
 
+  // One-time rebase after switching the trigger to QA-pass: suppress the existing
+  // QA-passed backlog so enabling the template doesn't blast hundreds of old
+  // surveys. Only QA-passes collected after this point notify.
+  if (!sentAlerts.has('__qapass_reseed_done__')) {
+    let seeded = 0;
+    for (const row of qaRows) {
+      if (!row.id || row.qaStatus !== '✅ PASS') continue;
+      if (!sentAlerts.has(`submission::${row.id}`)) { sentAlerts.add(`submission::${row.id}`); seeded++; }
+    }
+    sentAlerts.add('__qapass_reseed_done__');
+    saveNotifications();
+    console.log(`[WhatsApp] QA-pass rebase: suppressed ${seeded} existing — only new QA-passes notify from now`);
+    return;
+  }
+
   let sent = 0;
   for (const row of qaRows) {
     if (!row.id) continue;
