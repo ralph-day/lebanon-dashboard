@@ -136,7 +136,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
                   <button
                     onClick={() => { setShowRejected(v => !v); setShowAccepted(false) }}
                     className={`text-sm font-bold px-3 py-1 rounded-lg border transition-colors ${showRejected ? 'bg-red-600 text-white border-red-600' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'}`}
-                  >{dayRejectedRows.length} rejected</button>
+                  >{dayRejectedRows.length} FAIL</button>
                 )}
               </div>
             )}
@@ -175,7 +175,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
       {/* Rejected dropdown */}
       {showRejected && dayRejectedRows.length > 0 && (
         <div className="mb-3 border border-red-100 rounded-lg bg-red-50 px-3 py-2.5">
-          <p className="text-xs font-semibold text-red-700 mb-2">🚫 Rejected surveys — {label}</p>
+          <p className="text-xs font-semibold text-red-700 mb-2">🚫 QA fail surveys — {label}</p>
           <div className="space-y-1.5 max-h-52 overflow-y-auto">
             {dayRejectedRows.map((r, i) => (
               <div key={r.id || i} className="bg-white border border-red-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3">
