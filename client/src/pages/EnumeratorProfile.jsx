@@ -149,11 +149,12 @@ export default function EnumeratorProfile({ data }) {
     allQaRows.forEach(r => {
       const ds = toLbDate(r.submissionDate)
       if (!ds) return
-      if (!byDate[ds]) byDate[ds] = { date: ds, total: 0, accepted: 0, rejected: 0, qaPass: 0, qaReview: 0, qaFail: 0 }
+      if (!byDate[ds]) byDate[ds] = { date: ds, total: 0, accepted: 0, rejected: 0, pending: 0, qaPass: 0, qaReview: 0, qaFail: 0 }
       byDate[ds].total++
       const st = (r.status || '').trim().toLowerCase()
       if (st === 'accepted') byDate[ds].accepted++
-      else if (st) byDate[ds].rejected++
+      else if (st === 'rejected') byDate[ds].rejected++
+      else byDate[ds].pending++ // 'not available' = pending GTS review, NOT rejected
       if (r.qaStatus === '✅ PASS')   byDate[ds].qaPass++
       if (r.qaStatus === '⚠️ REVIEW') byDate[ds].qaReview++
       if (r.qaStatus === '❌ FAIL')   byDate[ds].qaFail++
@@ -477,6 +478,7 @@ export default function EnumeratorProfile({ data }) {
                     <th className="text-right pb-2 font-medium">Total</th>
                     <th className="text-right pb-2 font-medium text-emerald-600">Accepted</th>
                     <th className="text-right pb-2 font-medium text-red-500">Rejected</th>
+                    <th className="text-right pb-2 font-medium text-slate-400">Pending</th>
                     <th className="text-right pb-2 font-medium text-emerald-600">QA Pass</th>
                     <th className="text-right pb-2 font-medium text-amber-500">Review</th>
                     <th className="text-right pb-2 font-medium text-red-500">QA Fail</th>
@@ -498,6 +500,7 @@ export default function EnumeratorProfile({ data }) {
                         <td className="py-2 text-right text-slate-600">{d.total}</td>
                         <td className="py-2 text-right font-semibold text-emerald-600">{d.accepted || '—'}</td>
                         <td className="py-2 text-right font-semibold text-red-500">{d.rejected || '—'}</td>
+                        <td className="py-2 text-right text-slate-400">{d.pending || '—'}</td>
                         <td className="py-2 text-right text-emerald-600">{d.qaPass || '—'}</td>
                         <td className="py-2 text-right text-amber-500">{d.qaReview || '—'}</td>
                         <td className="py-2 text-right font-semibold text-red-500">{d.qaFail || '—'}</td>
