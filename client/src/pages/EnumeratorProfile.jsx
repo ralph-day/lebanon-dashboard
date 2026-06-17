@@ -169,7 +169,7 @@ export default function EnumeratorProfile({ data }) {
   // Fastest surveys (likely rushed) — shortest app time, clickable
   const fastestSurveys = [...qaRows].filter(r => parseFloat(r.appTime) > 0)
     .sort((a, b) => parseFloat(a.appTime) - parseFloat(b.appTime)).slice(0, 5)
-  // Flag-rate trend over time (all history, chronological)
+  // QA-fail-rate trend over time (all history, chronological) — matches the QA Fail metric
   const flagTrend = (() => {
     const byDate = {}
     allQaRows.forEach(r => {
@@ -177,7 +177,7 @@ export default function EnumeratorProfile({ data }) {
       if (!ds) return
       if (!byDate[ds]) byDate[ds] = { date: ds, total: 0, flagged: 0 }
       byDate[ds].total++
-      if (hasAnyFlag(r)) byDate[ds].flagged++
+      if (r.qaStatus === '❌ FAIL') byDate[ds].flagged++
     })
     return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
       .map(d => ({ date: d.date.slice(5), rate: Math.round(d.flagged / d.total * 100), flagged: d.flagged, total: d.total }))
@@ -418,8 +418,8 @@ export default function EnumeratorProfile({ data }) {
         {/* ── Flag-rate trend + Fastest surveys ─────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="text-sm font-semibold text-slate-700 mb-1">Flag Rate Over Time</h3>
-            <p className="text-xs text-slate-400 mb-3">All time · % of surveys flagged per day</p>
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">QA Fail Rate Over Time</h3>
+            <p className="text-xs text-slate-400 mb-3">All time · % of surveys that failed QA per day</p>
             {flagTrend.length === 0 ? (
               <p className="text-sm text-slate-400 text-center py-4">No history</p>
             ) : (
@@ -428,7 +428,7 @@ export default function EnumeratorProfile({ data }) {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
-                  <Tooltip formatter={(v, n, p) => [`${v}% (${p.payload.flagged}/${p.payload.total})`, 'Flagged']} />
+                  <Tooltip formatter={(v, n, p) => [`${v}% (${p.payload.flagged}/${p.payload.total})`, 'QA Fail']} />
                   <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
                     {flagTrend.map((d, i) => <Cell key={i} fill={d.rate >= 50 ? '#ef4444' : d.rate >= 20 ? '#f59e0b' : '#10b981'} />)}
                   </Bar>
