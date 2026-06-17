@@ -1188,21 +1188,22 @@ function buildAcceptedTemplateParams(row) {
 async function notifyAcceptedSubmissions(qaRows) {
   if (!process.env.META_WA_TOKEN) return;
 
-  // First run: seed all currently-accepted rows as already-notified so we
-  // don't flood WhatsApp with hundreds of historical submissions. Only
-  // newly-accepted rows from this point on will trigger a message.
+  // First run: seed all currently QA-passed rows as already-notified so we
+  // don't flood WhatsApp with hundreds of historical submissions. Only newly
+  // QA-passed surveys from this point on trigger a message (immediate — not
+  // waiting on GTS, which lags days behind collection).
   const hasAnySubmissionKey = [...sentAlerts].some(k => k.startsWith('submission::'));
   if (!hasAnySubmissionKey) {
     let seeded = 0;
     for (const row of qaRows) {
       if (!row.id) continue;
-      if ((row.status || '').trim().toLowerCase() !== 'accepted') continue;
+      if (row.qaStatus !== '✅ PASS') continue; // notify on QA pass (immediate), not GTS acceptance (lags)
       sentAlerts.add(`submission::${row.id}`);
       seeded++;
     }
     if (seeded > 0) {
       saveNotifications();
-      console.log(`[WhatsApp] Seeded ${seeded} existing accepted submission(s) — only new ones will notify`);
+      console.log(`[WhatsApp] Seeded ${seeded} existing QA-passed submission(s) — only new ones will notify`);
     }
     return;
   }
@@ -1210,7 +1211,7 @@ async function notifyAcceptedSubmissions(qaRows) {
   let sent = 0;
   for (const row of qaRows) {
     if (!row.id) continue;
-    if ((row.status || '').trim().toLowerCase() !== 'accepted') continue;
+    if (row.qaStatus !== '✅ PASS') continue; // notify on QA pass (immediate), not GTS acceptance (lags)
     if (/test/i.test(row.name || '')) continue;
     const key = `submission::${row.id}`;
     if (sentAlerts.has(key)) continue;
