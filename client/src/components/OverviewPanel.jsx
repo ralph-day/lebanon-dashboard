@@ -12,6 +12,7 @@ function StatCard({ label, value, sub, color = 'blue' }) {
     blue:  'bg-blue-50 text-blue-700 border-blue-100',
     green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
     amber: 'bg-amber-50 text-amber-700 border-amber-100',
+    red:   'bg-red-50 text-red-600 border-red-100',
     slate: 'bg-slate-50 text-slate-700 border-slate-100',
   }
   return (
@@ -475,9 +476,10 @@ export default function OverviewPanel({ data }) {
       </div>
 
       {/* ── Big numbers ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard label="Total Surveys" value={totalCompleted.toLocaleString()} sub={`Target: ${overview.totalTarget.toLocaleString()}`} color="blue" />
-        <StatCard label="Completed Today" value={overview.completedToday} sub="accepted submissions" color="green" />
+        <StatCard label="Pass Today" value={overview.passToday ?? 0} sub="passed QA today" color="green" />
+        <StatCard label="Failed Today" value={overview.failToday ?? 0} sub="failed QA today" color="red" />
         <StatCard label="Remaining" value={overview.remaining.toLocaleString()} sub="surveys to collect" color="amber" />
         <StatCard label="Locations" value={overview.totalLocations} sub="survey areas" color="slate" />
       </div>

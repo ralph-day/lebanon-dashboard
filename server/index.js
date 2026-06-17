@@ -750,6 +750,10 @@ async function parseExcel(filePath) {
     }
   });
 
+  // Today's QA pass/fail totals for the Overview summary cards (immediate, QA-based).
+  overview.passToday = Object.values(todayByName).reduce((s, v) => s + v.accepted, 0);
+  overview.failToday = Object.values(todayByName).reduce((s, v) => s + v.rejected, 0);
+
   // ── Enumerator assignments ────────────────────────────────────────────────
   const enumCompletedMap = {};
   enumerators.forEach(e => { enumCompletedMap[e.name] = e.totalSurveys; });
