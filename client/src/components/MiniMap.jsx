@@ -225,8 +225,8 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
             <button
               onClick={() => { setShowAccepted(v => !v); setShowTooClose(false) }}
               className={`px-2 py-0.5 rounded-full transition-colors border ${showAccepted ? 'bg-green-600 text-white border-green-600' : 'bg-green-50 text-green-700 border-transparent hover:bg-green-100'}`}
-            >{accepted} ✅ PASS</button>
-            <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} rejected</span>
+            >{accepted} ✅ QA pass</button>
+            <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded-full">{rejected} QA fail</span>
             {tooClose > 0 && (
               <button
                 onClick={() => { setShowTooClose(v => !v); setShowAccepted(false) }}
@@ -246,7 +246,7 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
       {/* Accepted surveys panel */}
       {showAccepted && (
         <div className="border-t border-green-100 bg-green-50 px-4 py-3">
-          <p className="text-xs font-semibold text-green-700 mb-2">✅ Accepted surveys — {dateLabel}</p>
+          <p className="text-xs font-semibold text-green-700 mb-2">✅ QA pass surveys — {dateLabel}</p>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {visiblePoints.filter(p => p.status === 'accepted').map((p, i) => {
               const isSelected = selectedPoint?.id === p.id
@@ -358,8 +358,8 @@ export default function MiniMap({ gpsPoints = [], highlight = null }) {
       {/* Legend */}
       <div className="px-4 py-2 border-t border-slate-100 flex flex-wrap gap-3 text-xs text-slate-500 shrink-0">
         {[
-          { color: '#22c55e', label: 'Accepted' },
-          { color: '#ef4444', label: 'Rejected' },
+          { color: '#22c55e', label: 'QA Pass' },
+          { color: '#ef4444', label: 'QA Fail' },
           { color: '#f97316', label: 'Too close to another interview (≤15 m)' },
         ].map(({ color, label }) => (
           <span key={label} className="flex items-center gap-1">

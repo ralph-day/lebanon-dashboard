@@ -34,8 +34,8 @@ function dotColor(p) {
 
 function dotLabel(p) {
   if (p.duplicate) return '⚠ Too close to another interview (≤15 m)'
-  if (p.status === 'accepted') return '✅ Accepted'
-  if (p.status === 'rejected') return '❌ Rejected'
+  if (p.status === 'accepted') return '✅ QA Pass'
+  if (p.status === 'rejected') return '❌ QA Fail'
   return '⏳ Pending / Unknown'
 }
 
@@ -166,8 +166,8 @@ function AuditTable({ gpsPoints }) {
           onChange={e => setSearch(e.target.value)}
           className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-700 bg-white w-56" />
         <div className="flex gap-2 ml-auto text-xs font-semibold">
-          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-lg">{accepted} accepted</span>
-          <span className="bg-red-50 text-red-600 px-2 py-1 rounded-lg">{rejected} rejected</span>
+          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-lg">{accepted} QA pass</span>
+          <span className="bg-red-50 text-red-600 px-2 py-1 rounded-lg">{rejected} QA fail</span>
           {tooClose > 0 && <span className="bg-orange-50 text-orange-600 px-2 py-1 rounded-lg">⚠ {tooClose} too close</span>}
           <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">{rows.length} total</span>
         </div>
@@ -372,8 +372,8 @@ export default function MapPanel({ gpsPoints = [] }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total GPS points', value: gpsPoints.length,                                    color: 'bg-blue-50 text-blue-700'   },
-          { label: 'Accepted',         value: gpsPoints.filter(p => p.status === 'accepted').length, color: 'bg-green-50 text-green-700' },
-          { label: 'Rejected',         value: gpsPoints.filter(p => p.status === 'rejected').length, color: 'bg-red-50 text-red-700'    },
+          { label: 'QA Pass',          value: gpsPoints.filter(p => p.status === 'accepted').length, color: 'bg-green-50 text-green-700' },
+          { label: 'QA Fail',          value: gpsPoints.filter(p => p.status === 'rejected').length, color: 'bg-red-50 text-red-700'    },
           { label: 'Duplicate flags',  value: dupCount,                                             color: 'bg-orange-50 text-orange-700'},
         ].map(({ label, value, color }) => (
           <div key={label} className={`rounded-xl p-3 ${color}`}>
@@ -421,8 +421,8 @@ export default function MapPanel({ gpsPoints = [] }) {
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
           className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 bg-white">
           <option value="all">All statuses</option>
-          <option value="accepted">Accepted</option>
-          <option value="rejected">Rejected</option>
+          <option value="accepted">QA Pass</option>
+          <option value="rejected">QA Fail</option>
           <option value="pending">Pending</option>
           <option value="">Unknown</option>
         </select>
@@ -440,8 +440,8 @@ export default function MapPanel({ gpsPoints = [] }) {
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs text-slate-600 items-center">
         {[
-          { color: '#22c55e', label: 'Accepted' },
-          { color: '#ef4444', label: 'Rejected' },
+          { color: '#22c55e', label: 'QA Pass' },
+          { color: '#ef4444', label: 'QA Fail' },
           { color: '#f59e0b', label: 'Pending / Unknown' },
           { color: '#f97316', label: 'Too close to another interview (≤15 m)' },
         ].map(({ color, label }) => (
