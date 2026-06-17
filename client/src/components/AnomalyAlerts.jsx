@@ -1,11 +1,29 @@
 import { useState } from 'react'
 
+// submissionDate is naive Lebanon wall-clock digits (UTC+3, no zone). Parse as
+// UTC then subtract 3h to get the real instant — independent of the viewer's timezone.
+function realMs(isoStr) {
+  if (!isoStr) return null
+  const hasZone = /[zZ]$|[+-]\d\d:?\d\d$/.test(isoStr)
+  const ms = Date.parse(hasZone ? isoStr : isoStr + 'Z')
+  return isNaN(ms) ? null : ms - 3 * 3600000
+}
+
 function timeAgo(isoStr) {
-  if (!isoStr) return '—'
-  const mins = Math.floor((Date.now() - new Date(isoStr).getTime()) / 60000)
+  const ms = realMs(isoStr)
+  if (ms == null) return '—'
+  const mins = Math.max(0, Math.floor((Date.now() - ms) / 60000))
   if (mins < 60) return `${mins}m ago`
   if (mins < 1440) return `${Math.floor(mins / 60)}h ${mins % 60}m ago`
-  return new Date(isoStr).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return `${Math.floor(mins / 1440)}d ago`
+}
+
+// Exact Lebanon wall-clock time of submission, e.g. "16 Jun 18:42".
+function lebanonTime(isoStr) {
+  if (!isoStr) return '—'
+  const hasZone = /[zZ]$|[+-]\d\d:?\d\d$/.test(isoStr)
+  const d = new Date(hasZone ? isoStr : isoStr + 'Z')
+  return isNaN(d) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function SeverityIcon({ type }) {
@@ -39,7 +57,7 @@ function IssueModal({ enumeratorName, issue, onClose }) {
         <div className={`text-sm border rounded-lg px-3 py-2 ${style.cls}`}>
           {issue.detail}
         </div>
-        <p className="text-xs text-slate-400 mt-3">Submission: {timeAgo(issue.submissionDate)}</p>
+        <p className="text-xs text-slate-400 mt-3">Submitted: {lebanonTime(issue.submissionDate)} ({timeAgo(issue.submissionDate)})</p>
         <div className="mt-4 flex justify-end">
           <button onClick={onClose} className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg">
             Close
@@ -123,7 +141,7 @@ export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">Latest issue: {timeAgo(a.latestAt)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Latest issue: {lebanonTime(a.latestAt)} ({timeAgo(a.latestAt)})</p>
                 </div>
 
                 {/* Phone + WhatsApp CTAs */}
@@ -191,7 +209,7 @@ export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }
                             <span className="ml-1.5 font-mono opacity-60">#{issue.id.replace(/^uuid:/, '').slice(0, 8)}</span>
                           )}
                         </div>
-                        <span className="shrink-0 opacity-60 whitespace-nowrap">{timeAgo(issue.submissionDate)}</span>
+                        <span className="shrink-0 opacity-60 whitespace-nowrap" title={timeAgo(issue.submissionDate)}>{lebanonTime(issue.submissionDate)}</span>
                       </div>
                     )
                   })}
