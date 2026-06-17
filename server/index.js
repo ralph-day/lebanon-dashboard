@@ -378,12 +378,21 @@ async function parseExcel(filePath) {
   const surveyComparison = sheet('Survey Comparison');
 
   // instanceID -> GTS match comment (Accepted / Rejected - ... / Not Available in GTS Data)
+  // GTS (Survey Comparison) is the single source of truth for accepted/rejected.
+  // The legacy `SurveyStatus_New` column is no longer used anywhere.
   const gtsMatchByInstance = {};
+  const gtsStatusByInstance = {};
   surveyComparison.forEach(r => {
     const id = r.instanceID || '';
     if (!id) return;
-    gtsMatchByInstance[id] = r.GTS_Match_Comment || '';
+    const c = String(r.GTS_Match_Comment || '');
+    gtsMatchByInstance[id] = c;
+    gtsStatusByInstance[id] = c.startsWith('Accepted') ? 'accepted'
+      : c.startsWith('Rejected') ? 'rejected'
+      : c.startsWith('Not Available') ? 'not available' : '';
   });
+  // Normalized GTS verdict for a survey: 'accepted' | 'rejected' | 'not available' | ''
+  const gtsStatus = id => gtsStatusByInstance[id || ''] || '';
 
   // Per-location GTS review tallies from Survey Comparison's GTS_Match_Comment
   // (Accepted / Rejected / Not Available in GTS Data). Used as a fallback when
@@ -416,7 +425,7 @@ async function parseExcel(filePath) {
       enumerator:   r.NameCode || r.name || '',
       location:     cfg.name || loc4.replace(/_/g, ' '),
       loc4,
-      status:       (r.SurveyStatus_New || '').trim().toLowerCase(),
+      status:       gtsStatus(r.instanceID || r['KEY'] || ''),
       date:         toISO(r.SubmissionDate || r.submission_date || r['_submission_time']),
     });
   });
@@ -463,7 +472,7 @@ async function parseExcel(filePath) {
   const ovTodayStart = ovToday.getTime() - 3 * 3600000;
   let completedToday = 0;
   rawData.forEach(r => {
-    if (String(r.SurveyStatus_New || '').trim().toLowerCase() !== 'accepted') return;
+    if (gtsStatus(r.instanceID) !== 'accepted') return;
     const iso = toISO(r.SubmissionDate);
     if (!iso) return;
     const ts = new Date(iso).getTime() - 3 * 3600000;
@@ -477,7 +486,7 @@ async function parseExcel(filePath) {
   // populated, so derive these from accepted submissions instead.
   const demoByLoc = {};
   rawData.forEach(r => {
-    if (String(r.SurveyStatus_New || '').trim().toLowerCase() !== 'accepted') return;
+    if (gtsStatus(r.instanceID) !== 'accepted') return;
     const code = r.loc_4 || '';
     if (!demoByLoc[code]) demoByLoc[code] = { palestinian: 0, lebanese: 0, syrian: 0, men: 0, women: 0 };
     const nat = String(r.nationality || '').trim().toLowerCase();
@@ -532,12 +541,8 @@ async function parseExcel(filePath) {
     };
   }).sort((a, b) => a.regionOrder - b.regionOrder || a.location.localeCompare(b.location));
 
-  // Enumerators
-  // Per-enumerator Surveys/Accepted/Rejected/Not Available — all from Survey
-  // Comparison's SurveyStatus_New, keyed by NameCode.
-  // Accepted/Rejected/Not Available per enumerator come from GTS_Match_Comment
-  // (the client's verdict) so the Enumerators page always matches the Locations
-  // page. Falls back to SurveyStatus_New only when GTS_Match_Comment is blank.
+  // Enumerators — Accepted/Rejected/Not Available per enumerator come from
+  // Survey Comparison's GTS_Match_Comment (the client's verdict), keyed by NameCode.
   const scStatusByEnum = {};
   surveyComparison.forEach(r => {
     const name = r.NameCode || '';
@@ -545,16 +550,9 @@ async function parseExcel(filePath) {
     if (!scStatusByEnum[name]) scStatusByEnum[name] = { total: 0, accepted: 0, rejected: 0, notAvailable: 0 };
     scStatusByEnum[name].total++;
     const gts = String(r.GTS_Match_Comment || '').trim();
-    if (gts) {
-      if (gts.startsWith('Accepted')) scStatusByEnum[name].accepted++;
-      else if (gts.startsWith('Rejected')) scStatusByEnum[name].rejected++;
-      else if (gts.startsWith('Not Available')) scStatusByEnum[name].notAvailable++;
-    } else {
-      const status = (r.SurveyStatus_New || '').trim().toLowerCase();
-      if (status === 'accepted') scStatusByEnum[name].accepted++;
-      else if (status === 'not available') scStatusByEnum[name].notAvailable++;
-      else if (status) scStatusByEnum[name].rejected++;
-    }
+    if (gts.startsWith('Accepted')) scStatusByEnum[name].accepted++;
+    else if (gts.startsWith('Rejected')) scStatusByEnum[name].rejected++;
+    else if (gts.startsWith('Not Available')) scStatusByEnum[name].notAvailable++;
   });
 
   const enumerators = enumSummary.map(r => ({
@@ -585,7 +583,7 @@ async function parseExcel(filePath) {
     const loc4 = r.loc_4 || r['Fixed Location'] || '';
     const cfg = LOCATION_MAP[loc4] || {};
     statusByInstance[id] = {
-      status:       (r.SurveyStatus_New || '').trim(),
+      status:       gtsStatus(id),
       loc4,
       locationName: cfg.name || loc4.replace(/_/g, ' '),
       district:     cfg.district || (r.loc_3 || '').replace(/_/g, ' '),
@@ -593,13 +591,13 @@ async function parseExcel(filePath) {
     };
   });
 
-  // QA flags summary — enrich with SurveyStatus_New + location from data sheet
+  // QA flags summary — enrich with GTS verdict + location from data sheet
   const qaRows = qaDashboard.map(r => {
     const extra = statusByInstance[r.instanceID || ''] || {};
     return {
     id: r.instanceID || '',
     name: r.NameCode || '',
-    status: extra.status || (r.SurveyStatus_New || '').trim(),
+    status: extra.status || gtsStatus(r.instanceID),
     locationName: extra.locationName || '',
     district:     extra.district || '',
     group:        extra.group || '',
@@ -623,7 +621,7 @@ async function parseExcel(filePath) {
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;
   const qaReview = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  const qaRejected = qaRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
+  const qaRejected = qaRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length;
 
   // Quality% and Missing-GPS per enumerator — computed from qaRows so they
   // survive Moe dropping the Quality_% / Missing_GPS columns from
@@ -730,7 +728,7 @@ async function parseExcel(filePath) {
       todayByName[r.name].total++;
       const st = (r.status || '').trim().toLowerCase();
       if (st === 'accepted') todayByName[r.name].accepted++;
-      else if (st && st !== 'accepted') todayByName[r.name].rejected++;
+      else if (st === 'rejected') todayByName[r.name].rejected++;
     }
   });
 
@@ -866,7 +864,7 @@ async function parseExcel(filePath) {
     overview, locations, enumerators, assignments, activeEnumerators, anomalies,
     qa: { rows: qaRows, pass: qaPass, review: qaReview, fail: qaFail, rejected: qaRejected },
     sectionTimings, natTotals, genderTotals, gpsPoints,
-    rawByInstance, sectionTimingByInstance,
+    rawByInstance, sectionTimingByInstance, gtsMatchByInstance,
   };
 }
 
@@ -889,7 +887,7 @@ function fieldLabel(key) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function buildSurveyDetail(raw, sectionTiming) {
+function buildSurveyDetail(raw, sectionTiming, gtsComment) {
   const keys = Object.keys(raw);
 
   const isEmpty = v => v === null || v === undefined || v === '' || v === 'n/a' || v === 'NA';
@@ -897,7 +895,8 @@ function buildSurveyDetail(raw, sectionTiming) {
   const meta = {
     instanceID:     raw.instanceID || raw['KEY'] || '',
     name:           raw.NameCode || '',
-    status:         (raw.SurveyStatus_New || '').trim(),
+    // GTS verdict (Accepted / Rejected / Not Available in GTS Data)
+    status:         String(gtsComment || '').trim(),
     submissionDate: toISO(raw.SubmissionDate),
     start:          toISO(raw.start),
     end:            toISO(raw.end),
@@ -1300,10 +1299,10 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
   const pass     = approvedRows.filter(r => r.qaStatus === '✅ PASS').length;
   const review   = approvedRows.filter(r => r.qaStatus === '⚠️ REVIEW').length;
   const fail     = approvedRows.filter(r => r.qaStatus === '❌ FAIL').length;
-  const rejected = approvedRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted'; }).length;
+  const rejected = approvedRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length;
   // Send most-recent 2000 rows to client — prevents large payloads freezing the UI
   const clientRows = approvedRows.slice(-2000);
-  const { rawByInstance, sectionTimingByInstance, ...publicData } = cache.data;
+  const { rawByInstance, sectionTimingByInstance, gtsMatchByInstance, ...publicData } = cache.data;
   res.json({ ...publicData, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
@@ -1316,7 +1315,7 @@ app.get('/api/survey/:id', requireAuth, async (req, res) => {
   const raw = cache.data.rawByInstance?.[req.params.id];
   if (!raw) return res.status(404).json({ error: 'Survey not found' });
   const sectionTiming = cache.data.sectionTimingByInstance?.[req.params.id] || null;
-  res.json(buildSurveyDetail(raw, sectionTiming));
+  res.json(buildSurveyDetail(raw, sectionTiming, cache.data.gtsMatchByInstance?.[req.params.id]));
 });
 
 app.post('/api/refresh', requireAuth, refreshLimit, async (req, res) => {

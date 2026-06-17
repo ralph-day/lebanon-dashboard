@@ -119,7 +119,7 @@ export default function PaymentsPanel({ enumerators = [], qaRows = [], currentUs
       const stored = (payments.enumerators || []).find(p => p.code === code) || {}
       const myRows = qaByCode[code] || []
       const accepted = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted').length
-      const rejected = myRows.filter(r => { const s = (r.status || '').trim().toLowerCase(); return s && s !== 'accepted' }).length
+      const rejected = myRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length
       const participantCost = (e.totalSurveys || 0) * PARTICIPANT_RATE
       const rate      = parseFloat(stored.ratePerSurvey) || 0
       const otherCosts = parseFloat(stored.otherCosts)   || 0

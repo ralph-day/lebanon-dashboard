@@ -103,10 +103,7 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
     return ts >= dayStart.getTime() && ts <= dayEnd.getTime()
   })
   const dayAcceptedRows = dayQaRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted')
-  const dayRejectedRows = dayQaRows.filter(r => {
-    const st = (r.status || '').trim().toLowerCase()
-    return st && st !== 'accepted'
-  })
+  const dayRejectedRows = dayQaRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected')
   const dayQaFailRows = dayQaRows.filter(r => r.qaStatus === '❌ FAIL')
 
   // totalAccepted uses gpsPoints with Lebanon midnight-to-midnight boundary —

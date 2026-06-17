@@ -75,7 +75,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
   const pass     = rows.filter(r => r.qaStatus === '✅ PASS').length
   const review   = rows.filter(r => r.qaStatus === '⚠️ REVIEW').length
   const fail     = rows.filter(r => r.qaStatus === '❌ FAIL').length
-  const rejected = rows.filter(r => (r.status || '').trim().toLowerCase() !== 'accepted').length
+  const rejected = rows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length
   const total    = rows.length
 
   const statCards = [
@@ -115,7 +115,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
   const filtered = rows.filter(r => {
     const matchFilter   = filter === 'All'
       || (filter === '__REJECTED__'
-          ? ((r.status || '').trim().toLowerCase() !== 'accepted' && (r.status || '').trim() !== '')
+          ? (r.status || '').trim().toLowerCase() === 'rejected'
           : r.qaStatus === filter)
     const matchName     = !searchName || r.name.toLowerCase().includes(searchName.toLowerCase())
     const matchDistrict = searchDistrict === 'All' || r.district === searchDistrict
@@ -203,7 +203,7 @@ export default function QAPanel({ qa: initialQa, canApprove = false, notes = [],
             { key: '✅ PASS',      label: '✅ PASS',       count: countWhere(r => r.qaStatus === '✅ PASS') },
             { key: '⚠️ REVIEW',   label: '⚠️ REVIEW',    count: countWhere(r => r.qaStatus === '⚠️ REVIEW') },
             { key: '❌ FAIL',      label: '❌ FAIL',       count: countWhere(r => r.qaStatus === '❌ FAIL') },
-            { key: '__REJECTED__', label: '🚫 Rejected',   count: countWhere(r => (r.status || '').trim().toLowerCase() !== 'accepted' && (r.status || '').trim() !== '') },
+            { key: '__REJECTED__', label: '🚫 Rejected',   count: countWhere(r => (r.status || '').trim().toLowerCase() === 'rejected') },
           ].map(({ key, label, count }) => (
             <button
               key={key}
