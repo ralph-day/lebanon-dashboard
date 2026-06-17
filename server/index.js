@@ -1133,6 +1133,9 @@ const ALAA_PHONE   = process.env.ALAA_PHONE   || '9613480629';  // +961 3 480 62
 const AHMAD_PHONE  = process.env.AHMAD_PHONE  || '96170823546'; // +961 70 823 546
 const TONI_PHONE   = process.env.TONI_PHONE   || '70006655';    // +961 70 006 655 (team leader)
 
+// Single source of truth for team-leader recipients — used by ALL notification
+// types (accepted-submission updates, anomaly/QA alerts, security alerts) so
+// every leader always gets every notification. Add a leader here only.
 const TEAM_ALERT_PHONES = [RALPH_PHONE, NISRINE_PHONE, MOE_PHONE, ALAA_PHONE, AHMAD_PHONE, TONI_PHONE];
 
 function buildAcceptedMessage(row) {
@@ -1273,7 +1276,7 @@ async function notifyAnomalies(anomalies) {
 
     // Message to field managers (Nisrine + Moe + Ralph + Alaa + Ahmad)
     const managerMsg = buildManagerMessage(anomaly);
-    for (const ph of [NISRINE_PHONE, MOE_PHONE, RALPH_PHONE, ALAA_PHONE, AHMAD_PHONE, TONI_PHONE]) {
+    for (const ph of TEAM_ALERT_PHONES) {
       await send(ph, 'survey_manager_alert', [anomaly.name, issueCount, issueList], managerMsg);
     }
 
@@ -2028,12 +2031,7 @@ async function sendSecurityAlert(article, matchedKeywords, mentionedAreas) {
   console.log(`[Security] Sending alert to managers`);
 
   // Send to managers only
-  await sendWhatsApp(RALPH_PHONE,  managerMsg);
-  await sendWhatsApp(NISRINE_PHONE, managerMsg);
-  await sendWhatsApp(MOE_PHONE,    managerMsg);
-  await sendWhatsApp(ALAA_PHONE,   managerMsg);
-  await sendWhatsApp(AHMAD_PHONE,  managerMsg);
-  await sendWhatsApp(TONI_PHONE,   managerMsg);
+  for (const ph of TEAM_ALERT_PHONES) await sendWhatsApp(ph, managerMsg);
 }
 
 let securityMonitorSeeded = false;
