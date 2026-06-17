@@ -17,6 +17,15 @@ function fmtDateTime(iso) {
   return isNaN(d) ? '—' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+function median(nums) {
+  if (!nums.length) return null
+  const s = [...nums].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+const hasAnyFlag = r => [r.tooFast, r.tooSlow, r.belowRange, r.missingGPS, r.appLeftOpen].some(f => f && String(f).startsWith('✗'))
+
 const SECTIONS = [
   { key: 'time_demo',         label: 'Demographics', min: 3 },
   { key: 'time_priorities',   label: 'Priorities',   min: 2.5 },
@@ -152,6 +161,28 @@ export default function EnumeratorProfile({ data }) {
     return Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date))
   }, [allQaRows])
 
+  // Median duration (filtered) — robust to outliers, unlike the average
+  const durationVals = qaRows.map(r => parseFloat(r.appTime)).filter(v => v > 0)
+  const medianDuration = median(durationVals)
+  // Too-close (GPS duplicate) count — clustering is a fraud signal
+  const tooCloseCount = qaRows.filter(r => r.tooClose).length
+  // Fastest surveys (likely rushed) — shortest app time, clickable
+  const fastestSurveys = [...qaRows].filter(r => parseFloat(r.appTime) > 0)
+    .sort((a, b) => parseFloat(a.appTime) - parseFloat(b.appTime)).slice(0, 5)
+  // Flag-rate trend over time (all history, chronological)
+  const flagTrend = (() => {
+    const byDate = {}
+    allQaRows.forEach(r => {
+      const ds = toLbDate(r.submissionDate)
+      if (!ds) return
+      if (!byDate[ds]) byDate[ds] = { date: ds, total: 0, flagged: 0 }
+      byDate[ds].total++
+      if (hasAnyFlag(r)) byDate[ds].flagged++
+    })
+    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({ date: d.date.slice(5), rate: Math.round(d.flagged / d.total * 100), flagged: d.flagged, total: d.total }))
+  })()
+
   // Date filter label
   const filterLabel = {
     all:    'All time',
@@ -212,9 +243,10 @@ export default function EnumeratorProfile({ data }) {
         </div>
 
         {/* ── Overview stats (all-time from server) ────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatBox label="Total Surveys" value={enumerator?.totalSurveys || assignment?.completed} sub="all time" color="blue" />
-          <StatBox label="Avg Duration"  value={enumerator?.avgDuration != null ? `${parseFloat(enumerator.avgDuration).toFixed(1)} min` : '—'} color="slate" />
+          <StatBox label="Avg Duration"  value={enumerator?.avgDuration != null ? `${parseFloat(enumerator.avgDuration).toFixed(1)} min` : '—'} sub={medianDuration != null ? `median ${medianDuration.toFixed(1)} min` : null} color="slate" />
+          <StatBox label="Too Close"     value={tooCloseCount} sub="≤15 m duplicates" color={tooCloseCount > 0 ? 'red' : 'green'} />
           <StatBox label="Missing GPS"   value={enumerator?.missingGPS ?? '—'} color={enumerator?.missingGPS > 0 ? 'amber' : 'green'} />
           <StatBox label="Quality"       value={enumerator?.qualityPct != null ? `${parseFloat(enumerator.qualityPct).toFixed(0)}%` : '—'} sub="all time" color="slate" />
         </div>
@@ -382,6 +414,54 @@ export default function EnumeratorProfile({ data }) {
             </div>
           </div>
         )}
+
+        {/* ── Flag-rate trend + Fastest surveys ─────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Flag Rate Over Time</h3>
+            <p className="text-xs text-slate-400 mb-3">All time · % of surveys flagged per day</p>
+            {flagTrend.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No history</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={flagTrend} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
+                  <Tooltip formatter={(v, n, p) => [`${v}% (${p.payload.flagged}/${p.payload.total})`, 'Flagged']} />
+                  <Bar dataKey="rate" radius={[3, 3, 0, 0]}>
+                    {flagTrend.map((d, i) => <Cell key={i} fill={d.rate >= 50 ? '#ef4444' : d.rate >= 20 ? '#f59e0b' : '#10b981'} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-1">Fastest Surveys</h3>
+            <p className="text-xs text-slate-400 mb-3">{filterLabel} · shortest app time — most likely rushed</p>
+            {fastestSurveys.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">No surveys for this period</p>
+            ) : (
+              <div className="space-y-1.5">
+                {fastestSurveys.map((r, i) => (
+                  <div
+                    key={r.id || i}
+                    onClick={() => r.id && setSelectedSurveyId(r.id)}
+                    className={`border border-slate-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3 ${r.id ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                    title={r.id ? 'Click to view full survey' : undefined}
+                  >
+                    <div className="min-w-0">
+                      <span className="font-mono text-slate-500">#{(r.id || '').replace(/^uuid:/, '').slice(0, 8) || '—'}</span>
+                      <span className="ml-2 text-red-500">{flagsOf(r)}</span>
+                    </div>
+                    <span className="shrink-0 font-bold text-slate-700">{parseFloat(r.appTime).toFixed(1)} min</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* ── Daily breakdown table ─────────────────────────────────────────── */}
         <div className="bg-white rounded-xl border border-slate-200 p-5">
