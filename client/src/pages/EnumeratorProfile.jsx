@@ -26,6 +26,17 @@ function median(nums) {
 
 const hasAnyFlag = r => [r.tooFast, r.tooSlow, r.belowRange, r.missingGPS, r.appLeftOpen].some(f => f && String(f).startsWith('✗'))
 
+const gtsOf = r => (r.status || '').trim().toLowerCase()
+// Drill-down categories for the survey list (QA verdict + GTS verdict)
+const DRILL = {
+  qaPass:   { label: 'QA Pass',           test: r => r.qaStatus === '✅ PASS' },
+  qaReview: { label: 'Review',            test: r => r.qaStatus === '⚠️ REVIEW' },
+  qaFail:   { label: 'QA Fail',           test: r => r.qaStatus === '❌ FAIL' },
+  accepted: { label: 'Accepted by GTS',   test: r => gtsOf(r) === 'accepted' },
+  rejected: { label: 'Rejected by GTS',   test: r => gtsOf(r) === 'rejected' },
+  pending:  { label: 'Pending GTS review', test: r => gtsOf(r) !== 'accepted' && gtsOf(r) !== 'rejected' },
+}
+
 const SECTIONS = [
   { key: 'time_demo',         label: 'Demographics', min: 3 },
   { key: 'time_priorities',   label: 'Priorities',   min: 2.5 },
@@ -74,7 +85,8 @@ export default function EnumeratorProfile({ data }) {
   // Date filter state
   const [dateMode,   setDateMode]   = useState('all')  // 'all' | 'today' | 'last7' | 'custom'
   const [customDate, setCustomDate] = useState(() => toLbDate(new Date().toISOString()))
-  const [qaFilter,   setQaFilter]   = useState(null)   // '✅ PASS' | '⚠️ REVIEW' | '❌ FAIL' | null
+  const [drill,      setDrill]      = useState(null)   // key of DRILL | null
+  const openDrill = (key, date) => { if (date) { setDateMode('custom'); setCustomDate(date) } setDrill(key) }
   const [selectedSurveyId, setSelectedSurveyId] = useState(null)
 
   const assignment   = data?.assignments?.find(a => a.code === code)
@@ -298,11 +310,11 @@ export default function EnumeratorProfile({ data }) {
                   <span className="text-2xl font-bold text-blue-700">{total}</span>
                 </div>
                 <div className="flex gap-4 mb-4">
-                  {[['✅ Pass', pass, '#10b981', '✅ PASS'], ['⚠️ Review', review, '#f59e0b', '⚠️ REVIEW'], ['❌ QA Fail', fail, '#ef4444', '❌ FAIL']].map(([label, val, color, statusKey]) => (
+                  {[['✅ Pass', pass, '#10b981', 'qaPass'], ['⚠️ Review', review, '#f59e0b', 'qaReview'], ['❌ QA Fail', fail, '#ef4444', 'qaFail']].map(([label, val, color, statusKey]) => (
                     <button
                       key={label}
-                      onClick={() => setQaFilter(qaFilter === statusKey ? null : statusKey)}
-                      className={`text-center flex-1 rounded-lg py-1.5 border transition-colors ${qaFilter === statusKey ? 'bg-slate-100 border-slate-300' : 'border-transparent hover:bg-slate-50'}`}
+                      onClick={() => setDrill(drill === statusKey ? null : statusKey)}
+                      className={`text-center flex-1 rounded-lg py-1.5 border transition-colors ${drill === statusKey ? 'bg-slate-100 border-slate-300' : 'border-transparent hover:bg-slate-50'}`}
                       title={`Show ${label} surveys`}
                     >
                       <p className="text-2xl font-bold" style={{ color }}>{val}</p>
@@ -356,17 +368,17 @@ export default function EnumeratorProfile({ data }) {
           </div>
         </div>
 
-        {/* ── Filtered survey list (Pass / Review / QA Fail) ────────────────── */}
-        {qaFilter && (() => {
+        {/* ── Filtered survey list (QA verdict or GTS verdict) ──────────────── */}
+        {drill && DRILL[drill] && (() => {
           const list = qaRows
-            .filter(r => r.qaStatus === qaFilter)
+            .filter(DRILL[drill].test)
             .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
-          const heading = qaFilter === '✅ PASS' ? 'Passed' : qaFilter === '⚠️ REVIEW' ? 'Review' : 'QA Failed'
+          const heading = DRILL[drill].label
           return (
             <div className="bg-white rounded-xl border border-slate-200 p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-slate-700">{heading} surveys — {filterLabel} ({list.length})</h3>
-                <button onClick={() => setQaFilter(null)} className="text-xs text-slate-400 hover:text-slate-600">✕ clear</button>
+                <button onClick={() => setDrill(null)} className="text-xs text-slate-400 hover:text-slate-600">✕ clear</button>
               </div>
               {list.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">No {heading.toLowerCase()} surveys for this period</p>
@@ -498,18 +510,23 @@ export default function EnumeratorProfile({ data }) {
                           {isToday && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">today</span>}
                         </td>
                         <td className="py-2 text-right text-slate-600">{d.total}</td>
-                        <td className="py-2 text-right font-semibold text-emerald-600">{d.accepted || '—'}</td>
-                        <td className="py-2 text-right font-semibold text-red-500">{d.rejected || '—'}</td>
-                        <td className="py-2 text-right text-slate-400">{d.pending || '—'}</td>
-                        <td className="py-2 text-right text-emerald-600">{d.qaPass || '—'}</td>
-                        <td className="py-2 text-right text-amber-500">{d.qaReview || '—'}</td>
-                        <td className="py-2 text-right font-semibold text-red-500">{d.qaFail || '—'}</td>
+                        {[['accepted', d.accepted, 'text-emerald-600 font-semibold'],
+                          ['rejected', d.rejected, 'text-red-500 font-semibold'],
+                          ['pending',  d.pending,  'text-slate-400'],
+                          ['qaPass',   d.qaPass,   'text-emerald-600'],
+                          ['qaReview', d.qaReview, 'text-amber-500'],
+                          ['qaFail',   d.qaFail,   'text-red-500 font-semibold']].map(([key, val, cls]) => (
+                          <td key={key} className={`py-2 text-right ${cls} ${val ? 'cursor-pointer hover:underline' : ''}`}
+                            onClick={val ? (e => { e.stopPropagation(); openDrill(key, d.date) }) : undefined}>
+                            {val || '—'}
+                          </td>
+                        ))}
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
-              <p className="text-xs text-slate-400 mt-3">Click a row to filter the quality view to that day</p>
+              <p className="text-xs text-slate-400 mt-3">Click a row to filter to that day · click a number to list those surveys</p>
             </div>
           )}
         </div>
