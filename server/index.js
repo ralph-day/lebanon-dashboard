@@ -392,11 +392,13 @@ async function parseExcel(filePath) {
   // The legacy `SurveyStatus_New` column is no longer used anywhere.
   const gtsMatchByInstance = {};
   const gtsStatusByInstance = {};
+  const gtsLoc4ByInstance = {}; // GTS-corrected location (transfers reassign loc_4)
   surveyComparison.forEach(r => {
     const id = r.instanceID || '';
     if (!id) return;
     const c = String(r.GTS_Match_Comment || '');
     gtsMatchByInstance[id] = c;
+    gtsLoc4ByInstance[id] = r.GTS_loc_4 || r.loc_4 || '';
     gtsStatusByInstance[id] = c.startsWith('Accepted') ? 'accepted'
       : c.startsWith('Rejected') ? 'rejected'
       : c.startsWith('Not Available') ? 'not available' : '';
@@ -415,9 +417,11 @@ async function parseExcel(filePath) {
   // (Accepted / Rejected / Not Available in GTS Data). Used as a fallback when
   // Target_Tracker's own Rejected/Not_Available columns are absent — keeps the
   // Locations page on GTS verdicts, never the raw-data QA flags.
+  // Key by GTS-corrected location (GTS_loc_4) to match Target_Tracker's attribution
+  // (which counts transfers at their reassigned location), falling back to loc_4.
   const gtsByLoc = {};
   surveyComparison.forEach(r => {
-    const loc = r.loc_4 || r['Fixed Location'] || '';
+    const loc = r.GTS_loc_4 || r.loc_4 || r['Fixed Location'] || '';
     if (!loc) return;
     if (!gtsByLoc[loc]) gtsByLoc[loc] = { rejected: 0, notAvailable: 0 };
     const c = String(r.GTS_Match_Comment || '');
@@ -634,6 +638,7 @@ async function parseExcel(filePath) {
     locationOn: r.LocationOn || '',
     tooClose: duplicateIds.has(r.instanceID || ''),
     gtsMatch: gtsMatchByInstance[r.instanceID || ''] || '',
+    gtsLoc4: gtsLoc4ByInstance[r.instanceID || ''] || '',
   }; });
 
   const qaPass = qaRows.filter(r => r.qaStatus === '✅ PASS').length;

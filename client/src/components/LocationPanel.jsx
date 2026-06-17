@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import LebanonMap from './LebanonMap'
 import NotesBubble from './NotesBubble'
+import SurveyDetailModal from './SurveyDetailModal'
 
 const REGION_ORDER = ['Beirut', 'Mount Lebanon', 'North', 'South', 'Bekaa', 'Akkar']
 const GROUP_ORDER  = ['Camps', 'Beirut', 'Aley', 'Chouf', 'Jbeil', 'Kesrwane', 'El Batroun', 'North', 'Saida', 'Rachaya', 'West Beqaa', 'Zahle', 'Akkar']
@@ -32,12 +33,14 @@ function StatusBadge({ status }) {
 }
 
 // ── Rejected surveys subpage ──────────────────────────────────────────────────
-function RejectedDetail({ locationName, rows, onBack }) {
+function RejectedDetail({ locationName, rows, onBack, onOpenSurvey }) {
   // GTS rejections — match the Rejected count, which comes from GTS_Match_Comment
   const rejected = rows.filter(r => String(r.gtsMatch || '').startsWith('Rejected'))
     .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
 
-  const flags = r => [r.tooFast, r.belowRange, r.missingGPS]
+  // GTS rejection reason, e.g. "Rejected - too_short" → "too_short"
+  const gtsReason = r => String(r.gtsMatch || '').replace(/^Rejected\s*-\s*/i, '').trim() || 'Rejected'
+  const qaFlags = r => [r.tooFast, r.tooSlow, r.belowRange, r.missingGPS, r.appLeftOpen]
     .filter(f => f && f.startsWith('✗'))
     .map(f => f.replace('✗ ', ''))
     .join(' · ') || '—'
@@ -66,13 +69,17 @@ function RejectedDetail({ locationName, rows, onBack }) {
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-2.5">Enumerator</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Date</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">Duration (min)</th>
+                  <th className="text-left text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">GTS Reason</th>
                   <th className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wide px-3 py-2.5">QA Status</th>
-                  <th className="text-left text-xs font-semibold text-red-500 uppercase tracking-wide px-3 py-2.5">Flags / Reason</th>
+                  <th className="text-left text-xs font-semibold text-slate-400 uppercase tracking-wide px-3 py-2.5">QA Flags</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rejected.map((r, i) => (
-                  <tr key={i} className="hover:bg-red-50/40">
+                  <tr key={i}
+                    onClick={() => r.id && onOpenSurvey?.(r.id)}
+                    className={`hover:bg-red-50/40 ${r.id ? 'cursor-pointer' : ''}`}
+                    title={r.id ? 'Click to view full survey' : undefined}>
                     <td className="px-4 py-3 font-medium text-slate-800">{r.name || '—'}</td>
                     <td className="px-3 py-3 text-center text-xs text-slate-500">
                       {r.submissionDate ? new Date(r.submissionDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -80,14 +87,16 @@ function RejectedDetail({ locationName, rows, onBack }) {
                     <td className="px-3 py-3 text-center text-slate-600">
                       {r.fullTime ? parseFloat(r.fullTime).toFixed(1) : r.appTime ? parseFloat(r.appTime).toFixed(1) : '—'}
                     </td>
+                    <td className="px-3 py-3 text-xs font-medium text-red-600">{gtsReason(r)}</td>
                     <td className="px-3 py-3 text-center">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                         r.qaStatus === '❌ FAIL' ? 'bg-red-100 text-red-700' :
                         r.qaStatus === '⚠️ REVIEW' ? 'bg-amber-100 text-amber-700' :
+                        r.qaStatus === '✅ PASS' ? 'bg-emerald-100 text-emerald-700' :
                         'bg-slate-100 text-slate-500'
-                      }`}>{r.qaStatus || 'Rejected'}</span>
+                      }`}>{r.qaStatus || '—'}</span>
                     </td>
-                    <td className="px-3 py-3 text-xs text-slate-600">{flags(r)}</td>
+                    <td className="px-3 py-3 text-xs text-slate-500">{qaFlags(r)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -138,6 +147,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
   const [search, setSearch]             = useState('')
   const [locationMeta, setLocationMeta] = useState({})
   const [rejectedDetail, setRejectedDetail] = useState(null) // { locationName, rows }
+  const [detailSurveyId, setDetailSurveyId] = useState(null)
 
   useEffect(() => {
     fetch('/api/location-meta', { credentials: 'include' })
@@ -212,11 +222,17 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
 
   // Rejected detail subpage
   if (rejectedDetail) {
-    return <RejectedDetail
-      locationName={rejectedDetail.locationName}
-      rows={rejectedDetail.rows}
-      onBack={() => setRejectedDetail(null)}
-    />
+    return (
+      <>
+        <RejectedDetail
+          locationName={rejectedDetail.locationName}
+          rows={rejectedDetail.rows}
+          onBack={() => setRejectedDetail(null)}
+          onOpenSurvey={setDetailSurveyId}
+        />
+        <SurveyDetailModal surveyId={detailSurveyId} onClose={() => setDetailSurveyId(null)} />
+      </>
+    )
   }
 
   return (
@@ -318,7 +334,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                 <div className="text-center self-center font-medium text-slate-700">{target}</div>
                 <div className="text-center self-center font-semibold text-emerald-600">{accepted}</div>
                 <div className="text-center self-center text-slate-500">{remaining}</div>
-                <div className="text-center self-center" onClick={e => { if (rejected > 0) { e.stopPropagation(); const districtRows = qaRows.filter(r => locations.some(l => l.location === r.locationName)); setRejectedDetail({ locationName: group, rows: districtRows }) } }}>
+                <div className="text-center self-center" onClick={e => { if (rejected > 0) { e.stopPropagation(); const codes = new Set(locations.map(l => l.code)); const districtRows = qaRows.filter(r => codes.has(r.gtsLoc4)); setRejectedDetail({ locationName: group, rows: districtRows }) } }}>
                   {rejected > 0
                     ? <span className="text-sm font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{rejected}</span>
                     : <span className="text-slate-300 text-sm">—</span>}
@@ -372,7 +388,7 @@ export default function LocationPanel({ locations, qaRows = [], notes = [], onNo
                         <div className="text-center text-sm font-medium text-emerald-600">{loc.accepted}</div>
                         <div className="text-center text-sm text-slate-500">{loc.remaining}</div>
                         <div className="text-center text-sm self-center"
-                          onClick={e => { if (locRejected > 0) { e.stopPropagation(); setRejectedDetail({ locationName: loc.location, rows: qaRows.filter(r => r.locationName === loc.location) }) } }}>
+                          onClick={e => { if (locRejected > 0) { e.stopPropagation(); setRejectedDetail({ locationName: loc.location, rows: qaRows.filter(r => r.gtsLoc4 === loc.code) }) } }}>
                           {locRejected > 0
                             ? <span className="font-semibold text-red-500 underline decoration-dotted cursor-pointer hover:text-red-700">{locRejected}</span>
                             : <span className="text-slate-300">—</span>}
