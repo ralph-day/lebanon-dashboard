@@ -1,29 +1,21 @@
 import { useState } from 'react'
 
-// submissionDate is naive Lebanon wall-clock digits (UTC+3, no zone). Parse as
-// UTC then subtract 3h to get the real instant — independent of the viewer's timezone.
-function realMs(isoStr) {
-  if (!isoStr) return null
-  const hasZone = /[zZ]$|[+-]\d\d:?\d\d$/.test(isoStr)
-  const ms = Date.parse(hasZone ? isoStr : isoStr + 'Z')
-  return isNaN(ms) ? null : ms - 3 * 3600000
+// interviewAt / uploadAt are proper absolute ISO instants (with Z). Format the
+// exact Lebanon wall-clock time, e.g. "16 Jun 18:42".
+function beirutTime(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  return isNaN(d) ? null : d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-function timeAgo(isoStr) {
-  const ms = realMs(isoStr)
-  if (ms == null) return '—'
-  const mins = Math.max(0, Math.floor((Date.now() - ms) / 60000))
+function agoFrom(iso) {
+  if (!iso) return '—'
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return '—'
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000))
   if (mins < 60) return `${mins}m ago`
   if (mins < 1440) return `${Math.floor(mins / 60)}h ${mins % 60}m ago`
   return `${Math.floor(mins / 1440)}d ago`
-}
-
-// Exact Lebanon wall-clock time of submission, e.g. "16 Jun 18:42".
-function lebanonTime(isoStr) {
-  if (!isoStr) return '—'
-  const hasZone = /[zZ]$|[+-]\d\d:?\d\d$/.test(isoStr)
-  const d = new Date(hasZone ? isoStr : isoStr + 'Z')
-  return isNaN(d) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function SeverityIcon({ type }) {
@@ -57,7 +49,12 @@ function IssueModal({ enumeratorName, issue, onClose }) {
         <div className={`text-sm border rounded-lg px-3 py-2 ${style.cls}`}>
           {issue.detail}
         </div>
-        <p className="text-xs text-slate-400 mt-3">Submitted: {lebanonTime(issue.submissionDate)} ({timeAgo(issue.submissionDate)})</p>
+        <p className="text-xs text-slate-400 mt-3">
+          Interviewed: {beirutTime(issue.interviewAt) || '—'} ({agoFrom(issue.interviewAt)})
+          {issue.uploadAt && beirutTime(issue.uploadAt) !== beirutTime(issue.interviewAt) && (
+            <> · uploaded {beirutTime(issue.uploadAt)}</>
+          )}
+        </p>
         <div className="mt-4 flex justify-end">
           <button onClick={onClose} className="text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-lg">
             Close
@@ -110,6 +107,8 @@ export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }
           const isExpanded = expanded === a.name
           const hasCritical = a.critical.length > 0
           const allIssues = [...a.critical, ...a.warnings]
+          // Latest interview instant across this enumerator's issues (for the header).
+          const latestInterview = allIssues.map(i => i.interviewAt).filter(Boolean).sort().pop() || null
 
           return (
             <div key={a.name} className={`rounded-lg border bg-white ${hasCritical ? 'border-red-200' : 'border-amber-200'}`}>
@@ -141,7 +140,7 @@ export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">Latest issue: {lebanonTime(a.latestAt)} ({timeAgo(a.latestAt)})</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Latest interview: {beirutTime(latestInterview) || '—'} ({agoFrom(latestInterview)})</p>
                 </div>
 
                 {/* Phone + WhatsApp CTAs */}
@@ -209,7 +208,12 @@ export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }
                             <span className="ml-1.5 font-mono opacity-60">#{issue.id.replace(/^uuid:/, '').slice(0, 8)}</span>
                           )}
                         </div>
-                        <span className="shrink-0 opacity-60 whitespace-nowrap" title={timeAgo(issue.submissionDate)}>{lebanonTime(issue.submissionDate)}</span>
+                        <span className="shrink-0 opacity-60 whitespace-nowrap text-right" title={agoFrom(issue.interviewAt)}>
+                          {beirutTime(issue.interviewAt) || beirutTime(issue.uploadAt) || '—'}
+                          {issue.uploadAt && beirutTime(issue.uploadAt) !== beirutTime(issue.interviewAt) && (
+                            <span className="block opacity-70">↑ {beirutTime(issue.uploadAt)}</span>
+                          )}
+                        </span>
                       </div>
                     )
                   })}

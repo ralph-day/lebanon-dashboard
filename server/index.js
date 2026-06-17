@@ -364,6 +364,16 @@ function toISO(val) {
   return String(val);
 }
 
+// Convert a cell to a proper absolute UTC ISO string (real instant). Handles
+// ExcelJS Date objects and timezoned date strings (e.g. "... GMT+0300").
+// Used for anomaly timestamps so the client can format them in Asia/Beirut.
+function toInstantISO(val) {
+  if (val == null || val === '') return null;
+  if (val && val.result !== undefined) val = val.result;
+  const d = val instanceof Date ? val : new Date(String(val));
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 async function parseExcel(filePath) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(filePath);
@@ -799,6 +809,15 @@ async function parseExcel(filePath) {
   });
 
   // ── Anomalies (active enumerators only) ───────────────────────────────────
+  // Per-survey real timestamps from the data sheet: interview end vs upload.
+  const interviewISOByInstance = {};
+  const uploadISOByInstance = {};
+  rawData.forEach(r => {
+    const id = r.instanceID || r['KEY'] || '';
+    if (!id) return;
+    interviewISOByInstance[id] = toInstantISO(r.end);
+    uploadISOByInstance[id] = toInstantISO(r.SubmissionDate);
+  });
   const activeNames = new Set(Object.keys(recentByName));
   const anomalyMap = {};
   const addAnomaly = (name, severity, type, detail, submissionDate, id) => {
@@ -809,7 +828,11 @@ async function parseExcel(filePath) {
       if (now - ts > FOUR_HOURS_MS) return;
     }
     if (!anomalyMap[name]) anomalyMap[name] = { name, phone: phoneByName[name] || null, critical: [], warnings: [] };
-    const entry = { type, detail, submissionDate, id: id || '' };
+    const entry = {
+      type, detail, submissionDate, id: id || '',
+      interviewAt: interviewISOByInstance[id || ''] || null, // real interview-end instant
+      uploadAt:    uploadISOByInstance[id || ''] || null,    // real sync/upload instant
+    };
     if (severity === 'critical') anomalyMap[name].critical.push(entry);
     else anomalyMap[name].warnings.push(entry);
   };
