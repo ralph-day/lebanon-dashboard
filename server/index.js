@@ -801,7 +801,7 @@ async function parseExcel(filePath) {
   // ── Anomalies (active enumerators only) ───────────────────────────────────
   const activeNames = new Set(Object.keys(recentByName));
   const anomalyMap = {};
-  const addAnomaly = (name, severity, type, detail, submissionDate) => {
+  const addAnomaly = (name, severity, type, detail, submissionDate, id) => {
     if (!activeNames.has(name)) return;
     // Only show issues from the last 4 hours
     if (submissionDate) {
@@ -809,22 +809,22 @@ async function parseExcel(filePath) {
       if (now - ts > FOUR_HOURS_MS) return;
     }
     if (!anomalyMap[name]) anomalyMap[name] = { name, phone: phoneByName[name] || null, critical: [], warnings: [] };
-    const entry = { type, detail, submissionDate };
+    const entry = { type, detail, submissionDate, id: id || '' };
     if (severity === 'critical') anomalyMap[name].critical.push(entry);
     else anomalyMap[name].warnings.push(entry);
   };
 
   qaRows.filter(r => r.qaStatus === '❌ FAIL').forEach(r => {
     const flagList = [r.tooFast, r.belowRange, r.missingGPS].filter(f => f && f.startsWith('✗')).join(', ');
-    addAnomaly(r.name, 'critical', 'Failed Survey', `Rejected — ${flagList || `${r.totalFlags} flag(s)`}`, r.submissionDate);
+    addAnomaly(r.name, 'critical', 'Failed Survey', `Rejected — ${flagList || `${r.totalFlags} flag(s)`}`, r.submissionDate, r.id);
   });
   // Only warn for Too Fast / Missing GPS on surveys that are NOT already a FAIL
   // (FAIL surveys already list their flags under the critical entry above)
   qaRows.filter(r => r.tooFast === '✗ Too Fast' && r.qaStatus !== '❌ FAIL').forEach(r => {
-    addAnomaly(r.name, 'warning', 'Too Fast', `Completed in ${parseFloat(r.fullTime || 0).toFixed(1)} min — below minimum`, r.submissionDate);
+    addAnomaly(r.name, 'warning', 'Too Fast', `Completed in ${parseFloat(r.fullTime || 0).toFixed(1)} min — below minimum`, r.submissionDate, r.id);
   });
   qaRows.filter(r => r.missingGPS === '✗ Missing GPS' && r.qaStatus !== '❌ FAIL').forEach(r => {
-    addAnomaly(r.name, 'warning', 'Missing GPS', 'No location data recorded', r.submissionDate);
+    addAnomaly(r.name, 'warning', 'Missing GPS', 'No location data recorded', r.submissionDate, r.id);
   });
 
   const queryAllRules = sheet('Query_All_Rules');
@@ -846,7 +846,7 @@ async function parseExcel(filePath) {
     if (extreme.startsWith('✗')) { const pct = extreme.match(/(\d+)%/)?.[1]; flagDetails.push(`${pct || 'High'}% extreme answers`); }
     const level = String(r.Suspicion_Level || '');
     const detail = flagDetails.length > 0 ? `[${level.replace(/[^a-zA-Z\s]/g, '').trim()}] ${flagDetails.join(' · ')}` : `Suspicion score ${score}`;
-    addAnomaly(name, score >= 3 ? 'critical' : 'warning', 'Suspicious Pattern', detail, submissionDate);
+    addAnomaly(name, score >= 3 ? 'critical' : 'warning', 'Suspicious Pattern', detail, submissionDate, r.instanceID);
   });
 
   const anomalies = Object.values(anomalyMap).map(a => {

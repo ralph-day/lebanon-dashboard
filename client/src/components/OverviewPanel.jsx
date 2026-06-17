@@ -433,12 +433,14 @@ export default function OverviewPanel({ data }) {
   const activeCount = assignments.filter(a => a.isActive).length
 
   const [highlight, setHighlight] = useState(null) // { enumerator, date }
+  const [anomalySurveyId, setAnomalySurveyId] = useState(null)
 
   return (
     <div className="space-y-6">
 
       {/* ── Anomaly Alerts ────────────────────────────────────────────────── */}
-      <AnomalyAlerts anomalies={anomalies} navigate={navigate} />
+      <AnomalyAlerts anomalies={anomalies} navigate={navigate} onOpenSurvey={setAnomalySurveyId} />
+      <SurveyDetailModal surveyId={anomalySurveyId} onClose={() => setAnomalySurveyId(null)} />
 
       {/* ── Active Field Team ─────────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">

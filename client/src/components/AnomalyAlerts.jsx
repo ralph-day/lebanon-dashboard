@@ -50,7 +50,7 @@ function IssueModal({ enumeratorName, issue, onClose }) {
   )
 }
 
-export default function AnomalyAlerts({ anomalies = [], navigate }) {
+export default function AnomalyAlerts({ anomalies = [], navigate, onOpenSurvey }) {
   const [expanded, setExpanded] = useState(null)
   const [dismissed, setDismissed] = useState(new Set())
   const [activeIssue, setActiveIssue] = useState(null)
@@ -174,14 +174,22 @@ export default function AnomalyAlerts({ anomalies = [], navigate }) {
                     return (
                       <div
                         key={i}
-                        onClick={e => { e.stopPropagation(); setActiveIssue({ enumeratorName: a.name.split('(')[0].trim(), issue }) }}
+                        onClick={e => {
+                          e.stopPropagation()
+                          if (issue.id && onOpenSurvey) onOpenSurvey(issue.id)
+                          else setActiveIssue({ enumeratorName: a.name.split('(')[0].trim(), issue })
+                        }}
                         className={`flex items-start gap-2 text-xs border rounded-lg px-3 py-2 cursor-pointer hover:opacity-80 ${style.cls}`}
+                        title={issue.id ? 'Click to view section-by-section timing' : undefined}
                       >
                         <span className="shrink-0 mt-0.5">{style.icon}</span>
                         <div className="flex-1 min-w-0">
                           <span className="font-semibold">{issue.type}</span>
                           <span className="mx-1.5 text-current opacity-40">·</span>
                           <span>{issue.detail}</span>
+                          {issue.id && (
+                            <span className="ml-1.5 font-mono opacity-60">#{issue.id.replace(/^uuid:/, '').slice(0, 8)}</span>
+                          )}
                         </div>
                         <span className="shrink-0 opacity-60 whitespace-nowrap">{timeAgo(issue.submissionDate)}</span>
                       </div>
