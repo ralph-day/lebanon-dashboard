@@ -1,6 +1,21 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
+import SurveyDetailModal from '../components/SurveyDetailModal'
+
+// ✗-flags on a QA row → readable list
+function flagsOf(r) {
+  return [r.tooFast, r.tooSlow, r.appLeftOpen, r.belowRange, r.missingGPS]
+    .filter(f => f && String(f).startsWith('✗'))
+    .map(f => String(f).replace('✗ ', ''))
+    .join(', ') || '—'
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return isNaN(d) ? '—' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
 
 const SECTIONS = [
   { key: 'time_demo',         label: 'Demographics', min: 3 },
@@ -50,6 +65,8 @@ export default function EnumeratorProfile({ data }) {
   // Date filter state
   const [dateMode,   setDateMode]   = useState('all')  // 'all' | 'today' | 'last7' | 'custom'
   const [customDate, setCustomDate] = useState(() => toLbDate(new Date().toISOString()))
+  const [qaFilter,   setQaFilter]   = useState(null)   // '✅ PASS' | '⚠️ REVIEW' | '❌ FAIL' | null
+  const [selectedSurveyId, setSelectedSurveyId] = useState(null)
 
   const assignment   = data?.assignments?.find(a => a.code === code)
   const enumerator   = data?.enumerators?.find(e => e.name.includes(`(${code})`))
@@ -239,12 +256,17 @@ export default function EnumeratorProfile({ data }) {
             ) : (
               <>
                 <div className="flex gap-4 mb-4">
-                  {[['✅ Pass', pass, '#10b981'], ['⚠️ Review', review, '#f59e0b'], ['❌ QA Fail', fail, '#ef4444']].map(([label, val, color]) => (
-                    <div key={label} className="text-center flex-1">
+                  {[['✅ Pass', pass, '#10b981', '✅ PASS'], ['⚠️ Review', review, '#f59e0b', '⚠️ REVIEW'], ['❌ QA Fail', fail, '#ef4444', '❌ FAIL']].map(([label, val, color, statusKey]) => (
+                    <button
+                      key={label}
+                      onClick={() => setQaFilter(qaFilter === statusKey ? null : statusKey)}
+                      className={`text-center flex-1 rounded-lg py-1.5 border transition-colors ${qaFilter === statusKey ? 'bg-slate-100 border-slate-300' : 'border-transparent hover:bg-slate-50'}`}
+                      title={`Show ${label} surveys`}
+                    >
                       <p className="text-2xl font-bold" style={{ color }}>{val}</p>
                       <p className="text-xs text-slate-500 mt-0.5">{label}</p>
                       <p className="text-xs text-slate-400">{total > 0 ? Math.round(val / total * 100) : 0}%</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
                 {rejected > 0 && (
@@ -281,6 +303,45 @@ export default function EnumeratorProfile({ data }) {
             )}
           </div>
         </div>
+
+        {/* ── Filtered survey list (Pass / Review / QA Fail) ────────────────── */}
+        {qaFilter && (() => {
+          const list = qaRows
+            .filter(r => r.qaStatus === qaFilter)
+            .sort((a, b) => new Date(b.submissionDate) - new Date(a.submissionDate))
+          const heading = qaFilter === '✅ PASS' ? 'Passed' : qaFilter === '⚠️ REVIEW' ? 'Review' : 'QA Failed'
+          return (
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-700">{heading} surveys — {filterLabel} ({list.length})</h3>
+                <button onClick={() => setQaFilter(null)} className="text-xs text-slate-400 hover:text-slate-600">✕ clear</button>
+              </div>
+              {list.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">No {heading.toLowerCase()} surveys for this period</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[28rem] overflow-y-auto">
+                  {list.map((r, i) => (
+                    <div
+                      key={r.id || i}
+                      onClick={() => r.id && setSelectedSurveyId(r.id)}
+                      className={`border border-slate-100 rounded-lg px-3 py-2 text-xs flex items-center justify-between gap-3 ${r.id ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+                      title={r.id ? 'Click to view full survey (section-by-section timing)' : undefined}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-mono text-slate-500">#{(r.id || '').replace(/^uuid:/, '').slice(0, 8) || '—'}</p>
+                        <p className="text-slate-600 mt-0.5">Flags: <span className="text-red-500">{flagsOf(r)}</span></p>
+                      </div>
+                      <div className="text-right shrink-0 text-slate-400">
+                        <p>{fmtDateTime(r.submissionDate)}</p>
+                        <p className="mt-0.5">uploaded</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── Section timing (all-time averages from server) ────────────────── */}
         {sectionTiming && (
@@ -370,6 +431,7 @@ export default function EnumeratorProfile({ data }) {
           </div>
         )}
 
+        <SurveyDetailModal surveyId={selectedSurveyId} onClose={() => setSelectedSurveyId(null)} />
       </main>
     </div>
   )
