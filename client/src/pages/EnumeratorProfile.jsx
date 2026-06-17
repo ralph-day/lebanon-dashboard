@@ -111,11 +111,16 @@ export default function EnumeratorProfile({ data }) {
   const pass   = qaRows.filter(r => r.qaStatus === '✅ PASS').length
   const review = qaRows.filter(r => r.qaStatus === '⚠️ REVIEW').length
   const fail   = qaRows.filter(r => r.qaStatus === '❌ FAIL').length
-  const rejected = qaRows.filter(r => {
-    const st = (r.status || '').trim().toLowerCase()
-    return st && st !== 'accepted'
-  }).length
+  const rejected = qaRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length
   const total  = qaRows.length
+
+  // Flag frequency across the filtered period — what's driving the failures
+  const flagCounts = {}
+  qaRows.forEach(r => {
+    [['Too Fast', r.tooFast], ['Too Slow', r.tooSlow], ['Below Range', r.belowRange], ['Missing GPS', r.missingGPS], ['App Left Open', r.appLeftOpen]]
+      .forEach(([lbl, v]) => { if (v && String(v).startsWith('✗')) flagCounts[lbl] = (flagCounts[lbl] || 0) + 1 })
+  })
+  const flagList = Object.entries(flagCounts).sort((a, b) => b[1] - a[1])
 
   // Recent survey bars (last 20 in filtered set)
   const recentBars = [...qaRows]
@@ -255,6 +260,10 @@ export default function EnumeratorProfile({ data }) {
               <p className="text-sm text-slate-400 text-center py-4">No surveys for this period</p>
             ) : (
               <>
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4 flex items-baseline justify-between">
+                  <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Total filled — {filterLabel}</span>
+                  <span className="text-2xl font-bold text-blue-700">{total}</span>
+                </div>
                 <div className="flex gap-4 mb-4">
                   {[['✅ Pass', pass, '#10b981', '✅ PASS'], ['⚠️ Review', review, '#f59e0b', '⚠️ REVIEW'], ['❌ QA Fail', fail, '#ef4444', '❌ FAIL']].map(([label, val, color, statusKey]) => (
                     <button
@@ -271,7 +280,17 @@ export default function EnumeratorProfile({ data }) {
                 </div>
                 {rejected > 0 && (
                   <div className="bg-red-50 rounded-lg px-3 py-2 text-xs text-red-700 font-medium mb-3">
-                    ⛔ {rejected} survey{rejected !== 1 ? 's' : ''} rejected by supervisor
+                    ⛔ {rejected} survey{rejected !== 1 ? 's' : ''} rejected by GTS
+                  </div>
+                )}
+                {flagList.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-slate-400 mb-1.5">Most common flags</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {flagList.map(([lbl, n]) => (
+                        <span key={lbl} className="text-xs bg-red-50 border border-red-200 text-red-600 rounded-full px-2 py-0.5">{lbl} · {n}</span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 <div className="flex h-2 rounded-full overflow-hidden">
