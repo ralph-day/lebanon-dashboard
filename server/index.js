@@ -394,6 +394,13 @@ async function parseExcel(filePath) {
   // Normalized GTS verdict for a survey: 'accepted' | 'rejected' | 'not available' | ''
   const gtsStatus = id => gtsStatusByInstance[id || ''] || '';
 
+  // instanceID -> QA verdict, mapped to accepted/rejected so the DAILY views and
+  // the Map (which need immediate feedback, before GTS reviews) can use it.
+  // 'accepted' = QA PASS, 'rejected' = QA FAIL, '' = REVIEW/unknown.
+  const qaStatusRawByInstance = {};
+  qaDashboard.forEach(r => { if (r.instanceID) qaStatusRawByInstance[r.instanceID] = String(r.QA_Status || ''); });
+  const qaPassFail = id => { const q = qaStatusRawByInstance[id || ''] || ''; return q === '✅ PASS' ? 'accepted' : q === '❌ FAIL' ? 'rejected' : ''; };
+
   // Per-location GTS review tallies from Survey Comparison's GTS_Match_Comment
   // (Accepted / Rejected / Not Available in GTS Data). Used as a fallback when
   // Target_Tracker's own Rejected/Not_Available columns are absent — keeps the
@@ -425,7 +432,8 @@ async function parseExcel(filePath) {
       enumerator:   r.NameCode || r.name || '',
       location:     cfg.name || loc4.replace(/_/g, ' '),
       loc4,
-      status:       gtsStatus(r.instanceID || r['KEY'] || ''),
+      // Map colours by QA verdict (immediate), not GTS (which lags).
+      status:       qaPassFail(r.instanceID || r['KEY'] || ''),
       date:         toISO(r.SubmissionDate || r.submission_date || r['_submission_time']),
     });
   });
@@ -726,9 +734,9 @@ async function parseExcel(filePath) {
     if (ts >= todayStart.getTime()) {
       if (!todayByName[r.name]) todayByName[r.name] = { accepted: 0, rejected: 0, total: 0 };
       todayByName[r.name].total++;
-      const st = (r.status || '').trim().toLowerCase();
-      if (st === 'accepted') todayByName[r.name].accepted++;
-      else if (st === 'rejected') todayByName[r.name].rejected++;
+      // Daily counts use QA verdict (immediate), not GTS (which lags).
+      if (r.qaStatus === '✅ PASS') todayByName[r.name].accepted++;
+      else if (r.qaStatus === '❌ FAIL') todayByName[r.name].rejected++;
     }
   });
 

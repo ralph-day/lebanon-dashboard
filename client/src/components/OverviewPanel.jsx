@@ -78,11 +78,10 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
     if (!assignment) return
     if (!statsByCode[assignment.code]) statsByCode[assignment.code] = { accepted: 0, rejected: 0, qaFail: 0, total: 0 }
     statsByCode[assignment.code].total++
-    const st = (r.status || '').trim().toLowerCase()
-    if (st === 'accepted') statsByCode[assignment.code].accepted++
-    else if (st) statsByCode[assignment.code].rejected++
-    // QA fail = automated quality check failed (separate from supervisor rejection)
-    if (r.qaStatus === '❌ FAIL') statsByCode[assignment.code].qaFail++
+    // Daily progress uses the QA verdict (immediate) — GTS accept/reject lags and
+    // is shown cumulatively on the Locations/Enumerators pages instead.
+    if (r.qaStatus === '✅ PASS') statsByCode[assignment.code].accepted++
+    else if (r.qaStatus === '❌ FAIL') statsByCode[assignment.code].qaFail++
   })
 
   const rows = assignments
@@ -102,8 +101,8 @@ function DailyProgress({ assignments, qaRows, gpsPoints = [], navigate, onHighli
     const ts = new Date(r.submissionDate).getTime()
     return ts >= dayStart.getTime() && ts <= dayEnd.getTime()
   })
-  const dayAcceptedRows = dayQaRows.filter(r => (r.status || '').trim().toLowerCase() === 'accepted')
-  const dayRejectedRows = dayQaRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected')
+  const dayAcceptedRows = dayQaRows.filter(r => r.qaStatus === '✅ PASS')
+  const dayRejectedRows = dayQaRows.filter(r => r.qaStatus === '❌ FAIL')
   const dayQaFailRows = dayQaRows.filter(r => r.qaStatus === '❌ FAIL')
 
   // totalAccepted uses gpsPoints with Lebanon midnight-to-midnight boundary —
