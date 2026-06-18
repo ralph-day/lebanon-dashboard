@@ -1130,7 +1130,8 @@ function buildEnumeratorMessage(anomaly) {
   ];
   [...anomaly.critical, ...anomaly.warnings].forEach(item => {
     const typeAr = AR_TYPE[item.type] || item.type;
-    lines.push(`• ${typeAr}`);
+    const t = fmtBeirutText(item.interviewAt || item.submissionDate);
+    lines.push(`• ${typeAr}${t !== '—' ? ` (الوقت: ${t})` : ''}`);
     if (item.detail) lines.push(`  ${item.detail}`);
   });
   lines.push(``, `يرجى مراجعة أسلوب العمل فوراً والتواصل مع منسقة الميدان.`);
@@ -1148,7 +1149,8 @@ function buildManagerMessage(anomaly) {
   ];
   [...anomaly.critical, ...anomaly.warnings].forEach(item => {
     const typeAr = AR_TYPE[item.type] || item.type;
-    lines.push(`• ${typeAr}: ${item.detail || ''}`);
+    const t = fmtBeirutText(item.interviewAt || item.submissionDate);
+    lines.push(`• ${typeAr}${t !== '—' ? ` (الوقت: ${t})` : ''}: ${item.detail || ''}`);
   });
   lines.push(``, `يرجى المتابعة مع المستطلع.`);
   return lines.join('\n');
@@ -1304,7 +1306,7 @@ async function notifyAnomalies(anomalies) {
 
     // Build issue list string for templates
     const issueList = [...anomaly.critical, ...anomaly.warnings]
-      .map(i => `${i.type === 'Failed Survey' ? '❌' : '⚠️'} ${i.detail}`)
+      .map(i => { const t = fmtBeirutText(i.interviewAt || i.submissionDate); return `${i.type === 'Failed Survey' ? '❌' : '⚠️'} ${i.detail}${t !== '—' ? ` — ${t}` : ''}`; })
       .join('\n');
     const firstName = anomaly.name.split(' ')[0];
     const issueCount = `${anomaly.totalIssues} (حرجة: ${anomaly.critical.length} / تحذيرات: ${anomaly.warnings.length})`;
