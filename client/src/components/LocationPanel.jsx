@@ -82,7 +82,7 @@ function RejectedDetail({ locationName, rows, onBack, onOpenSurvey }) {
                     title={r.id ? 'Click to view full survey' : undefined}>
                     <td className="px-4 py-3 font-medium text-slate-800">{r.name || '—'}</td>
                     <td className="px-3 py-3 text-center text-xs text-slate-500">
-                      {r.submissionDate ? new Date(r.submissionDate).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      {r.submissionDate ? new Date(/[zZ]$/.test(r.submissionDate) ? r.submissionDate : r.submissionDate + 'Z').toLocaleString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                     </td>
                     <td className="px-3 py-3 text-center text-slate-600">
                       {r.fullTime ? parseFloat(r.fullTime).toFixed(1) : r.appTime ? parseFloat(r.appTime).toFixed(1) : '—'}
