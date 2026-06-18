@@ -350,17 +350,23 @@ function wsToArrays(ws) {
 // Normalize any date value (JS Date, Excel serial, or string) to ISO string
 function toISO(val) {
   if (!val) return null;
-  if (val instanceof Date) {
-    if (isNaN(val.getTime())) return null;
+  // Excel serial numbers (e.g. QA_Dashboard.SubmissionDate) encode wall-clock
+  // digits directly: mapping serial→UTC epoch puts those digits in the Date's
+  // UTC fields, exactly like ExcelJS's Date cells. Convert to a Date and fall
+  // through to the SAME naive formatting — never emit a Z here, or fmtBeirut*
+  // will treat Beirut wall-clock as UTC and add a spurious +3h.
+  let d = val;
+  if (typeof val === 'number') d = new Date(Math.round((val - 25569) * 86400 * 1000));
+  if (d instanceof Date) {
+    if (isNaN(d.getTime())) return null;
     // ExcelJS on a UTC server returns a Date where the UTC fields hold the
     // raw local-time digits from the Excel cell (no TZ conversion was applied).
     // Format as a naive datetime string (no Z / offset) so the browser treats
     // it as Lebanon local time — consistent with how SurveyCTO string dates arrive.
     const pad = n => String(n).padStart(2, '0');
-    return `${val.getUTCFullYear()}-${pad(val.getUTCMonth()+1)}-${pad(val.getUTCDate())}` +
-           `T${pad(val.getUTCHours())}:${pad(val.getUTCMinutes())}:${pad(val.getUTCSeconds())}`;
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}` +
+           `T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
   }
-  if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000).toISOString();
   return String(val);
 }
 
