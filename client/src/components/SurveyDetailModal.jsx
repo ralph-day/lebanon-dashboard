@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
+import { fmtBeirut } from '../lib/time'
 
-function fmtDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d)) return '—'
-  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+const fmtDateTime = iso => fmtBeirut(iso, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
 function formatValue(v) {
   if (v === true || v === 1 || v === '1') return 'Yes'

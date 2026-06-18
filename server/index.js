@@ -646,6 +646,21 @@ async function parseExcel(filePath) {
   const qaFail = qaRows.filter(r => r.qaStatus === '❌ FAIL').length;
   const qaRejected = qaRows.filter(r => (r.status || '').trim().toLowerCase() === 'rejected').length;
 
+  // ── Timezone canary ──────────────────────────────────────────────────────
+  // submissionDate is naive Beirut wall-clock (no zone): real UTC = digits − 3h.
+  // If many surveys land in the future, the data's date format has drifted
+  // (the recurring +3h class of bug) — surface it loudly instead of via a
+  // confused team leader weeks later.
+  {
+    const nowMs = Date.now();
+    const future = qaRows.filter(r => {
+      const iso = r.submissionDate; if (!iso) return false;
+      const ms = /[zZ]$/.test(iso) ? Date.parse(iso) : Date.parse(iso + 'Z') - 3 * 3600000;
+      return !isNaN(ms) && ms > nowMs + 30 * 60000; // >30 min ahead = suspicious
+    }).length;
+    if (future > 0) console.warn(`[TZ CANARY] ${future}/${qaRows.length} surveys have a FUTURE submissionDate — possible timezone/data-format drift`);
+  }
+
   // Quality% and Missing-GPS per enumerator — computed from qaRows so they
   // survive Moe dropping the Quality_% / Missing_GPS columns from
   // Enumerator_Summary. Matches the Data Quality tab's pass/total logic.

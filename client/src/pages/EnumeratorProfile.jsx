@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 import SurveyDetailModal from '../components/SurveyDetailModal'
+import { fmtBeirut } from '../lib/time'
 
 // ✗-flags on a QA row → readable list
 function flagsOf(r) {
@@ -11,14 +12,7 @@ function flagsOf(r) {
     .join(', ') || '—'
 }
 
-// submissionDate is a naive Lebanon wall-clock string (no zone). Render the
-// digits exactly as stored — parse as UTC and format as UTC — so the viewer's
-// own timezone (and Safari's parse-naive-as-UTC quirk) can't add a +3h shift.
-function fmtDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(/[zZ]$/.test(iso) ? iso : iso + 'Z')
-  return isNaN(d) ? '—' : d.toLocaleString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
+const fmtDateTime = fmtBeirut // shared helper — handles naive Beirut + real-UTC timestamps
 
 function median(nums) {
   if (!nums.length) return null

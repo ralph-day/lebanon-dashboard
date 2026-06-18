@@ -1,22 +1,9 @@
 import { useState } from 'react'
+import { fmtBeirut, timeAgoBeirut } from '../lib/time'
 
-// interviewAt / uploadAt are proper absolute ISO instants (with Z). Format the
-// exact Lebanon wall-clock time, e.g. "16 Jun 18:42".
-function beirutTime(iso) {
-  if (!iso) return null
-  const d = new Date(iso)
-  return isNaN(d) ? null : d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-
-function agoFrom(iso) {
-  if (!iso) return '—'
-  const t = new Date(iso).getTime()
-  if (isNaN(t)) return '—'
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000))
-  if (mins < 60) return `${mins}m ago`
-  if (mins < 1440) return `${Math.floor(mins / 60)}h ${mins % 60}m ago`
-  return `${Math.floor(mins / 1440)}d ago`
-}
+// Shared helpers handle both naive-Beirut and real-UTC timestamps.
+const beirutTime = iso => (iso ? fmtBeirut(iso) : null)
+const agoFrom = timeAgoBeirut
 
 function SeverityIcon({ type }) {
   if (type === 'critical') return <span className="text-base">🔴</span>
