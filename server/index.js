@@ -1083,7 +1083,10 @@ async function sendWhatsApp(phone, message, templateName, templateParams, lang =
           language: { code: lang },
           components: [{
             type: 'body',
-            parameters: templateParams.map(p => ({ type: 'text', text: p })),
+            // WhatsApp rejects template params containing newlines, tabs, or 4+
+            // consecutive spaces (error #132018). Collapse all whitespace so no
+            // builder can ever trip it (free-form text body below is exempt).
+            parameters: templateParams.map(p => ({ type: 'text', text: String(p ?? '—').replace(/\s+/g, ' ').trim() || '—' })),
           }],
         },
       }
@@ -1313,7 +1316,7 @@ async function notifyAnomalies(anomalies) {
     // Build issue list string for templates
     const issueList = [...anomaly.critical, ...anomaly.warnings]
       .map(i => { const t = fmtBeirutText(i.interviewAt || i.submissionDate); return `${i.type === 'Failed Survey' ? '❌' : '⚠️'} ${i.detail}${t !== '—' ? ` — ${t}` : ''}`; })
-      .join('\n');
+      .join(' · ');
     const firstName = anomaly.name.split(' ')[0];
     const issueCount = `${anomaly.totalIssues} (حرجة: ${anomaly.critical.length} / تحذيرات: ${anomaly.warnings.length})`;
 
