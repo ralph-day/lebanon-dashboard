@@ -374,6 +374,19 @@ function toInstantISO(val) {
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+// Render a server timestamp as Beirut wall-clock for server-sent text (WhatsApp).
+// Mirrors the client lib/time.js: a NAIVE string (no zone, from toISO — ExcelJS
+// digits already hold Beirut wall-clock) is rendered as-is (format in UTC, no
+// offset); a zoned/real instant is converted to Asia/Beirut. This avoids the
+// double +3h that `new Date(naive).toLocaleString({timeZone:'Asia/Beirut'})` adds.
+function fmtBeirutText(iso) {
+  if (!iso) return '—';
+  const hasZone = /[zZ]$|[+-]\d\d:?\d\d$/.test(iso);
+  const d = new Date(hasZone ? iso : iso + 'Z');
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-GB', { timeZone: hasZone ? 'Asia/Beirut' : 'UTC', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
 async function parseExcel(filePath) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(filePath);
@@ -839,8 +852,8 @@ async function parseExcel(filePath) {
   rawData.forEach(r => {
     const id = r.instanceID || r['KEY'] || '';
     if (!id) return;
-    interviewISOByInstance[id] = toInstantISO(r.end);
-    uploadISOByInstance[id] = toInstantISO(r.SubmissionDate);
+    interviewISOByInstance[id] = toInstantISO(r.end); // real TZ string → real instant
+    uploadISOByInstance[id] = toISO(r.SubmissionDate); // ExcelJS Date mistags as UTC → keep naive Beirut digits, client renders as-is
   });
   const activeNames = new Set(Object.keys(recentByName));
   const anomalyMap = {};
@@ -1162,8 +1175,7 @@ function buildAcceptedMessage(row) {
     `الموقع: ${row.locationName || row.district || '—'}`,
   ];
   if (row.submissionDate) {
-    const d = new Date(row.submissionDate);
-    if (!isNaN(d)) lines.push(`الوقت: ${d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`);
+    lines.push(`الوقت: ${fmtBeirutText(row.submissionDate)}`);
   }
   lines.push(`نتيجة الجودة: ${row.qaStatus || '—'}`);
   if (row.tooClose) {
@@ -1186,11 +1198,7 @@ function buildAcceptedMessage(row) {
 //   الوقت: {{3}}
 //   نتيجة الجودة: {{4}}
 function buildAcceptedTemplateParams(row) {
-  let timeStr = '—';
-  if (row.submissionDate) {
-    const d = new Date(row.submissionDate);
-    if (!isNaN(d)) timeStr = d.toLocaleString('en-GB', { timeZone: 'Asia/Beirut', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  }
+  const timeStr = fmtBeirutText(row.submissionDate);
   const notes = [];
   if (row.tooClose) notes.push('⚠️ الموقع قريب جدًا (Too Close)');
   if (row.missingGPS === '✗ Missing GPS') notes.push('⚠️ بيانات GPS مفقودة');
