@@ -1223,13 +1223,23 @@ async function notifyAcceptedSubmissions(qaRows) {
     return;
   }
 
-  let sent = 0;
+  // Hard recency guard: never send a survey older than this, no matter the dedup
+  // state. submissionDate is the UTC wall-clock (toISO), so +'Z' recovers the real
+  // instant. Old backlog gets its key added (suppressed) but is never sent.
+  const MAX_AGE_MS = (Number(process.env.SURVEY_ALERT_MAX_AGE_HOURS) || 24) * 3600000;
+  const realMs = iso => { if (!iso) return NaN; const s = /[zZ]$/.test(iso) ? iso : iso + 'Z'; return Date.parse(s); };
+
+  let sent = 0, suppressed = 0;
   for (const row of qaRows) {
     if (!row.id) continue;
     if (row.qaStatus !== '✅ PASS') continue; // notify on QA pass (immediate), not GTS acceptance (lags)
     if (/test/i.test(row.name || '')) continue;
     const key = `submission::${row.id}`;
     if (sentAlerts.has(key)) continue;
+
+    // Too old → suppress silently (prevents flushing days-old backlog).
+    const ageMs = Date.now() - realMs(row.submissionDate);
+    if (!isNaN(ageMs) && ageMs > MAX_AGE_MS) { sentAlerts.add(key); suppressed++; continue; }
 
     const acceptedTemplate = process.env.SURVEY_ACCEPTED_TEMPLATE;
     const acceptedLang = process.env.SURVEY_ACCEPTED_TEMPLATE_LANG || 'ar';
@@ -1250,9 +1260,10 @@ async function notifyAcceptedSubmissions(qaRows) {
     sent++;
     await new Promise(r => setTimeout(r, 1000));
   }
-  if (sent > 0) {
+  if (sent > 0 || suppressed > 0) {
     saveNotifications();
-    console.log(`[WhatsApp] Sent ${sent} new accepted-submission notification(s)`);
+    if (sent > 0) console.log(`[WhatsApp] Sent ${sent} new QA-passed notification(s)`);
+    if (suppressed > 0) console.log(`[WhatsApp] Suppressed ${suppressed} old QA-passed survey(s) (older than ${MAX_AGE_MS / 3600000}h)`);
   }
 }
 
