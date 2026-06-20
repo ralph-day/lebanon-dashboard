@@ -129,17 +129,17 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
               <span className="text-white text-sm font-bold">IA</span>
             </div>
-            <div>
-              <h1 className="text-sm font-semibold text-slate-800 leading-tight">Lebanon Survey Dashboard</h1>
-              <p className="text-xs text-slate-400">Emergency Response Perception Study 2026</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-slate-800 leading-tight truncate">Lebanon Survey Dashboard</h1>
+              <p className="text-xs text-slate-400 truncate">Emergency Response Perception Study 2026</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {data && (
               <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400">
                 <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block" />
@@ -162,13 +162,14 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-0 border-t border-slate-100">
+        {/* Tabs — horizontally scrollable on narrow screens so all tabs stay
+            reachable instead of overflowing off the edge on phones. */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-0 border-t border-slate-100 overflow-x-auto no-scrollbar">
           {TABS.map(tab => (
             <button
               key={tab}
               onClick={() => switchTab(tab)}
-              className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab
                   ? 'border-blue-600 text-blue-600'
                   : 'border-transparent text-slate-500 hover:text-slate-700'

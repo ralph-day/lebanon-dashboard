@@ -11,3 +11,13 @@ body {
   width: 100%;
   min-height: 100vh;
 }
+
+/* Hide the scrollbar on horizontally-scrollable tab strips (swipeable on
+   touch, clean on desktop) while keeping scroll functionality. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
