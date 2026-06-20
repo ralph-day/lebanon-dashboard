@@ -128,6 +128,10 @@ app.get('/auth/login', (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'],
+    // Always show the Google account chooser instead of silently reusing the
+    // browser's currently signed-in account — lets users pick the right email
+    // (e.g. on phones where auto sign-in defaults to a personal account).
+    prompt: 'select_account',
     state,
   });
   res.redirect(url);
