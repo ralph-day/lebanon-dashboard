@@ -9,6 +9,110 @@ const SMALL_N = 20 // warn when a disaggregated cell is below this
 
 const prettify = s => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
 
+const SENT_COLOR = { positive: 'bg-emerald-100 text-emerald-700', neutral: 'bg-slate-100 text-slate-600', negative: 'bg-red-100 text-red-700', mixed: 'bg-amber-100 text-amber-700' }
+
+// Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
+// on demand (the API call can take ~30–90s), caches per field in local state.
+function QualitativeSection({ fields }) {
+  const [active, setActive] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [cache, setCache] = useState({}) // field -> result
+
+  if (!fields || !fields.length) return null
+
+  const run = (field) => {
+    setActive(field); setError(null)
+    if (cache[field]) return
+    setLoading(true)
+    fetch('/api/analysis/qualitative', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field }),
+    })
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Analysis failed'); return d })
+      .then(d => setCache(c => ({ ...c, [field]: d })))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }
+
+  const result = active && cache[active]
+  const s = result?.analysis?.sentiment
+
+  return (
+    <section>
+      <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+        <span className="w-1.5 h-4 bg-violet-500 rounded-full inline-block" /> Qualitative — open-text themes <span className="text-xs font-normal text-violet-500">✦ AI</span>
+      </h3>
+      <div className="bg-white rounded-xl border border-slate-100 p-4">
+        <div className="flex flex-wrap gap-2 mb-3">
+          {fields.map(f => (
+            <button key={f.key} onClick={() => run(f.key)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${active === f.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="flex items-center gap-3 py-10 justify-center text-slate-500 text-sm">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-violet-600" />
+            Reading responses and coding themes… (this can take up to a minute)
+          </div>
+        )}
+        {error && <p className="text-sm text-red-600 py-3">{error}</p>}
+        {!active && !loading && <p className="text-sm text-slate-400 py-3">Pick a question above to extract themes, sentiment, and representative quotes from the open-text answers.</p>}
+
+        {result && !loading && (
+          <div className="space-y-4">
+            <p className="text-xs text-slate-400">{result.n} responses analyzed · GTS-accepted sample</p>
+            <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{result.analysis.summary}</p>
+
+            {s && (
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Overall sentiment</p>
+                <div className="flex h-3 rounded-full overflow-hidden">
+                  <div style={{ width: `${Math.round((s.positive || 0) * 100)}%` }} className="bg-emerald-400" title={`Positive ${Math.round((s.positive || 0) * 100)}%`} />
+                  <div style={{ width: `${Math.round((s.neutral || 0) * 100)}%` }} className="bg-slate-300" title={`Neutral ${Math.round((s.neutral || 0) * 100)}%`} />
+                  <div style={{ width: `${Math.round((s.negative || 0) * 100)}%` }} className="bg-red-400" title={`Negative ${Math.round((s.negative || 0) * 100)}%`} />
+                </div>
+                <div className="flex gap-3 text-xs text-slate-500 mt-1">
+                  <span>● Positive {Math.round((s.positive || 0) * 100)}%</span>
+                  <span>● Neutral {Math.round((s.neutral || 0) * 100)}%</span>
+                  <span>● Negative {Math.round((s.negative || 0) * 100)}%</span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {result.analysis.themes.map((t, i) => (
+                <div key={i} className="border border-slate-100 rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h4 className="text-sm font-semibold text-slate-800">{t.label}</h4>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${SENT_COLOR[t.sentiment] || SENT_COLOR.neutral}`}>{t.sentiment}</span>
+                      <span className="text-xs text-slate-400">{Math.round((t.share || 0) * 100)}%</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-600 mb-2">{t.description}</p>
+                  <div className="space-y-1.5">
+                    {(t.quotes || []).map((q, j) => (
+                      <div key={j} className="text-xs border-l-2 border-violet-200 pl-2">
+                        <p className="text-slate-700" dir="auto">“{q.original}”</p>
+                        {q.translation && q.translation !== q.original && <p className="text-slate-400 italic">{q.translation}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // Horizontal bar chart — one series per breakdown category.
 function HBar({ rows, series, domain, unit = '%', rowH = 26 }) {
   const grouped = series.length > 1
@@ -207,6 +311,8 @@ export default function AnalysisPanel() {
           </section>
         )
       })}
+
+      <QualitativeSection fields={meta.qualitative} />
     </div>
   )
 }

@@ -143,7 +143,15 @@ const GAP_DIMS = [
   { suffix: 'action', label: 'Feedback leading to action' },
 ];
 
+// ── Open-text fields for qualitative (Claude) analysis ───────────────────────
+// Allowlisted so the endpoint can never be pointed at an arbitrary column.
+const QUALITATIVE = [
+  { key: 'message_to_world', label: 'Message to the world' },
+  { key: 'hope_future', label: 'Hopes for the future' },
+  { key: 'anything_else', label: 'Anything else to share' },
+];
+
 module.exports = {
   prettify, NONRESPONSE, ageBucket, normDisplacement,
-  DIMENSIONS, SINGLE, LIKERT, MULTI, TRUST_ACTORS, GAP_DIMS,
+  DIMENSIONS, SINGLE, LIKERT, MULTI, TRUST_ACTORS, GAP_DIMS, QUALITATIVE,
 };
