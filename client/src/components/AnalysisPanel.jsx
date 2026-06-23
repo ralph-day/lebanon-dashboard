@@ -101,8 +101,8 @@ function MapSection({ respondents, meta }) {
           <p className="text-sm font-semibold text-slate-700">Mapping: <span className="text-blue-600">{activeLabel}</span></p>
           <span className="text-xs text-slate-400">{locs.length} locations · bubble size = sample, color = mean (1–5)</span>
         </div>
-        {/* Creative metric picker: grouped pills instead of a dropdown */}
-        <div className="no-print space-y-1.5 mb-3 max-h-32 overflow-y-auto no-scrollbar">
+        {/* Creative metric picker: grouped pills, all visible (no inner scroll) */}
+        <div className="no-print space-y-1.5 mb-3">
           {metricGroups.map(g => (
             <div key={g.group} className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-slate-400 w-full sm:w-auto sm:mr-1">{g.group}</span>
@@ -115,7 +115,7 @@ function MapSection({ respondents, meta }) {
             </div>
           ))}
         </div>
-        <div className="h-96 rounded-lg overflow-hidden">
+        <div className="h-[640px] rounded-lg overflow-hidden">
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (
