@@ -92,6 +92,19 @@ app.use(session({
   },
 }));
 
+// ── Local-dev auth bypass ─────────────────────────────────────────────────────
+// Lets you run the dashboard locally without the full Google OAuth round-trip.
+// Double-guarded so it can NEVER activate in production: requires BOTH
+// NODE_ENV !== 'production' AND the explicit DEV_AUTH_BYPASS=1 flag. When on, it
+// injects a fixed team-member session so every requireAuth/requireTeam route
+// (incl. /auth/me) just works. Never set DEV_AUTH_BYPASS in Railway.
+const DEV_AUTH_BYPASS = process.env.NODE_ENV !== 'production' && process.env.DEV_AUTH_BYPASS === '1';
+if (DEV_AUTH_BYPASS) {
+  const devUser = { email: 'ralphbaydoun@gmail.com', name: 'Local Dev', picture: '' };
+  console.warn('[DEV] AUTH BYPASS ENABLED — all requests authenticated as', devUser.email, '(local only)');
+  app.use((req, _res, next) => { if (!req.session.user) req.session.user = devUser; next(); });
+}
+
 // ── Google OAuth ──────────────────────────────────────────────────────────────
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
