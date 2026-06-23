@@ -88,6 +88,19 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
     const slug = TAB_TO_SLUG[tab] || 'overview'
     window.history.replaceState(null, '', `#${slug}`)
   }
+
+  // Respond to hash changes (e.g. the "Build a report →" link from Analysis).
+  useEffect(() => {
+    const onHash = () => {
+      const tab = SLUG_TO_TAB[parseHash().tabSlug]
+      if (!tab) return
+      if ((tab === 'Analysis' || tab === 'Report') && !canAnalyze) return
+      if (tab === 'Team' && !canAccessTeam) return
+      setActiveTab(tab)
+    }
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [canAnalyze, canAccessTeam])
   const [notes, setNotes]         = useState([])
 
   useEffect(() => {

@@ -685,16 +685,10 @@ export default function AnalysisPanel({ user }) {
             <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
             <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
           </div>
-          <div className="no-print ml-auto flex items-center gap-2">
-            <button onClick={generateReport} disabled={reportBusy}
-              className="text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-60">
-              {reportBusy ? `✦ Working ${reportProgress?.done || 0}/${reportProgress?.total || 0}…` : '✦ Generate report (PDF)'}
-            </button>
-            <button onClick={exportWord} disabled={reportBusy}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors disabled:opacity-60">
-              ⬇ Word
-            </button>
-          </div>
+          <a href="#report"
+            className="no-print ml-auto text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors">
+            ✦ Build a report →
+          </a>
         </div>
         {/* Breakdown as selectable tags, applied to every question below */}
         <div className="no-print flex flex-wrap items-center gap-2">
