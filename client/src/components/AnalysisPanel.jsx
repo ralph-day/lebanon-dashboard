@@ -254,7 +254,7 @@ function QualitativeSection({ fields }) {
       body: JSON.stringify({ field }),
     })
       .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Analysis failed'); return d })
-      .then(d => setCache(c => ({ ...c, [field]: d })))
+      .then(d => { setCache(c => ({ ...c, [field]: d })); ctx?.registerQual(field, d) })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }
@@ -481,22 +481,75 @@ export default function AnalysisPanel({ user }) {
   }
   const [reportBusy, setReportBusy] = useState(false)
   const [reportProgress, setReportProgress] = useState(null)
+  const [qualResults, setQualResults] = useState({}) // field -> qualitative result
 
-  // Generate report: AI-summarize every registered chart (limited concurrency),
-  // then open the print dialog (print CSS keeps charts + summaries + notes).
-  const generateReport = async () => {
-    setReportBusy(true)
+  // AI-summarize every registered chart (4-way concurrency, shows progress).
+  const ensureSummaries = async () => {
     const metas = [...graphsRef.current.values()]
     const queue = metas.filter(m => !summaries[`${m.key}::${m.breakdown || ''}`])
     let done = 0; setReportProgress({ done: 0, total: queue.length })
-    const worker = async () => { while (queue.length) { const m = queue.shift(); try { await summarizeGraph(m) } catch { /* keep going */ } setReportProgress({ done: ++done, total: metas.length }) } }
+    const worker = async () => { while (queue.length) { const m = queue.shift(); try { await summarizeGraph(m) } catch { /* keep going */ } setReportProgress({ done: ++done, total: queue.length || done }) } }
     await Promise.all([worker(), worker(), worker(), worker()])
-    setReportBusy(false); setReportProgress(null)
+    setReportProgress(null)
+    return metas
+  }
+
+  // PDF: summarize then print (print CSS keeps charts + summaries + notes).
+  const generateReport = async () => {
+    setReportBusy(true)
+    try { await ensureSummaries() } finally { setReportBusy(false) }
     setTimeout(() => window.print(), 500)
   }
 
+  // Word: summarize then build an editable .docx (headings, AI summaries,
+  // team notes, data tables, qualitative themes).
+  const exportWord = async () => {
+    setReportBusy(true)
+    try {
+      const metas = await ensureSummaries()
+      const docx = await import('docx')
+      const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType } = docx
+      const notesFor = key => allNotes.filter(n => n.entityType === 'analysisGraph' && n.entityId === key)
+      const children = [
+        new Paragraph({ text: 'Lebanon Emergency Response Perception Study 2026', heading: HeadingLevel.TITLE }),
+        new Paragraph({ children: [new TextRun({ text: `Results report · ${data.n} accepted surveys · ${dimKey ? `Broken down by ${dimLabel}` : 'Overall'} · ${new Date().toLocaleDateString()}`, italics: true, color: '666666' })] }),
+        new Paragraph({ text: '' }),
+      ]
+      for (const m of metas) {
+        children.push(new Paragraph({ text: m.title + (m.breakdown && m.breakdown !== 'location' ? ` — by ${m.breakdown}` : ''), heading: HeadingLevel.HEADING_2 }))
+        const sum = summaries[`${m.key}::${m.breakdown || ''}`]
+        if (sum) children.push(new Paragraph({ children: [new TextRun({ text: 'AI summary: ', bold: true, color: '6D28D9' }), new TextRun(sum)] }))
+        notesFor(m.key).forEach(nt => children.push(new Paragraph({ children: [new TextRun({ text: `Note — ${nt.author}: `, bold: true }), new TextRun(nt.text)] })))
+        const cols = ['Category', ...m.series]
+        const headRow = new TableRow({ children: cols.map(c => new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(c), bold: true })] })] })) })
+        const bodyRows = (m.rows || []).slice(0, 60).map(r => new TableRow({ children: [String(r.name), ...m.series.map(s => r[s] == null ? '' : String(r[s]) + (m.kind === 'pct' ? '%' : ''))].map(v => new TableCell({ children: [new Paragraph(String(v))] })) }))
+        children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headRow, ...bodyRows] }))
+        children.push(new Paragraph({ text: '' }))
+      }
+      const qkeys = Object.keys(qualResults)
+      if (qkeys.length) {
+        children.push(new Paragraph({ text: 'Qualitative — open-text themes', heading: HeadingLevel.HEADING_1 }))
+        for (const f of qkeys) {
+          const q = qualResults[f]
+          children.push(new Paragraph({ text: q.label, heading: HeadingLevel.HEADING_2 }))
+          if (q.analysis?.summary) children.push(new Paragraph(q.analysis.summary))
+          ;(q.analysis?.themes || []).forEach(t => {
+            children.push(new Paragraph({ children: [new TextRun({ text: `${t.label} (${Math.round((t.share || 0) * 100)}%, ${t.sentiment}): `, bold: true }), new TextRun(t.description || '')] }))
+            ;(t.quotes || []).slice(0, 2).forEach(qt => children.push(new Paragraph({ alignment: AlignmentType.START, children: [new TextRun({ text: `“${qt.original}” — ${qt.translation || ''}`, italics: true, color: '555555' })] })))
+          })
+        }
+      }
+      const blob = await Packer.toBlob(new Document({ sections: [{ children }] }))
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url
+      a.download = `Lebanon-Analysis-Report-${dimKey ? dimLabel + '-' : ''}${new Date().toISOString().slice(0, 10)}.docx`
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    } finally { setReportBusy(false) }
+  }
+
   const ctxValue = {
-    user, allNotes, summaries,
+    user, allNotes, summaries, qualResults,
+    registerQual: (field, result) => setQualResults(q => ({ ...q, [field]: result })),
     addNote: n => setAllNotes(p => [n, ...p]),
     deleteNote: id => setAllNotes(p => p.filter(n => n.id !== id)),
     summarizeGraph,
@@ -622,11 +675,11 @@ export default function AnalysisPanel({ user }) {
           <div className="no-print ml-auto flex items-center gap-2">
             <button onClick={generateReport} disabled={reportBusy}
               className="text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-60">
-              {reportBusy ? `✦ Summarizing ${reportProgress?.done || 0}/${reportProgress?.total || 0}…` : '✦ Generate report'}
+              {reportBusy ? `✦ Working ${reportProgress?.done || 0}/${reportProgress?.total || 0}…` : '✦ Generate report (PDF)'}
             </button>
-            <button onClick={() => window.print()}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
-              ⎙ Print / PDF
+            <button onClick={exportWord} disabled={reportBusy}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors disabled:opacity-60">
+              ⬇ Word
             </button>
           </div>
         </div>
