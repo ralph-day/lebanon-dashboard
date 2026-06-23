@@ -656,6 +656,15 @@ export default function AnalysisPanel({ user }) {
         return row
       }).sort((a, b) => b._gap - a._gap)
   const gapSeries = dimKey ? cats : ['Experience', 'Expectation']
+  // Dimension order shared across all small-multiple panels (sorted by overall gap).
+  const gapDimOrder = meta.gap.dims
+    .map(g => ({ suffix: g.suffix, label: g.label, _gap: (gapMeanOf(data.respondents, 'expect_' + g.suffix) || 0) - (gapMeanOf(data.respondents, 'perception_' + g.suffix) || 0) }))
+    .sort((a, b) => b._gap - a._gap)
+  const gapPanelRows = rows => gapDimOrder.map(d => ({
+    name: d.label,
+    Experience: r2(gapMeanOf(rows, 'perception_' + d.suffix) || 0),
+    Expectation: r2(gapMeanOf(rows, 'expect_' + d.suffix) || 0),
+  }))
 
   return (
    <AnalysisCtx.Provider value={ctxValue}>
@@ -699,17 +708,29 @@ export default function AnalysisPanel({ user }) {
       <section>
         <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
           <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" /> Expectation Gap — experience vs expectation
+          {dimKey && <span className="text-xs font-normal text-slate-400">· side-by-side by {dimLabel}</span>}
         </h3>
-        <Card
-          title={dimKey ? `Expectation gap (expectation − experience) by ${dimLabel}` : 'What people experience vs what they expect (1–5)'}
-          n={data.n}
-          csv={{ rows: gapRows, series: gapSeries }}
-          graph={{ key: 'gap', title: dimKey ? `Expectation gap by ${dimLabel}` : 'Expectation gap (experience vs expectation)', breakdown: dimKey ? dimLabel : '', series: gapSeries, rows: gapRows, kind: 'gap' }}
-          note={dimKey
-            ? `Bars show the gap size per ${dimLabel.toLowerCase()} group — higher = bigger shortfall vs expectations. Sorted by overall gap.`
-            : 'Sorted by largest gap. A wide gap = people expect far more than they currently receive.'}>
-          <HBar rows={gapRows} series={gapSeries} domain={dimKey ? [0, 'dataMax'] : [1, 5]} unit="" rowH={30} />
-        </Card>
+        {!dimKey ? (
+          <Card title="What people experience vs what they expect (1–5)" n={data.n}
+            csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
+            graph={{ key: 'gap', title: 'Expectation gap (experience vs expectation)', breakdown: '', series: ['Experience', 'Expectation'], rows: gapRows, kind: 'gap' }}
+            note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
+            <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {groups.map(g => {
+              const rows = gapPanelRows(g.rows)
+              return (
+                <Card key={g.key} title={`${g.key} · experience vs expectation`} n={g.rows.length}
+                  csv={{ rows, series: ['Experience', 'Expectation'] }}
+                  graph={{ key: `gap:${g.key}`, title: `Expectation gap — ${g.key}`, breakdown: dimLabel, series: ['Experience', 'Expectation'], rows, kind: 'gap' }}>
+                  <HBar rows={rows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={24} />
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       {/* Sectioned indicators */}
