@@ -426,12 +426,29 @@ export default function AnalysisPanel() {
 
   const { meta } = data
 
-  // ---- Expectation-gap (flagship), always computed overall ----
-  const gapRows = meta.gap.dims.map(g => {
-    const mean = col => { let s = 0, k = 0; data.respondents.forEach(r => { const v = r.v[col]; if (typeof v === 'number') { s += v; k++ } }); return k ? s / k : 0 }
-    const exp = mean('perception_' + g.suffix), expect = mean('expect_' + g.suffix)
-    return { name: g.label, Experience: Math.round(exp * 100) / 100, Expectation: Math.round(expect * 100) / 100, _gap: expect - exp }
-  }).sort((a, b) => b._gap - a._gap)
+  // ---- Expectation-gap (flagship) ----
+  // Overall: Experience vs Expectation (two series). With a breakdown active:
+  // the gap size (expectation − experience) per dimension, one bar per group.
+  const r2 = v => Math.round(v * 100) / 100
+  const gapMeanOf = (rows, col) => { let s = 0, k = 0; rows.forEach(r => { const v = r.v[col]; if (typeof v === 'number') { s += v; k++ } }); return k ? s / k : null }
+  const dimLabel = data.dimensions.find(d => d.key === dimKey)?.label || ''
+  const gapRows = !dimKey
+    ? meta.gap.dims.map(g => {
+        const exp = gapMeanOf(data.respondents, 'perception_' + g.suffix) || 0
+        const expect = gapMeanOf(data.respondents, 'expect_' + g.suffix) || 0
+        return { name: g.label, Experience: r2(exp), Expectation: r2(expect), _gap: expect - exp }
+      }).sort((a, b) => b._gap - a._gap)
+    : meta.gap.dims.map(g => {
+        const row = { name: g.label, _gap: 0 }
+        groups.forEach(grp => {
+          const exp = gapMeanOf(grp.rows, 'perception_' + g.suffix)
+          const expect = gapMeanOf(grp.rows, 'expect_' + g.suffix)
+          const gap = (exp != null && expect != null) ? expect - exp : 0
+          row[grp.key] = r2(gap); row._gap += gap
+        })
+        return row
+      }).sort((a, b) => b._gap - a._gap)
+  const gapSeries = dimKey ? cats : ['Experience', 'Expectation']
 
   return (
     <div className="space-y-5">
@@ -464,10 +481,14 @@ export default function AnalysisPanel() {
         <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
           <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" /> Expectation Gap — experience vs expectation
         </h3>
-        <Card title="What people experience vs what they expect (1–5)" n={data.n}
-          csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
-          note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
-          <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
+        <Card
+          title={dimKey ? `Expectation gap (expectation − experience) by ${dimLabel}` : 'What people experience vs what they expect (1–5)'}
+          n={data.n}
+          csv={{ rows: gapRows, series: gapSeries }}
+          note={dimKey
+            ? `Bars show the gap size per ${dimLabel.toLowerCase()} group — higher = bigger shortfall vs expectations. Sorted by overall gap.`
+            : 'Sorted by largest gap. A wide gap = people expect far more than they currently receive.'}>
+          <HBar rows={gapRows} series={gapSeries} domain={dimKey ? [0, 'dataMax'] : [1, 5]} unit="" rowH={30} />
         </Card>
       </section>
 
