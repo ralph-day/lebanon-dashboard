@@ -353,6 +353,47 @@ function Donut({ rows, seriesKey }) {
   )
 }
 
+// Vertical column chart.
+function Column({ rows, series, domain, unit = '%' }) {
+  const grouped = series.length > 1
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 56 }} barCategoryGap={grouped ? 12 : 6}>
+        <CartesianGrid vertical={false} stroke="#eef2f7" />
+        <XAxis dataKey="name" fontSize={10} angle={-30} textAnchor="end" interval={0} height={70} stroke="#94a3b8" />
+        <YAxis domain={domain || [0, 'dataMax']} tickFormatter={v => (unit === '%' ? `${v}%` : v)} fontSize={11} stroke="#94a3b8" />
+        <Tooltip formatter={v => (unit === '%' ? `${v}%` : v)} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+        {grouped && <Legend wrapperStyle={{ fontSize: 11 }} />}
+        {series.map((s, i) => (
+          <Bar key={s} dataKey={s} fill={PALETTE[i % PALETTE.length]} radius={[3, 3, 0, 0]} maxBarSize={grouped ? 28 : 44}>
+            {!grouped && rows.map((_, ri) => <Cell key={ri} fill={PALETTE[ri % PALETTE.length]} />)}
+          </Bar>
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+// Data table view.
+function DataTable({ rows, series, unit = '%' }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead><tr className="text-slate-500 border-b border-slate-100"><th className="text-left py-1.5 pr-2 font-medium">Category</th>{series.map(s => <th key={s} className="text-right py-1.5 px-2 font-medium">{s}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i} className="border-b border-slate-50"><td className="py-1.5 pr-2 text-slate-700">{r.name}</td>{series.map(s => <td key={s} className="text-right py-1.5 px-2 text-slate-800 tabular-nums">{r[s]}{unit === '%' && r[s] != null ? '%' : ''}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
+  )
+}
+
+// Dispatcher: render rows/series in the chosen visualization.
+function ChartView({ type, rows, series, domain, unit, rowH }) {
+  if (type === 'column') return <Column rows={rows} series={series} domain={domain} unit={unit} />
+  if (type === 'pie') return <Donut rows={rows} seriesKey={series[0]} />
+  if (type === 'table') return <DataTable rows={rows} series={series} unit={unit} />
+  return <HBar rows={rows} series={series} domain={domain} unit={unit} rowH={rowH} />
+}
+
 // Shared state for per-graph AI summaries + team notes + a registry the report
 // generator iterates over.
 const AnalysisCtx = createContext(null)
@@ -401,7 +442,8 @@ function GraphTools({ graph }) {
   )
 }
 
-function Card({ title, n, note, csv, graph, children }) {
+const VIZ_LABEL = { bar: 'Bar', column: 'Column', pie: 'Pie', table: 'Table' }
+function Card({ title, n, note, csv, graph, viz, onPush, pushed, children }) {
   return (
     <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
       <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -415,6 +457,20 @@ function Card({ title, n, note, csv, graph, children }) {
           )}
         </div>
       </div>
+      {(viz || onPush) && (
+        <div className="no-print flex items-center gap-1.5 mb-2 flex-wrap">
+          {viz && viz.options.map(o => (
+            <button key={o} onClick={() => viz.setType(o)}
+              className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${viz.type === o ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>{VIZ_LABEL[o]}</button>
+          ))}
+          {onPush && (
+            <button onClick={onPush}
+              className="ml-auto text-xs px-2.5 py-0.5 rounded-md border border-violet-200 text-violet-600 hover:bg-violet-50 transition-colors">
+              {pushed ? '✓ Pushed' : '⤴ Push to report'}
+            </button>
+          )}
+        </div>
+      )}
       {note && <p className="text-xs text-amber-600 mb-2">{note}</p>}
       {children}
       {graph && <GraphTools graph={graph} />}
@@ -428,7 +484,18 @@ export default function AnalysisPanel({ user }) {
   const [dimKey, setDimKey] = useState('') // '' = no breakdown
   const [allNotes, setAllNotes] = useState([])
   const [summaries, setSummaries] = useState({}) // graphKey -> summary text
+  const [vizByKey, setVizByKey] = useState({})   // graphKey -> chart type
+  const [pushedKey, setPushedKey] = useState('') // transient "pushed ✓"
   const graphsRef = useRef(new Map()) // graphKey -> latest meta (for the report)
+
+  const pushChart = async (meta) => {
+    try {
+      const block = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: 'chart', qKey: meta.qKey, title: meta.title, kind: meta.kind, viz: meta.viz, breakdown: dimKey, summary: '', comment: '' }
+      const res = await fetch('/api/analysis/report/blocks', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ block }) })
+      if (!res.ok) throw new Error('Failed')
+      setPushedKey(meta.qKey); setTimeout(() => setPushedKey(''), 2000)
+    } catch { alert('Could not push to report') }
+  }
 
   useEffect(() => {
     fetch('/api/analysis', { credentials: 'include' })
@@ -711,6 +778,7 @@ export default function AnalysisPanel({ user }) {
         {!dimKey ? (
           <Card title="What people experience vs what they expect (1–5)" n={data.n}
             csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
+            onPush={() => pushChart({ qKey: 'gap', title: 'Expectation gap (experience vs expectation)', kind: 'gap', viz: 'bar' })} pushed={pushedKey === 'gap'}
             note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
             <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
           </Card>
@@ -747,32 +815,39 @@ export default function AnalysisPanel({ user }) {
             </h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {showTrust && (() => {
-                const { rows, n } = meanData(meta.trust.actors)
+                const { rows, n } = meanData(meta.trust.actors); const k = 'trust'; const vt = vizByKey[k] || 'bar'
                 return <Card key="trust" title={meta.trust.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: 'trust', title: meta.trust.label, kind: 'mean', makeProfile: () => buildViews('mean', meta.trust.actors) }}>
-                  <HBar rows={rows} series={cats} domain={[1, 5]} unit="" />
+                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
+                  onPush={() => pushChart({ qKey: k, title: meta.trust.label, kind: 'mean', viz: vt })} pushed={pushedKey === k}
+                  graph={{ key: k, title: meta.trust.label, kind: 'mean', makeProfile: () => buildViews('mean', meta.trust.actors) }}>
+                  <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" />
                 </Card>
               })()}
-              {multis.map(m => { const { rows, n } = multiData(m); return (
+              {multis.map(m => { const { rows, n } = multiData(m); const k = `multi:${m.key}`; const vt = vizByKey[k] || 'bar'; return (
                 <Card key={m.key} title={m.label} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `multi:${m.key}`, title: m.label, kind: 'pct', makeProfile: () => buildViews('multi', m) }}>
-                  <HBar rows={rows} series={cats} unit="%" />
+                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
+                  onPush={() => pushChart({ qKey: k, title: m.label, kind: 'pct', viz: vt })} pushed={pushedKey === k}
+                  graph={{ key: k, title: m.label, kind: 'pct', makeProfile: () => buildViews('multi', m) }}>
+                  <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
-              {singles.map(s => { const { rows, n } = singleData(s)
-                // Few-option single-choice questions read better as a donut, but
-                // only in the overall view (a breakdown needs grouped bars).
-                const usePie = !dimKey && rows.length <= PIE_MAX
+              {singles.map(s => { const { rows, n } = singleData(s); const k = `single:${s.key}`
+                const opts = !dimKey ? ['bar', 'column', 'pie', 'table'] : ['bar', 'column', 'table']
+                const vt = vizByKey[k] || (!dimKey && rows.length <= PIE_MAX ? 'pie' : 'bar')
                 return (
                 <Card key={s.key} title={s.label} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `single:${s.key}`, title: s.label, kind: 'pct', makeProfile: () => buildViews('single', s) }}>
-                  {usePie ? <Donut rows={rows} seriesKey="All" /> : <HBar rows={rows} series={cats} unit="%" />}
+                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: opts }}
+                  onPush={() => pushChart({ qKey: k, title: s.label, kind: 'pct', viz: vt })} pushed={pushedKey === k}
+                  graph={{ key: k, title: s.label, kind: 'pct', makeProfile: () => buildViews('single', s) }}>
+                  <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
-              {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); return (
+              {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); const k = `likert:${l.key}`; const vt = vizByKey[k] || 'bar'; return (
                 <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `likert:${l.key}`, title: l.label, kind: 'mean', makeProfile: () => buildViews('mean', [{ col: l.key, label: l.label }]) }}>
-                  <HBar rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
+                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
+                  onPush={() => pushChart({ qKey: k, title: l.label, kind: 'mean', viz: vt })} pushed={pushedKey === k}
+                  graph={{ key: k, title: l.label, kind: 'mean', makeProfile: () => buildViews('mean', [{ col: l.key, label: l.label }]) }}>
+                  <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
                 </Card>
               )})}
             </div>
@@ -791,4 +866,4 @@ export default function AnalysisPanel({ user }) {
 }
 
 // Shared primitives reused by the Report builder.
-export { PALETTE, scaleColor, HBar, Donut, MapSection, aggSingle, aggMulti, aggMean }
+export { PALETTE, scaleColor, HBar, Donut, Column, DataTable, ChartView, MapSection, aggSingle, aggMulti, aggMean }

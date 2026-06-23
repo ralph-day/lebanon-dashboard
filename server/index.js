@@ -1773,6 +1773,18 @@ app.put('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => {
   res.json({ ok: true, updatedAt: analysisReport.updatedAt });
 });
 
+// Append a block to the living report (used by "Push to report" from Analysis).
+app.post('/api/analysis/report/blocks', requireAuth, requireAnalyst, (req, res) => {
+  const block = req.body?.block;
+  if (!block || typeof block !== 'object') return res.status(400).json({ error: 'Invalid block' });
+  if (!Array.isArray(analysisReport.blocks)) analysisReport.blocks = [];
+  analysisReport.blocks.push(block);
+  analysisReport.updatedAt = new Date().toISOString();
+  analysisReport.updatedBy = req.session.user?.email || '';
+  saveReport();
+  res.json({ ok: true, count: analysisReport.blocks.length });
+});
+
 // Executive summary — synthesise all per-question findings into a conclusion.
 app.post('/api/analysis/report/exec-summary', requireAuth, requireAnalyst, summaryLimit, async (req, res) => {
   const findings = Array.isArray(req.body?.findings) ? req.body.findings : [];
