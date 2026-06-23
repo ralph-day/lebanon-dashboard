@@ -62,74 +62,34 @@ function scaleColor(v) {
   return `hsl(${hue}, 70%, 45%)`
 }
 
-// Sequential blue scale for percentages (0–100%).
-function pctColor(p) {
-  const t = Math.max(0, Math.min(1, p / 100))
-  return `hsl(217, 75%, ${82 - t * 50}%)`
-}
-
-// Graduated-symbol map: one bubble per location at its GPS centroid. Any
-// question is mappable — numeric questions by mean (1–5), single-choice and
-// multi-select questions by the % choosing a picked option.
-function MapSection({ respondents, meta, renderExtras }) {
-  // All mappable questions, grouped for the selector.
-  const questions = useMemo(() => [
-    ...meta.likert.map(l => ({ id: `mean:${l.key}`, label: l.label, kind: 'mean', col: l.key, group: 'Means (1–5)' })),
-    ...meta.trust.actors.map(a => ({ id: `mean:${a.col}`, label: `Trust: ${a.label}`, kind: 'mean', col: a.col, group: 'Means (1–5)' })),
-    ...meta.gap.dims.map(g => ({ id: `mean:perception_${g.suffix}`, label: `Experienced: ${g.label}`, kind: 'mean', col: `perception_${g.suffix}`, group: 'Means (1–5)' })),
-    ...meta.single.map(s => ({ id: `single:${s.key}`, label: s.label, kind: 'pctSingle', key: s.key, group: 'Single-choice (%)' })),
-    ...meta.multi.map(m => ({ id: `multi:${m.key}`, label: m.label, kind: 'pctMulti', key: m.key, members: m.members, group: 'Multi-select (%)' })),
+// Graduated-symbol map: one bubble per location, colored by an indicator's mean
+// (1–5) and sized by respondent count, at each location's GPS centroid.
+function MapSection({ respondents, meta }) {
+  const metricGroups = useMemo(() => [
+    { group: 'Wellbeing', items: meta.likert.map(l => ({ col: l.key, label: l.label })) },
+    { group: 'Trust in actors', items: meta.trust.actors.map(a => ({ col: a.col, label: a.label })) },
+    { group: 'Experience (accountability)', items: meta.gap.dims.map(g => ({ col: `perception_${g.suffix}`, label: g.label })) },
   ], [meta])
-
-  const [qid, setQid] = useState(questions[0]?.id)
-  const [opt, setOpt] = useState('')
-  const q = questions.find(x => x.id === qid) || questions[0]
-
-  // Options for categorical/multi questions.
-  const opts = useMemo(() => {
-    if (!q) return []
-    if (q.kind === 'pctMulti') return q.members.map(m => ({ val: m.col, label: m.label }))
-    if (q.kind === 'pctSingle') {
-      const ind = meta.single.find(s => s.key === q.key)
-      const tot = {}
-      respondents.forEach(r => { const v = r.v[q.key]; if (v != null) tot[v] = (tot[v] || 0) + 1 })
-      let vals = Object.keys(tot)
-      if (ind?.order) vals = ind.order.filter(o => tot[o] != null).concat(vals.filter(o => !ind.order.includes(o)))
-      else vals.sort((a, b) => tot[b] - tot[a])
-      return vals.map(v => ({ val: v, label: (ind?.valueLabels?.[v]) || prettify(v) }))
-    }
-    return []
-  }, [q, respondents, meta])
-
-  // Keep a valid option selected when the question changes.
-  useEffect(() => { if (opts.length && !opts.some(o => o.val === opt)) setOpt(opts[0].val) }, [opts]) // eslint-disable-line
-
-  const isPct = q && q.kind !== 'mean'
-  const optLabel = opts.find(o => o.val === opt)?.label || ''
+  const [metric, setMetric] = useState(metricGroups[0]?.items[0]?.col)
+  const activeLabel = metricGroups.flatMap(g => g.items).find(i => i.col === metric)?.label || ''
 
   const locs = useMemo(() => {
     const m = {}
     respondents.forEach(r => {
       const L = r.d.loc
       if (!L || r.d.lat == null || r.d.lng == null) return
-      const o = (m[L] = m[L] || { lat: 0, lng: 0, c: 0, num: 0, den: 0 })
+      const o = (m[L] = m[L] || { lat: 0, lng: 0, c: 0, vals: [] })
       o.lat += r.d.lat; o.lng += r.d.lng; o.c++
-      if (!q) return
-      if (q.kind === 'mean') { const v = r.v[q.col]; if (typeof v === 'number') { o.num += v; o.den++ } }
-      else if (q.kind === 'pctSingle') { const v = r.v[q.key]; if (v != null) { o.den++; if (String(v) === String(opt)) o.num++ } }
-      else if (q.kind === 'pctMulti') { o.den++; if (r.v[opt] === 1) o.num++ }
+      const v = r.v[metric]; if (typeof v === 'number') o.vals.push(v)
     })
-    return Object.entries(m).map(([loc, o]) => {
-      const value = o.den ? (q.kind === 'mean' ? o.num / o.den : (o.num / o.den) * 100) : null
-      return { loc, lat: o.lat / o.c, lng: o.lng / o.c, n: o.c, value }
-    }).filter(x => x.value != null && Number.isFinite(x.lat) && Number.isFinite(x.lng))
-  }, [respondents, qid, opt]) // eslint-disable-line
+    return Object.entries(m).map(([loc, o]) => ({
+      loc, lat: o.lat / o.c, lng: o.lng / o.c, n: o.vals.length,
+      mean: o.vals.length ? o.vals.reduce((a, b) => a + b, 0) / o.vals.length : null,
+    })).filter(x => x.mean != null && Number.isFinite(x.lat) && Number.isFinite(x.lng))
+  }, [respondents, metric])
 
   const maxN = Math.max(1, ...locs.map(l => l.n))
   const radius = n => 6 + Math.sqrt(n / maxN) * 20
-  const colorOf = v => (isPct ? pctColor(v) : scaleColor(v))
-  const fmt = v => (isPct ? `${v.toFixed(0)}%` : `${v.toFixed(2)} / 5`)
-  const activeLabel = (q?.label || '') + (isPct && optLabel ? ` — ${optLabel}` : '')
 
   return (
     <section>
@@ -139,40 +99,32 @@ function MapSection({ respondents, meta, renderExtras }) {
       <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
         <div className="flex items-baseline justify-between gap-3 mb-2">
           <p className="text-sm font-semibold text-slate-700">Mapping: <span className="text-blue-600">{activeLabel}</span></p>
-          <span className="text-xs text-slate-400">{locs.length} locations · size = sample, color = {isPct ? '% choosing' : 'mean (1–5)'}</span>
+          <span className="text-xs text-slate-400">{locs.length} locations · bubble size = sample, color = mean (1–5)</span>
         </div>
-        <div className="no-print flex flex-wrap items-center gap-2 mb-2">
-          <label className="text-xs text-slate-500">Question</label>
-          <select value={qid} onChange={e => setQid(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 max-w-full">
-            {['Means (1–5)', 'Single-choice (%)', 'Multi-select (%)'].map(g => (
-              <optgroup key={g} label={g}>
-                {questions.filter(x => x.group === g).map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
-              </optgroup>
-            ))}
-          </select>
+        {/* Creative metric picker: grouped pills instead of a dropdown */}
+        <div className="no-print space-y-1.5 mb-3 max-h-32 overflow-y-auto no-scrollbar">
+          {metricGroups.map(g => (
+            <div key={g.group} className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-slate-400 w-full sm:w-auto sm:mr-1">{g.group}</span>
+              {g.items.map(it => (
+                <button key={it.col} onClick={() => setMetric(it.col)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${metric === it.col ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
-        {isPct && opts.length > 0 && (
-          <div className="no-print flex flex-wrap items-center gap-1.5 mb-3">
-            <span className="text-[10px] uppercase tracking-wide text-slate-400 mr-1">Show % choosing</span>
-            {opts.map(o => (
-              <button key={o.val} onClick={() => setOpt(o.val)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${opt === o.val ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
-                {o.label}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="h-96 rounded-lg overflow-hidden">
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (
               <CircleMarker key={l.loc} center={[l.lat, l.lng]} radius={radius(l.n)}
-                pathOptions={{ color: colorOf(l.value), fillColor: colorOf(l.value), fillOpacity: 0.7, weight: 1 }}>
+                pathOptions={{ color: scaleColor(l.mean), fillColor: scaleColor(l.mean), fillOpacity: 0.7, weight: 1 }}>
                 <Popup>
                   <div className="text-xs">
                     <p className="font-semibold">{l.loc}</p>
-                    <p>{activeLabel}: {fmt(l.value)}</p>
+                    <p>Mean: {l.mean.toFixed(2)} / 5</p>
                     <p>n = {l.n}</p>
                   </div>
                 </Popup>
@@ -181,18 +133,10 @@ function MapSection({ respondents, meta, renderExtras }) {
           </MapContainer>
         </div>
         <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-          <span>{isPct ? '0%' : 'Low (1)'}</span>
-          <div className="h-2 flex-1 rounded-full" style={{ background: isPct ? 'linear-gradient(to right, hsl(217,75%,82%), hsl(217,75%,32%))' : 'linear-gradient(to right, hsl(0,70%,45%), hsl(60,70%,45%), hsl(120,70%,45%))' }} />
-          <span>{isPct ? '100%' : 'High (5)'}</span>
+          <span>Low (1)</span>
+          <div className="h-2 flex-1 rounded-full" style={{ background: 'linear-gradient(to right, hsl(0,70%,45%), hsl(60,70%,45%), hsl(120,70%,45%))' }} />
+          <span>High (5)</span>
         </div>
-        <GraphTools graph={{
-          key: 'map',
-          title: `Geographic — ${activeLabel}`,
-          breakdown: 'location',
-          series: [isPct ? 'value (%)' : 'mean'],
-          rows: locs.map(l => ({ name: l.loc, [isPct ? 'value (%)' : 'mean']: Math.round(l.value * 100) / 100 })),
-          kind: isPct ? 'pct' : 'mean',
-        }} />
       </div>
     </section>
   )
