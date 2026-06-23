@@ -100,7 +100,7 @@ app.use(session({
 // (incl. /auth/me) just works. Never set DEV_AUTH_BYPASS in Railway.
 const DEV_AUTH_BYPASS = process.env.NODE_ENV !== 'production' && process.env.DEV_AUTH_BYPASS === '1';
 if (DEV_AUTH_BYPASS) {
-  const devUser = { email: 'ralphbaydoun@gmail.com', name: 'Local Dev', picture: '' };
+  const devUser = { email: 'ralph@influeanswers.com', name: 'Local Dev', picture: '' };
   console.warn('[DEV] AUTH BYPASS ENABLED — all requests authenticated as', devUser.email, '(local only)');
   app.use((req, _res, next) => { if (!req.session.user) req.session.user = devUser; next(); });
 }
@@ -208,6 +208,15 @@ const TEAM_EMAILS = [
 function requireTeam(req, res, next) {
   if (TEAM_EMAILS.includes(req.session.user?.email)) return next();
   res.status(403).json({ error: 'Team access only' });
+}
+
+// Analysis feature is restricted to a small allowlist (override via env
+// ANALYST_EMAILS, comma-separated). Mirrors the client-side gate.
+const ANALYST_EMAILS = (process.env.ANALYST_EMAILS || 'ralph@influeanswers.com')
+  .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+function requireAnalyst(req, res, next) {
+  if (ANALYST_EMAILS.includes(String(req.session.user?.email || '').toLowerCase())) return next();
+  res.status(403).json({ error: 'Analysis access restricted' });
 }
 
 // ── Data cache ────────────────────────────────────────────────────────────────
@@ -1433,7 +1442,7 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
 // the results explorer. The client cross-tabs this in-browser, so we ship one
 // sparse record per respondent (only answered values) plus the indicator
 // registry that tells the client how to interpret each field.
-app.get('/api/analysis', requireAuth, async (req, res) => {
+app.get('/api/analysis', requireAuth, requireAnalyst, async (req, res) => {
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
     await refreshCache();
   }
@@ -1545,7 +1554,7 @@ const QUAL_SCHEMA = {
   },
 };
 
-app.post('/api/analysis/qualitative', requireAuth, requireTeam, qualLimit, async (req, res) => {
+app.post('/api/analysis/qualitative', requireAuth, requireAnalyst, qualLimit, async (req, res) => {
   const field = String(req.body?.field || '');
   const meta = ANALYSIS.QUALITATIVE.find(f => f.key === field);
   if (!meta) return res.status(400).json({ error: 'Unknown or unsupported field' });
