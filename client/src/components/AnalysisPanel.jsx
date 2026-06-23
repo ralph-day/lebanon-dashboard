@@ -30,6 +30,31 @@ function downloadCsv(filename, rows, series) {
 
 const SENT_COLOR = { positive: 'bg-emerald-100 text-emerald-700', neutral: 'bg-slate-100 text-slate-600', negative: 'bg-red-100 text-red-700', mixed: 'bg-amber-100 text-amber-700' }
 
+// Standalone aggregations over an arbitrary grouping ([{key,rows}]) — used to
+// build the multi-angle profile (overall + each disaggregation) for AI summaries.
+function aggSingle(groups, ind) {
+  const cats = groups.map(g => g.key)
+  const totals = {}
+  groups.forEach(g => g.rows.forEach(r => { const v = r.v[ind.key]; if (v != null) totals[v] = (totals[v] || 0) + 1 }))
+  let opts = Object.keys(totals)
+  if (ind.order) opts = ind.order.filter(o => totals[o] != null).concat(opts.filter(o => !ind.order.includes(o)))
+  else opts.sort((a, b) => totals[b] - totals[a])
+  const lbl = v => (ind.valueLabels && ind.valueLabels[v]) || prettify(v)
+  const rows = opts.map(o => { const row = { name: lbl(o) }; groups.forEach(g => { const den = g.rows.filter(r => r.v[ind.key] != null).length; const cnt = g.rows.filter(r => String(r.v[ind.key]) === o).length; row[g.key] = den ? Math.round(cnt / den * 1000) / 10 : 0 }); return row })
+  return { series: cats, rows }
+}
+function aggMulti(groups, m) {
+  const cats = groups.map(g => g.key)
+  const rows = m.members.map(mem => { const row = { name: mem.label, _t: 0 }; groups.forEach(g => { const cnt = g.rows.filter(r => r.v[mem.col] === 1).length; row[g.key] = g.rows.length ? Math.round(cnt / g.rows.length * 1000) / 10 : 0; row._t += cnt }); return row }).sort((a, b) => b._t - a._t)
+  rows.forEach(r => delete r._t)
+  return { series: cats, rows }
+}
+function aggMean(groups, cols) {
+  const cats = groups.map(g => g.key)
+  const rows = cols.map(c => { const row = { name: c.label }; groups.forEach(g => { let s = 0, k = 0; g.rows.forEach(r => { const v = r.v[c.col]; if (typeof v === 'number') { s += v; k++ } }); row[g.key] = k ? Math.round(s / k * 100) / 100 : 0 }); return row })
+  return { series: cats, rows }
+}
+
 // Map a 1–5 mean to a red→amber→green fill.
 function scaleColor(v) {
   const t = Math.max(0, Math.min(1, (v - 1) / 4))
@@ -399,7 +424,7 @@ function GraphTools({ graph }) {
   useEffect(() => { ctx?.registerGraph(graph) }) // eslint-disable-line
   if (!ctx) return null
 
-  const summary = ctx.summaries[`${graph.key}::${graph.breakdown || ''}`]
+  const summary = ctx.summaries[graph.key]
   const run = async () => {
     setLoading(true); setError(null)
     try { await ctx.summarizeGraph(graph) } catch (e) { setError(e.message) } finally { setLoading(false) }
@@ -471,12 +496,17 @@ export default function AnalysisPanel({ user }) {
 
   // Context: notes CRUD, per-graph AI summaries, and a registry the report uses.
   const summarizeGraph = async (graph) => {
+    // Prefer the multi-angle profile (overall + every breakdown); fall back to
+    // the single current-view rows for charts without a profile (e.g. the map).
+    const body = graph.makeProfile
+      ? { title: graph.title, kind: graph.kind, views: graph.makeProfile() }
+      : { title: graph.title, kind: graph.kind, series: graph.series, rows: graph.rows }
     const res = await fetch('/api/analysis/summarize', {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: graph.title, breakdown: graph.breakdown, series: graph.series, rows: graph.rows, kind: graph.kind }),
+      body: JSON.stringify(body),
     })
     const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Summary failed')
-    setSummaries(s => ({ ...s, [`${graph.key}::${graph.breakdown || ''}`]: d.summary }))
+    setSummaries(s => ({ ...s, [graph.key]: d.summary }))
     return d.summary
   }
   const [reportBusy, setReportBusy] = useState(false)
@@ -566,6 +596,23 @@ export default function AnalysisPanel({ user }) {
   }, [data, dimKey])
 
   const cats = groups.map(g => g.key)
+
+  // Group respondents by any dimension key (used for the multi-angle profile).
+  const groupsBy = (dk) => {
+    if (!dk) return [{ key: 'All', rows: data.respondents }]
+    const m = {}
+    data.respondents.forEach(r => { const c = r.d[dk]; if (c == null) return; (m[c] = m[c] || []).push(r) })
+    return Object.entries(m).sort((a, b) => b[1].length - a[1].length).map(([key, rows]) => ({ key, rows }))
+  }
+  // Build the full profile for one indicator: overall + every disaggregation.
+  const buildViews = (kind, ind) => {
+    const dks = [{ key: '', label: 'Overall' }, ...data.dimensions]
+    return dks.map(d => {
+      const g = groupsBy(d.key)
+      const res = kind === 'single' ? aggSingle(g, ind) : kind === 'multi' ? aggMulti(g, ind) : aggMean(g, ind)
+      return { label: d.key ? `By ${d.label}` : 'Overall', series: res.series, rows: res.rows }
+    })
+  }
 
   // ---- aggregation helpers (memoized via the functions closing over groups) ----
   const singleData = (ind) => {
@@ -665,6 +712,19 @@ export default function AnalysisPanel({ user }) {
     Experience: r2(gapMeanOf(rows, 'perception_' + d.suffix) || 0),
     Expectation: r2(gapMeanOf(rows, 'expect_' + d.suffix) || 0),
   }))
+  // Multi-angle profile for the gap question: overall experience-vs-expectation,
+  // then gap size per group for each disaggregation.
+  const gapMakeProfile = () => {
+    const dks = [{ key: '', label: 'Overall' }, ...data.dimensions]
+    return dks.map(d => {
+      const g = groupsBy(d.key)
+      if (!d.key) return { label: 'Overall (experience vs expectation)', series: ['Experience', 'Expectation'], rows: gapPanelRows(data.respondents) }
+      return {
+        label: `Gap by ${d.label}`, series: g.map(x => x.key),
+        rows: gapDimOrder.map(dim => { const row = { name: dim.label }; g.forEach(x => { const ex = gapMeanOf(x.rows, 'perception_' + dim.suffix); const exp = gapMeanOf(x.rows, 'expect_' + dim.suffix); row[x.key] = (ex != null && exp != null) ? r2(exp - ex) : 0 }); return row }),
+      }
+    })
+  }
 
   return (
    <AnalysisCtx.Provider value={ctxValue}>
@@ -713,7 +773,6 @@ export default function AnalysisPanel({ user }) {
         {!dimKey ? (
           <Card title="What people experience vs what they expect (1–5)" n={data.n}
             csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
-            graph={{ key: 'gap', title: 'Expectation gap (experience vs expectation)', breakdown: '', series: ['Experience', 'Expectation'], rows: gapRows, kind: 'gap' }}
             note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
             <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
           </Card>
@@ -723,14 +782,17 @@ export default function AnalysisPanel({ user }) {
               const rows = gapPanelRows(g.rows)
               return (
                 <Card key={g.key} title={`${g.key} · experience vs expectation`} n={g.rows.length}
-                  csv={{ rows, series: ['Experience', 'Expectation'] }}
-                  graph={{ key: `gap:${g.key}`, title: `Expectation gap — ${g.key}`, breakdown: dimLabel, series: ['Experience', 'Expectation'], rows, kind: 'gap' }}>
+                  csv={{ rows, series: ['Experience', 'Expectation'] }}>
                   <HBar rows={rows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={24} />
                 </Card>
               )
             })}
           </div>
         )}
+        {/* One AI summary + notes for the whole expectation-gap question */}
+        <div className="print-card bg-white rounded-xl border border-slate-100 px-4 pb-3 mt-3">
+          <GraphTools graph={{ key: 'gap', title: 'Expectation gap (experience vs expectation)', kind: 'gap', makeProfile: gapMakeProfile }} />
+        </div>
       </section>
 
       {/* Sectioned indicators */}
@@ -749,13 +811,13 @@ export default function AnalysisPanel({ user }) {
               {showTrust && (() => {
                 const { rows, n } = meanData(meta.trust.actors)
                 return <Card key="trust" title={meta.trust.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: 'trust', title: meta.trust.label, breakdown: dimKey ? dimLabel : '', series: cats, rows, kind: 'mean' }}>
+                  graph={{ key: 'trust', title: meta.trust.label, kind: 'mean', makeProfile: () => buildViews('mean', meta.trust.actors) }}>
                   <HBar rows={rows} series={cats} domain={[1, 5]} unit="" />
                 </Card>
               })()}
               {multis.map(m => { const { rows, n } = multiData(m); return (
                 <Card key={m.key} title={m.label} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `multi:${m.key}`, title: m.label, breakdown: dimKey ? dimLabel : '', series: cats, rows, kind: 'pct' }}>
+                  graph={{ key: `multi:${m.key}`, title: m.label, kind: 'pct', makeProfile: () => buildViews('multi', m) }}>
                   <HBar rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
@@ -765,13 +827,13 @@ export default function AnalysisPanel({ user }) {
                 const usePie = !dimKey && rows.length <= PIE_MAX
                 return (
                 <Card key={s.key} title={s.label} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `single:${s.key}`, title: s.label, breakdown: dimKey ? dimLabel : '', series: cats, rows, kind: 'pct' }}>
+                  graph={{ key: `single:${s.key}`, title: s.label, kind: 'pct', makeProfile: () => buildViews('single', s) }}>
                   {usePie ? <Donut rows={rows} seriesKey="All" /> : <HBar rows={rows} series={cats} unit="%" />}
                 </Card>
               )})}
               {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); return (
                 <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  graph={{ key: `likert:${l.key}`, title: l.label, breakdown: dimKey ? dimLabel : '', series: cats, rows, kind: 'mean' }}>
+                  graph={{ key: `likert:${l.key}`, title: l.label, kind: 'mean', makeProfile: () => buildViews('mean', [{ col: l.key, label: l.label }]) }}>
                   <HBar rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
                 </Card>
               )})}
