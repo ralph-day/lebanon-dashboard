@@ -1460,6 +1460,12 @@ app.get('/api/analysis', requireAuth, async (req, res) => {
   const respondents = accepted.map(r => {
     const d = {};
     for (const dim of ANALYSIS.DIMENSIONS) d[dim.key] = dim.from(r);
+    // Location + GPS for the graduated-symbol map (same coords already exposed
+    // via /api/data gpsPoints). Bubbles are placed at per-location centroids.
+    d.loc = ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || null;
+    const lat = parseFloat(r['gps-Latitude']); const lng = parseFloat(r['gps-Longitude']);
+    d.lat = Number.isFinite(lat) ? lat : null;
+    d.lng = Number.isFinite(lng) ? lng : null;
     const v = {};
     // single-choice: keep value unless it's an explicit non-response (note: '0'
     // is a real answer for yes/no items, so it is preserved)

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
 } from 'recharts'
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 
 const PALETTE = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d']
 const SECTION_ORDER = ['Demographics', 'Priorities & Coping', 'Community & Aid', 'Trust', 'Information', 'Future Outlook']
@@ -24,6 +26,82 @@ function downloadCsv(filename, rows, series) {
 }
 
 const SENT_COLOR = { positive: 'bg-emerald-100 text-emerald-700', neutral: 'bg-slate-100 text-slate-600', negative: 'bg-red-100 text-red-700', mixed: 'bg-amber-100 text-amber-700' }
+
+// Map a 1–5 mean to a red→amber→green fill.
+function scaleColor(v) {
+  const t = Math.max(0, Math.min(1, (v - 1) / 4))
+  const hue = t * 120 // 0=red, 120=green
+  return `hsl(${hue}, 70%, 45%)`
+}
+
+// Graduated-symbol map: one bubble per location, colored by an indicator's mean
+// (1–5) and sized by respondent count, at each location's GPS centroid.
+function MapSection({ respondents, meta }) {
+  const metricOpts = useMemo(() => [
+    ...meta.likert.map(l => ({ col: l.key, label: l.label })),
+    ...meta.trust.actors.map(a => ({ col: a.col, label: `Trust: ${a.label}` })),
+    ...meta.gap.dims.map(g => ({ col: `perception_${g.suffix}`, label: `Experienced: ${g.label}` })),
+  ], [meta])
+  const [metric, setMetric] = useState(metricOpts[0]?.col)
+
+  const locs = useMemo(() => {
+    const m = {}
+    respondents.forEach(r => {
+      const L = r.d.loc
+      if (!L || r.d.lat == null || r.d.lng == null) return
+      const o = (m[L] = m[L] || { lat: 0, lng: 0, c: 0, vals: [] })
+      o.lat += r.d.lat; o.lng += r.d.lng; o.c++
+      const v = r.v[metric]; if (typeof v === 'number') o.vals.push(v)
+    })
+    return Object.entries(m).map(([loc, o]) => ({
+      loc, lat: o.lat / o.c, lng: o.lng / o.c, n: o.vals.length,
+      mean: o.vals.length ? o.vals.reduce((a, b) => a + b, 0) / o.vals.length : null,
+    })).filter(x => x.mean != null && Number.isFinite(x.lat) && Number.isFinite(x.lng))
+  }, [respondents, metric])
+
+  const maxN = Math.max(1, ...locs.map(l => l.n))
+  const radius = n => 6 + Math.sqrt(n / maxN) * 20
+
+  return (
+    <section>
+      <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+        <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" /> Geographic view
+      </h3>
+      <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <label className="text-xs text-slate-500 no-print">Metric</label>
+          <select value={metric} onChange={e => setMetric(e.target.value)}
+            className="no-print text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 max-w-full">
+            {metricOpts.map(o => <option key={o.col} value={o.col}>{o.label}</option>)}
+          </select>
+          <span className="text-xs text-slate-400 ml-auto">{locs.length} locations · bubble size = sample, color = mean (1–5)</span>
+        </div>
+        <div className="h-96 rounded-lg overflow-hidden">
+          <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
+            <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            {locs.map(l => (
+              <CircleMarker key={l.loc} center={[l.lat, l.lng]} radius={radius(l.n)}
+                pathOptions={{ color: scaleColor(l.mean), fillColor: scaleColor(l.mean), fillOpacity: 0.7, weight: 1 }}>
+                <Popup>
+                  <div className="text-xs">
+                    <p className="font-semibold">{l.loc}</p>
+                    <p>Mean: {l.mean.toFixed(2)} / 5</p>
+                    <p>n = {l.n}</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
+          </MapContainer>
+        </div>
+        <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
+          <span>Low (1)</span>
+          <div className="h-2 flex-1 rounded-full" style={{ background: 'linear-gradient(to right, hsl(0,70%,45%), hsl(60,70%,45%), hsl(120,70%,45%))' }} />
+          <span>High (5)</span>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 // Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
 // on demand (the API call can take ~30–90s), caches per field in local state.
@@ -337,6 +415,8 @@ export default function AnalysisPanel() {
           </section>
         )
       })}
+
+      <MapSection respondents={data.respondents} meta={meta} />
 
       <QualitativeSection fields={meta.qualitative} />
     </div>
