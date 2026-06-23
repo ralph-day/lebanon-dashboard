@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell,
+  PieChart, Pie,
 } from 'recharts'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -8,6 +9,7 @@ import 'leaflet/dist/leaflet.css'
 const PALETTE = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d']
 const SECTION_ORDER = ['Demographics', 'Priorities & Coping', 'Community & Aid', 'Trust', 'Information', 'Future Outlook']
 const SMALL_N = 20 // warn when a disaggregated cell is below this
+const PIE_MAX = 6  // single-choice questions with <= this many options render as a donut (overall view)
 
 const prettify = s => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
 
@@ -37,12 +39,13 @@ function scaleColor(v) {
 // Graduated-symbol map: one bubble per location, colored by an indicator's mean
 // (1–5) and sized by respondent count, at each location's GPS centroid.
 function MapSection({ respondents, meta }) {
-  const metricOpts = useMemo(() => [
-    ...meta.likert.map(l => ({ col: l.key, label: l.label })),
-    ...meta.trust.actors.map(a => ({ col: a.col, label: `Trust: ${a.label}` })),
-    ...meta.gap.dims.map(g => ({ col: `perception_${g.suffix}`, label: `Experienced: ${g.label}` })),
+  const metricGroups = useMemo(() => [
+    { group: 'Wellbeing', items: meta.likert.map(l => ({ col: l.key, label: l.label })) },
+    { group: 'Trust in actors', items: meta.trust.actors.map(a => ({ col: a.col, label: a.label })) },
+    { group: 'Experience (accountability)', items: meta.gap.dims.map(g => ({ col: `perception_${g.suffix}`, label: g.label })) },
   ], [meta])
-  const [metric, setMetric] = useState(metricOpts[0]?.col)
+  const [metric, setMetric] = useState(metricGroups[0]?.items[0]?.col)
+  const activeLabel = metricGroups.flatMap(g => g.items).find(i => i.col === metric)?.label || ''
 
   const locs = useMemo(() => {
     const m = {}
@@ -68,13 +71,23 @@ function MapSection({ respondents, meta }) {
         <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" /> Geographic view
       </h3>
       <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <label className="text-xs text-slate-500 no-print">Metric</label>
-          <select value={metric} onChange={e => setMetric(e.target.value)}
-            className="no-print text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 max-w-full">
-            {metricOpts.map(o => <option key={o.col} value={o.col}>{o.label}</option>)}
-          </select>
-          <span className="text-xs text-slate-400 ml-auto">{locs.length} locations · bubble size = sample, color = mean (1–5)</span>
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <p className="text-sm font-semibold text-slate-700">Mapping: <span className="text-blue-600">{activeLabel}</span></p>
+          <span className="text-xs text-slate-400">{locs.length} locations · bubble size = sample, color = mean (1–5)</span>
+        </div>
+        {/* Creative metric picker: grouped pills instead of a dropdown */}
+        <div className="no-print space-y-1.5 mb-3 max-h-32 overflow-y-auto no-scrollbar">
+          {metricGroups.map(g => (
+            <div key={g.group} className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-slate-400 w-full sm:w-auto sm:mr-1">{g.group}</span>
+              {g.items.map(it => (
+                <button key={it.col} onClick={() => setMetric(it.col)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${metric === it.col ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          ))}
         </div>
         <div className="h-96 rounded-lg overflow-hidden">
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
@@ -287,6 +300,23 @@ function HBar({ rows, series, domain, unit = '%', rowH = 26 }) {
   )
 }
 
+// Donut chart for single-choice questions with few options (overall view only).
+function Donut({ rows, seriesKey }) {
+  const data = rows.map(r => ({ name: r.name, value: r[seriesKey] }))
+  return (
+    <ResponsiveContainer width="100%" height={Math.max(200, 150 + data.length * 18)}>
+      <PieChart>
+        <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={48} outerRadius={82} paddingAngle={1}
+          label={({ value }) => `${value}%`} labelLine={false}>
+          {data.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} />)}
+        </Pie>
+        <Tooltip formatter={v => `${v}%`} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+}
+
 function Card({ title, n, note, csv, children }) {
   return (
     <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
@@ -406,22 +436,26 @@ export default function AnalysisPanel() {
   return (
     <div className="space-y-5">
       {/* Controls */}
-      <div className="bg-white rounded-xl border border-slate-100 p-4 flex flex-wrap items-center gap-3 sticky top-[97px] z-10">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
-          <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
-        </div>
-        <div className="ml-auto flex items-center gap-2 no-print">
-          <label className="text-xs text-slate-500">Break down by</label>
-          <select value={dimKey} onChange={e => setDimKey(e.target.value)}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700">
-            <option value="">— None (overall) —</option>
-            {data.dimensions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
+      <div className="bg-white rounded-xl border border-slate-100 p-4 sticky top-[97px] z-10">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
+            <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
+          </div>
           <button onClick={() => window.print()}
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
+            className="no-print ml-auto text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
             ⎙ Print / PDF
           </button>
+        </div>
+        {/* Breakdown as selectable tags, applied to every question below */}
+        <div className="no-print flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-500 mr-1">Break down by</span>
+          {[{ key: '', label: 'Overall' }, ...data.dimensions].map(d => (
+            <button key={d.key || 'all'} onClick={() => setDimKey(d.key)}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${dimKey === d.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}>
+              {d.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -461,9 +495,13 @@ export default function AnalysisPanel() {
                   <HBar rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
-              {singles.map(s => { const { rows, n } = singleData(s); return (
+              {singles.map(s => { const { rows, n } = singleData(s)
+                // Few-option single-choice questions read better as a donut, but
+                // only in the overall view (a breakdown needs grouped bars).
+                const usePie = !dimKey && rows.length <= PIE_MAX
+                return (
                 <Card key={s.key} title={s.label} n={n} note={smallNote} csv={{ rows, series: cats }}>
-                  <HBar rows={rows} series={cats} unit="%" />
+                  {usePie ? <Donut rows={rows} seriesKey="All" /> : <HBar rows={rows} series={cats} unit="%" />}
                 </Card>
               )})}
               {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); return (
