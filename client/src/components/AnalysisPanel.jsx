@@ -795,3 +795,6 @@ export default function AnalysisPanel({ user }) {
    </AnalysisCtx.Provider>
   )
 }
+
+// Shared primitives reused by the Report builder.
+export { PALETTE, scaleColor, HBar, Donut, MapSection, aggSingle, aggMulti, aggMean }

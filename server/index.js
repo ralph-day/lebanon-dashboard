@@ -1746,6 +1746,72 @@ Be precise and quantitative, but synthesise — do not list every number. No pre
   }
 });
 
+// Shared AI error → friendly message.
+function aiErrorResponse(res, err, where) {
+  const status = err?.status;
+  const raw = err?.error?.error?.message || err?.message || '';
+  console.error(`[${where}] error:`, status, raw);
+  let msg = 'Request failed — please try again.';
+  if (status === 529 || status === 429 || /overloaded/i.test(raw)) msg = 'Anthropic is temporarily overloaded — try again in a moment.';
+  else if (/credit balance/i.test(raw)) msg = 'Anthropic account is out of credits — add a balance in Plans & Billing.';
+  res.status(status === 529 || status === 429 ? 503 : 500).json({ error: msg });
+}
+
+// ── Analysis report (one living, auto-saved document) ─────────────────────────
+const REPORT_PATH = path.join(DATA_DIR, 'analysis_report.json');
+let analysisReport = {};
+try { if (fs.existsSync(REPORT_PATH)) analysisReport = JSON.parse(fs.readFileSync(REPORT_PATH, 'utf8')); } catch (e) { console.error('Could not load report:', e.message); }
+function saveReport() { try { atomicWrite(REPORT_PATH, JSON.stringify(analysisReport, null, 2)); } catch (e) { console.error('Could not save report:', e.message); } }
+
+app.get('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => res.json(analysisReport));
+app.put('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Invalid report' });
+  if (JSON.stringify(body).length > 2000000) return res.status(413).json({ error: 'Report too large' });
+  analysisReport = { ...body, updatedAt: new Date().toISOString(), updatedBy: req.session.user?.email || '' };
+  saveReport();
+  res.json({ ok: true, updatedAt: analysisReport.updatedAt });
+});
+
+// Executive summary — synthesise all per-question findings into a conclusion.
+app.post('/api/analysis/report/exec-summary', requireAuth, requireAnalyst, summaryLimit, async (req, res) => {
+  const findings = Array.isArray(req.body?.findings) ? req.body.findings : [];
+  if (!findings.length) return res.status(400).json({ error: 'No findings to summarise yet — generate the question summaries first.' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured (ANTHROPIC_API_KEY missing in Railway)' });
+  const list = findings.slice(0, 60).map((f, i) => `${i + 1}. ${String(f.title || '').slice(0, 120)}: ${String(f.summary || '').slice(0, 800)}`).join('\n').slice(0, 24000);
+  const system = `${STUDY_OBJECTIVE}
+
+You are writing the EXECUTIVE SUMMARY of the study report. You are given the per-question findings already drafted. Synthesise them into a cohesive executive summary (4–8 sentences, or two short paragraphs): the 3–5 most important cross-cutting messages, the largest accountability gaps and subgroup inequities, and the clearest implications for the humanitarian response. Be specific and quantitative where the findings allow. Integrate — do not just list the findings. No preamble.`;
+  try {
+    const client = new Anthropic({ apiKey, maxRetries: 4 });
+    const stream = client.messages.stream({ model: 'claude-opus-4-8', max_tokens: 1800, thinking: { type: 'adaptive' }, system, messages: [{ role: 'user', content: `Per-question findings:\n\n${list}` }] });
+    const message = await stream.finalMessage();
+    res.json({ summary: (message.content.find(b => b.type === 'text')?.text || '').trim() });
+  } catch (err) { aiErrorResponse(res, err, 'ExecSummary'); }
+});
+
+// Draft a narrative section (introduction / methodology) from known facts.
+app.post('/api/analysis/report/section', requireAuth, requireAnalyst, summaryLimit, async (req, res) => {
+  const section = String(req.body?.section || '');
+  const facts = String(req.body?.facts || '').slice(0, 4000);
+  if (!['intro', 'methodology'].includes(section)) return res.status(400).json({ error: 'Unknown section' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured (ANTHROPIC_API_KEY missing in Railway)' });
+  const ask = section === 'intro'
+    ? 'Write a concise INTRODUCTION for the report (2–4 short paragraphs): the context of the crisis and humanitarian response in Lebanon, the purpose of this perception study, and what the report covers.'
+    : 'Write a concise METHODOLOGY section (2–4 short paragraphs) using ONLY the facts provided: sampling approach, sample size and acceptance/quality assurance, geographic coverage, and the disaggregation dimensions analysed. Do not invent specifics not supported by the facts.';
+  const system = `${STUDY_OBJECTIVE}
+
+You are drafting one section of the study report for a professional humanitarian audience. ${ask} Professional report tone, no markdown headers, no preamble — just the prose.`;
+  try {
+    const client = new Anthropic({ apiKey, maxRetries: 4 });
+    const stream = client.messages.stream({ model: 'claude-opus-4-8', max_tokens: 1400, thinking: { type: 'adaptive' }, system, messages: [{ role: 'user', content: `Known facts about this study/report:\n${facts || '(none provided)'}` }] });
+    const message = await stream.finalMessage();
+    res.json({ text: (message.content.find(b => b.type === 'text')?.text || '').trim() });
+  } catch (err) { aiErrorResponse(res, err, 'SectionDraft'); }
+});
+
 // Full survey detail (all questions/answers, GPS, timing) for one submission
 app.get('/api/survey/:id', requireAuth, async (req, res) => {
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {

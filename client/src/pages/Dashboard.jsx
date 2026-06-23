@@ -9,6 +9,7 @@ import PaymentsPanel from '../components/PaymentsPanel'
 import MapPanel from '../components/MapPanel'
 import SecurityAlertsPanel from '../components/SecurityAlertsPanel'
 import AnalysisPanel from '../components/AnalysisPanel'
+import ReportBuilder from '../components/ReportBuilder'
 
 const REFRESH_INTERVAL = 15 * 60 * 1000
 const BASE_TABS = ['Overview', 'Field Progress', 'Locations', 'Enumerators', 'Data Quality', 'Map', 'Security']
@@ -24,6 +25,8 @@ const TAB_TO_SLUG = {
   'Locations': 'locations',
   'Enumerators': 'enumerators',
   'Data Quality': 'data-quality',
+  'Analysis': 'analysis',
+  'Report': 'report',
   'Map': 'map',
   'Team': 'team',
   'Security': 'security',
@@ -67,7 +70,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
   const canApproveQA  = user?.email === QA_ALLOWED_EMAIL
   const canAccessTeam = TEAM_ALLOWED_EMAILS.includes(user?.email)
   const canAnalyze    = ANALYST_ALLOWED_EMAILS.includes(user?.email)
-  const TABS = BASE_TABS.flatMap(t => (t === 'Data Quality' && canAnalyze) ? [t, 'Analysis'] : [t])
+  const TABS = BASE_TABS.flatMap(t => (t === 'Data Quality' && canAnalyze) ? [t, 'Analysis', 'Report'] : [t])
   if (canAccessTeam) TABS.push('Team')
 
   // Initialise active tab from URL hash
@@ -75,7 +78,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
     const { tabSlug } = parseHash()
     const tab = SLUG_TO_TAB[tabSlug]
     if (tab === 'Team' && !TEAM_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
-    if (tab === 'Analysis' && !ANALYST_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
+    if ((tab === 'Analysis' || tab === 'Report') && !ANALYST_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
     return tab || 'Overview'
   })
   const [initialTeamSubTab, setInitialTeamSubTab] = useState(() => parseHash().subSlug || 'tasks')
@@ -212,6 +215,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
             {activeTab === 'Enumerators'   && <EnumeratorPanel enumerators={data.enumerators} sectionTimings={data.sectionTimings} assignments={data.assignments || []} qaRows={data.qa?.rows || []} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Data Quality'  && <QAPanel qa={data.qa} canApprove={canApproveQA} notes={notes} onNoteAdded={n => setNotes(p => [n, ...p])} onNoteDeleted={id => setNotes(p => p.filter(n => n.id !== id))} />}
             {activeTab === 'Analysis'      && canAnalyze && <AnalysisPanel user={user} />}
+            {activeTab === 'Report'        && canAnalyze && <ReportBuilder user={user} />}
             {activeTab === 'Map'           && <MapPanel gpsPoints={data.gpsPoints || []} />}
             {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} initialSubTab={initialTeamSubTab} />}
             {activeTab === 'Security'      && <SecurityAlertsPanel />}
