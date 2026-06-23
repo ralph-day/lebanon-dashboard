@@ -9,6 +9,20 @@ const SMALL_N = 20 // warn when a disaggregated cell is below this
 
 const prettify = s => String(s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
 
+// Build CSV text from chart rows (first column = category name, then one column
+// per breakdown series) and trigger a download.
+const csvCell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+function downloadCsv(filename, rows, series) {
+  const head = ['Category', ...series]
+  const lines = [head.map(csvCell).join(',')]
+  rows.forEach(r => lines.push([r.name, ...series.map(s => r[s])].map(csvCell).join(',')))
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `${filename.replace(/[^\w\- ]+/g, '').trim() || 'chart'}.csv`
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
 const SENT_COLOR = { positive: 'bg-emerald-100 text-emerald-700', neutral: 'bg-slate-100 text-slate-600', negative: 'bg-red-100 text-red-700', mixed: 'bg-amber-100 text-amber-700' }
 
 // Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
@@ -45,7 +59,7 @@ function QualitativeSection({ fields }) {
         <span className="w-1.5 h-4 bg-violet-500 rounded-full inline-block" /> Qualitative — open-text themes <span className="text-xs font-normal text-violet-500">✦ AI</span>
       </h3>
       <div className="bg-white rounded-xl border border-slate-100 p-4">
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-3 no-print">
           {fields.map(f => (
             <button key={f.key} onClick={() => run(f.key)}
               className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${active === f.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>
@@ -135,12 +149,19 @@ function HBar({ rows, series, domain, unit = '%', rowH = 26 }) {
   )
 }
 
-function Card({ title, n, note, children }) {
+function Card({ title, n, note, csv, children }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-100 p-4">
+    <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
       <div className="flex items-baseline justify-between gap-3 mb-2">
         <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
-        {n != null && <span className="text-xs text-slate-400 shrink-0">n = {n}</span>}
+        <div className="flex items-center gap-2 shrink-0">
+          {n != null && <span className="text-xs text-slate-400">n = {n}</span>}
+          {csv && (
+            <button onClick={() => downloadCsv(title, csv.rows, csv.series)}
+              title="Download data as CSV"
+              className="no-print text-xs text-slate-400 hover:text-blue-600 transition-colors">⤓ CSV</button>
+          )}
+        </div>
       </div>
       {note && <p className="text-xs text-amber-600 mb-2">{note}</p>}
       {children}
@@ -252,13 +273,17 @@ export default function AnalysisPanel() {
           <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
           <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 no-print">
           <label className="text-xs text-slate-500">Break down by</label>
           <select value={dimKey} onChange={e => setDimKey(e.target.value)}
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700">
             <option value="">— None (overall) —</option>
             {data.dimensions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
           </select>
+          <button onClick={() => window.print()}
+            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
+            ⎙ Print / PDF
+          </button>
         </div>
       </div>
 
@@ -268,6 +293,7 @@ export default function AnalysisPanel() {
           <span className="w-1.5 h-4 bg-blue-600 rounded-full inline-block" /> Expectation Gap — experience vs expectation
         </h3>
         <Card title="What people experience vs what they expect (1–5)" n={data.n}
+          csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
           note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
           <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
         </Card>
@@ -288,22 +314,22 @@ export default function AnalysisPanel() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {showTrust && (() => {
                 const { rows, n } = meanData(meta.trust.actors)
-                return <Card key="trust" title={meta.trust.label + ' (mean 1–5)'} n={n} note={smallNote}>
+                return <Card key="trust" title={meta.trust.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}>
                   <HBar rows={rows} series={cats} domain={[1, 5]} unit="" />
                 </Card>
               })()}
               {multis.map(m => { const { rows, n } = multiData(m); return (
-                <Card key={m.key} title={m.label} n={n} note={smallNote}>
+                <Card key={m.key} title={m.label} n={n} note={smallNote} csv={{ rows, series: cats }}>
                   <HBar rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
               {singles.map(s => { const { rows, n } = singleData(s); return (
-                <Card key={s.key} title={s.label} n={n} note={smallNote}>
+                <Card key={s.key} title={s.label} n={n} note={smallNote} csv={{ rows, series: cats }}>
                   <HBar rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
               {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); return (
-                <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote}>
+                <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}>
                   <HBar rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
                 </Card>
               )})}
