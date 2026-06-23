@@ -13,6 +13,7 @@ const { ipKeyGenerator } = rateLimit;
 const { ENUMERATOR_ASSIGNMENTS } = require('./enumeratorConfig');
 const Anthropic = require('@anthropic-ai/sdk');
 const { LOCATION_MAP, REGION_ORDER, GROUP_ORDER } = require('./locationConfig');
+const ANALYSIS = require('./analysisConfig');
 const cron = require('node-cron');
 
 // ── Startup validation — fail fast regardless of NODE_ENV ─────────────────────
@@ -1413,6 +1414,68 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
   const clientRows = approvedRows.slice(-2000);
   const { rawByInstance, sectionTimingByInstance, gtsMatchByInstance, ...publicData } = cache.data;
   res.json({ ...publicData, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
+});
+
+// Analysis dataset — a compact, PII-free projection of the ACCEPTED surveys for
+// the results explorer. The client cross-tabs this in-browser, so we ship one
+// sparse record per respondent (only answered values) plus the indicator
+// registry that tells the client how to interpret each field.
+app.get('/api/analysis', requireAuth, async (req, res) => {
+  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
+    await refreshCache();
+  }
+  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+
+  const rawRows = Object.values(cache.data.rawByInstance || {});
+  const gtsMatch = cache.data.gtsMatchByInstance || {};
+  const accepted = rawRows.filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'));
+
+  const isNR = v => ANALYSIS.NONRESPONSE.has(v == null ? null : String(v).trim());
+  const likertVal = v => { const n = parseInt(v, 10); return n >= 1 && n <= 5 ? n : null; };
+
+  // Discover multi-select member columns by prefix (robust to questionnaire typos)
+  const allCols = accepted.length ? Object.keys(accepted[0]) : [];
+  const multiMeta = ANALYSIS.MULTI.map(m => {
+    const members = allCols
+      .filter(c => c.startsWith(m.key + '_'))
+      .map(c => ({ col: c, suffix: c.slice(m.key.length + 1) }))
+      .filter(x => x.suffix && !['text', '98', '99', '999'].includes(x.suffix))
+      .map(x => ({ col: x.col, label: (m.labels && m.labels[x.suffix]) || ANALYSIS.prettify(x.suffix) }));
+    return { key: m.key, label: m.label, section: m.section, members };
+  });
+
+  const respondents = accepted.map(r => {
+    const d = {};
+    for (const dim of ANALYSIS.DIMENSIONS) d[dim.key] = dim.from(r);
+    const v = {};
+    // single-choice: keep value unless it's an explicit non-response (note: '0'
+    // is a real answer for yes/no items, so it is preserved)
+    for (const s of ANALYSIS.SINGLE) { if (!isNR(r[s.key]) && r[s.key] != null && r[s.key] !== '') v[s.key] = String(r[s.key]); }
+    // likert / trust actors / gap pairs: keep only 1..5
+    for (const l of ANALYSIS.LIKERT) { const n = likertVal(r[l.key]); if (n != null) v[l.key] = n; }
+    for (const a of ANALYSIS.TRUST_ACTORS.actors) { const n = likertVal(r[a.col]); if (n != null) v[a.col] = n; }
+    for (const g of ANALYSIS.GAP_DIMS) {
+      const p = likertVal(r['perception_' + g.suffix]); if (p != null) v['perception_' + g.suffix] = p;
+      const e = likertVal(r['expect_' + g.suffix]);     if (e != null) v['expect_' + g.suffix] = e;
+    }
+    // multi-select: store only selected members (== 1) to keep payload sparse
+    for (const m of multiMeta) for (const mem of m.members) { if (String(r[mem.col]) === '1') v[mem.col] = 1; }
+    return { d, v };
+  });
+
+  res.json({
+    n: respondents.length,
+    fetchedAt: cache.fetchedAt,
+    dimensions: ANALYSIS.DIMENSIONS.map(({ key, label }) => ({ key, label })),
+    meta: {
+      single: ANALYSIS.SINGLE,
+      likert: ANALYSIS.LIKERT,
+      multi: multiMeta,
+      trust: ANALYSIS.TRUST_ACTORS,
+      gap: { section: 'Expectation Gap', dims: ANALYSIS.GAP_DIMS },
+    },
+    respondents,
+  });
 });
 
 // Full survey detail (all questions/answers, GPS, timing) for one submission
