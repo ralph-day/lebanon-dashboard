@@ -21,3 +21,12 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Print / PDF: drop the app chrome and interactive controls, keep the analysis
+   content, and avoid splitting a chart card across pages. */
+@media print {
+  header, .no-print { display: none !important; }
+  main { padding: 0 !important; }
+  .print-card, section { break-inside: avoid; page-break-inside: avoid; }
+  body { background: #fff; }
+}
