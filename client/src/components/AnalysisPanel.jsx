@@ -479,6 +479,22 @@ export default function AnalysisPanel({ user }) {
     setSummaries(s => ({ ...s, [`${graph.key}::${graph.breakdown || ''}`]: d.summary }))
     return d.summary
   }
+  const [reportBusy, setReportBusy] = useState(false)
+  const [reportProgress, setReportProgress] = useState(null)
+
+  // Generate report: AI-summarize every registered chart (limited concurrency),
+  // then open the print dialog (print CSS keeps charts + summaries + notes).
+  const generateReport = async () => {
+    setReportBusy(true)
+    const metas = [...graphsRef.current.values()]
+    const queue = metas.filter(m => !summaries[`${m.key}::${m.breakdown || ''}`])
+    let done = 0; setReportProgress({ done: 0, total: queue.length })
+    const worker = async () => { while (queue.length) { const m = queue.shift(); try { await summarizeGraph(m) } catch { /* keep going */ } setReportProgress({ done: ++done, total: metas.length }) } }
+    await Promise.all([worker(), worker(), worker(), worker()])
+    setReportBusy(false); setReportProgress(null)
+    setTimeout(() => window.print(), 500)
+  }
+
   const ctxValue = {
     user, allNotes, summaries,
     addNote: n => setAllNotes(p => [n, ...p]),
@@ -591,6 +607,11 @@ export default function AnalysisPanel({ user }) {
   return (
    <AnalysisCtx.Provider value={ctxValue}>
     <div className="space-y-5">
+      {/* Print-only report header */}
+      <div className="hidden print:block mb-2">
+        <h1 className="text-xl font-bold text-slate-800">Lebanon Emergency Response Perception Study 2026</h1>
+        <p className="text-sm text-slate-500">Results report · {data.n} accepted surveys · {dimKey ? `Broken down by ${dimLabel}` : 'Overall'} · Generated {new Date().toLocaleDateString()}</p>
+      </div>
       {/* Controls */}
       <div className="bg-white rounded-xl border border-slate-100 p-4 sticky top-[97px] z-10">
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -598,10 +619,16 @@ export default function AnalysisPanel({ user }) {
             <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
             <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
           </div>
-          <button onClick={() => window.print()}
-            className="no-print ml-auto text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
-            ⎙ Print / PDF
-          </button>
+          <div className="no-print ml-auto flex items-center gap-2">
+            <button onClick={generateReport} disabled={reportBusy}
+              className="text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-60">
+              {reportBusy ? `✦ Summarizing ${reportProgress?.done || 0}/${reportProgress?.total || 0}…` : '✦ Generate report'}
+            </button>
+            <button onClick={() => window.print()}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-600 hover:border-blue-300 transition-colors">
+              ⎙ Print / PDF
+            </button>
+          </div>
         </div>
         {/* Breakdown as selectable tags, applied to every question below */}
         <div className="no-print flex flex-wrap items-center gap-2">
