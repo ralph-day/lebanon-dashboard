@@ -143,15 +143,49 @@ const GAP_DIMS = [
   { suffix: 'action', label: 'Feedback leading to action' },
 ];
 
-// ── Open-text fields for qualitative (Claude) analysis ───────────────────────
-// Allowlisted so the endpoint can never be pointed at an arbitrary column.
+// ── Open-text fields ─────────────────────────────────────────────────────────
+// QUALITATIVE = substantial narrative questions sent for AI thematic analysis.
+// OPEN_TEXT   = every browsable open-text field (raw "read all answers" viewer).
+// Both are allowlists so the endpoints can never be pointed at an arbitrary
+// (e.g. PII) column.
 const QUALITATIVE = [
   { key: 'message_to_world', label: 'Message to the world' },
   { key: 'hope_future', label: 'Hopes for the future' },
   { key: 'anything_else', label: 'Anything else to share' },
+  { key: 'info_source_text', label: 'Information / news sources' },
+  { key: 'out_control_why', label: 'Why people feel out of control' },
+  { key: 'in_control_why', label: 'Why people feel in control' },
+  { key: 'contradictory_info_detail', label: 'Contradictory information' },
+];
+
+// "Other — specify" and short free-text fields: browsable verbatim, not themed.
+const OPEN_TEXT = [
+  ...QUALITATIVE,
+  { key: 'registration_text', label: 'Aid registration — other' },
+  { key: 'aid_who_text', label: 'Who provided aid — other' },
+  { key: 'coping_strategies_text', label: 'Coping strategies — other' },
+  { key: 'sampling_source_text', label: 'How they were referred — other' },
+  { key: 'info_pref_from_text', label: 'Preferred info source — other' },
+  { key: 'want_know_more_text', label: 'Wants to know more — other' },
+  { key: 'main_fears_text', label: 'Main fears — other' },
+  { key: 'trust_factors_text', label: 'Trust factors — other' },
+  { key: 'mutual_aid_type_text', label: 'Mutual aid type — other' },
+  { key: 'recovery_actions_text', label: 'Recovery actions — other' },
+  { key: 'info_barriers_text', label: 'Information barriers — other' },
+  { key: 'current_priorities_text', label: 'Priorities — other' },
+  { key: 'info_source_aid_text', label: 'Aid information source — other' },
+  { key: 'live_with_text', label: 'Who they live with — other' },
+  { key: 'reason_change_location_text', label: 'Reason for moving — other' },
+  { key: 'plans_text', label: 'Future plans — other' },
+  { key: 'reason_not_registered_text', label: 'Why not registered — other' },
+  { key: 'info_how_text', label: 'How they get information — other' },
+  { key: 'living_situation_text', label: 'Living situation — other' },
+  { key: 'aid_type_text', label: 'Aid type — other' },
+  { key: 'tension_source_text', label: 'Tension source — other' },
+  { key: 'survey_whynot_text', label: 'Survey feedback — other' },
 ];
 
 module.exports = {
   prettify, NONRESPONSE, ageBucket, normDisplacement,
-  DIMENSIONS, SINGLE, LIKERT, MULTI, TRUST_ACTORS, GAP_DIMS, QUALITATIVE,
+  DIMENSIONS, SINGLE, LIKERT, MULTI, TRUST_ACTORS, GAP_DIMS, QUALITATIVE, OPEN_TEXT,
 };

@@ -1502,9 +1502,37 @@ app.get('/api/analysis', requireAuth, requireAnalyst, async (req, res) => {
       trust: ANALYSIS.TRUST_ACTORS,
       gap: { section: 'Expectation Gap', dims: ANALYSIS.GAP_DIMS },
       qualitative: ANALYSIS.QUALITATIVE,
+      openText: ANALYSIS.OPEN_TEXT,
     },
     respondents,
   });
+});
+
+// Raw open-text responses for one field — every accepted answer, verbatim, in
+// the language it was written. No AI / no cost. Allowlisted field only.
+app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res) => {
+  const field = String(req.query.field || '');
+  const meta = ANALYSIS.OPEN_TEXT.find(f => f.key === field);
+  if (!meta) return res.status(400).json({ error: 'Unknown or unsupported field' });
+
+  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
+    await refreshCache();
+  }
+  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+
+  const rawRows = Object.values(cache.data.rawByInstance || {});
+  const gtsMatch = cache.data.gtsMatchByInstance || {};
+  const SKIP = new Set(['نعم', 'لا', 'no', 'none', 'na', 'n/a', '99', '98', '-', '.']);
+  const responses = rawRows
+    .filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'))
+    .map(r => ({
+      text: String(r[field] ?? '').trim(),
+      location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+      nationality: ANALYSIS.prettify(r.nationality) || '',
+    }))
+    .filter(x => x.text.length > 1 && !SKIP.has(x.text.toLowerCase()));
+
+  res.json({ field, label: meta.label, n: responses.length, fetchedAt: cache.fetchedAt, responses });
 });
 
 // Qualitative (Claude) analysis of an open-text field. Thematic coding +

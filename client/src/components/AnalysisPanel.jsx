@@ -103,6 +103,66 @@ function MapSection({ respondents, meta }) {
   )
 }
 
+// Raw browser: read every answer to an open-text question verbatim, in the
+// language it was written. No AI — just the responses.
+function ResponsesBrowser({ fields }) {
+  const [field, setField] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [cache, setCache] = useState({})
+
+  if (!fields || !fields.length) return null
+
+  const load = (f) => {
+    setField(f); setError(null)
+    if (!f || cache[f]) return
+    setLoading(true)
+    fetch(`/api/analysis/responses?field=${encodeURIComponent(f)}`, { credentials: 'include' })
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Failed to load'); return d })
+      .then(d => setCache(c => ({ ...c, [f]: d })))
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }
+
+  const result = field && cache[field]
+
+  return (
+    <section>
+      <h3 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+        <span className="w-1.5 h-4 bg-slate-400 rounded-full inline-block" /> All open-text responses (original language)
+      </h3>
+      <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <label className="text-xs text-slate-500 no-print">Question</label>
+          <select value={field} onChange={e => load(e.target.value)}
+            className="no-print text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 max-w-full">
+            <option value="">— Select a question —</option>
+            {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+          </select>
+          {result && <span className="text-xs text-slate-400 ml-auto">{result.n} responses</span>}
+        </div>
+
+        {loading && <p className="text-sm text-slate-400 py-6 text-center">Loading responses…</p>}
+        {error && <p className="text-sm text-red-600 py-3">{error}</p>}
+        {!field && !loading && <p className="text-sm text-slate-400 py-3">Pick a question to read every answer verbatim.</p>}
+
+        {result && !loading && (
+          <div className="max-h-[28rem] overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-lg">
+            {result.responses.map((r, i) => (
+              <div key={i} className="px-3 py-2 text-xs">
+                <p className="text-slate-800 whitespace-pre-wrap" dir="auto">{r.text}</p>
+                {(r.location || r.nationality) && (
+                  <p className="text-slate-400 mt-0.5">{[r.location, r.nationality].filter(Boolean).join(' · ')}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 // Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
 // on demand (the API call can take ~30–90s), caches per field in local state.
 function QualitativeSection({ fields }) {
@@ -419,6 +479,8 @@ export default function AnalysisPanel() {
       <MapSection respondents={data.respondents} meta={meta} />
 
       <QualitativeSection fields={meta.qualitative} />
+
+      <ResponsesBrowser fields={meta.openText} />
     </div>
   )
 }
