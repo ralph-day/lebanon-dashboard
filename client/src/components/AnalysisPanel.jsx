@@ -491,6 +491,14 @@ export default function AnalysisPanel({ user }) {
   const [vizByKey, setVizByKey] = useState({})   // graphKey -> chart type
   const [pushedKey, setPushedKey] = useState('') // transient "pushed ✓"
   const graphsRef = useRef(new Map()) // graphKey -> latest meta (for the report)
+  // Prompt technique (shared with the report via localStorage).
+  const [presets, setPresets] = useState([])
+  const [promptStyle, setPromptStyle] = useState('rigorous')
+  const [promptCustom, setPromptCustom] = useState('')
+  const [promptOpen, setPromptOpen] = useState(false)
+  const [aiAllBusy, setAiAllBusy] = useState(false)
+  const [aiProgress, setAiProgress] = useState(null)
+  const [pushedAll, setPushedAll] = useState(false)
 
   const pushChart = async (meta) => {
     try {
@@ -520,20 +528,50 @@ export default function AnalysisPanel({ user }) {
     try { localStorage.setItem(`an-sum::${data.fetchedAt}`, JSON.stringify(summaries)) } catch { /* ignore */ }
   }, [summaries, data?.fetchedAt])
 
+  // Prompt techniques: load presets + persisted choice (shared with the report).
+  useEffect(() => {
+    fetch('/api/analysis/prompts', { credentials: 'include' }).then(r => r.ok ? r.json() : { presets: [] }).then(d => setPresets(d.presets || [])).catch(() => {})
+    try { const raw = localStorage.getItem('analysis-prompt'); if (raw) { const p = JSON.parse(raw); setPromptStyle(p.style || 'rigorous'); setPromptCustom(p.custom || '') } } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    try { localStorage.setItem('analysis-prompt', JSON.stringify({ style: promptStyle, custom: promptCustom })) } catch { /* ignore */ }
+  }, [promptStyle, promptCustom])
+
   // Context: notes CRUD, per-graph AI summaries, and a registry the report uses.
   const summarizeGraph = async (graph) => {
     // Prefer the multi-angle profile (overall + every breakdown); fall back to
     // the single current-view rows for charts without a profile (e.g. the map).
-    const body = graph.makeProfile
+    const base = graph.makeProfile
       ? { title: graph.title, kind: graph.kind, views: graph.makeProfile() }
       : { title: graph.title, kind: graph.kind, series: graph.series, rows: graph.rows }
     const res = await fetch('/api/analysis/summarize', {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...base, style: promptStyle, customInstructions: promptCustom }),
     })
     const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Summary failed')
     setSummaries(s => ({ ...s, [graph.key]: d.summary }))
     return d.summary
+  }
+  // Analyze every chart at once (4-way concurrency, with progress).
+  const analyzeAll = async () => {
+    setAiAllBusy(true)
+    const metas = [...graphsRef.current.values()]
+    const queue = metas.filter(m => !summaries[m.key])
+    let done = 0; setAiProgress({ done: 0, total: queue.length })
+    const worker = async () => { while (queue.length) { const m = queue.shift(); try { await summarizeGraph(m) } catch { /* keep going */ } setAiProgress({ done: ++done, total: queue.length + done }) } }
+    await Promise.all([worker(), worker(), worker(), worker()])
+    setAiAllBusy(false); setAiProgress(null)
+  }
+  // Push every chart to the report at once (carries existing summaries).
+  const pushAll = async () => {
+    const metas = [...graphsRef.current.values()]
+    if (!metas.length) return
+    const blocks = metas.map(m => ({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${m.key}`, type: 'chart', qKey: m.key, title: m.title, kind: m.kind, viz: vizByKey[m.key] || 'bar', breakdown: dimKey, summary: summaries[m.key] || '', comment: '' }))
+    try {
+      const res = await fetch('/api/analysis/report/blocks', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blocks }) })
+      if (!res.ok) throw new Error('Failed')
+      setPushedAll(true); setTimeout(() => setPushedAll(false), 2500)
+    } catch { alert('Could not push to report') }
   }
   const [reportBusy, setReportBusy] = useState(false)
   const [reportProgress, setReportProgress] = useState(null)
@@ -767,11 +805,45 @@ export default function AnalysisPanel({ user }) {
             <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
             <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
           </div>
-          <a href="#report"
-            className="no-print ml-auto text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors">
-            ✦ Build a report →
-          </a>
+          <div className="no-print ml-auto flex items-center gap-2 flex-wrap">
+            <button onClick={() => setPromptOpen(o => !o)}
+              className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 bg-white text-slate-600 hover:border-violet-300">
+              ⚙ Prompt: {promptStyle === 'custom' ? 'Custom' : (presets.find(p => p.id === promptStyle)?.label || 'Rigorous analyst')}
+            </button>
+            <button onClick={analyzeAll} disabled={aiAllBusy}
+              className="text-sm rounded-lg px-3 py-1.5 bg-violet-600 text-white hover:bg-violet-700 transition-colors disabled:opacity-60">
+              {aiAllBusy ? `✦ Analyzing ${aiProgress?.done || 0}/${aiProgress?.total || 0}…` : '✦ Analyze all'}
+            </button>
+            <button onClick={pushAll}
+              className="text-sm rounded-lg px-3 py-1.5 border border-violet-200 text-violet-600 hover:bg-violet-50 transition-colors">
+              {pushedAll ? '✓ Pushed all' : '⤴ Push all to report'}
+            </button>
+            <a href="#report" className="text-sm rounded-lg px-3 py-1.5 bg-slate-800 text-white hover:bg-slate-700 transition-colors">Report →</a>
+          </div>
         </div>
+
+        {/* Prompt techniques panel */}
+        {promptOpen && (
+          <div className="no-print mb-3 border border-violet-100 bg-violet-50/40 rounded-lg p-3 space-y-2">
+            <p className="text-xs text-slate-500">Analysis technique — the study objective & multi-angle framing are always included; this controls the output style. Applies to every AI summary (here and in the report).</p>
+            <div className="flex flex-wrap gap-2">
+              {presets.map(p => (
+                <button key={p.id} onClick={() => setPromptStyle(p.id)} title={p.description}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${promptStyle === p.id ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>{p.label}</button>
+              ))}
+              <button onClick={() => { if (!promptCustom) setPromptCustom(presets.find(p => p.id === promptStyle)?.instructions || ''); setPromptStyle('custom') }}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${promptStyle === 'custom' ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>Custom</button>
+            </div>
+            <p className="text-xs text-slate-500">{promptStyle === 'custom' ? 'Your custom instructions:' : (presets.find(p => p.id === promptStyle)?.description || '')}</p>
+            {promptStyle === 'custom' ? (
+              <textarea value={promptCustom} onChange={e => setPromptCustom(e.target.value)} rows={6}
+                className="w-full text-xs text-slate-700 border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-violet-300" placeholder="Write your own analysis instructions…" />
+            ) : (
+              <pre className="text-xs text-slate-600 whitespace-pre-wrap bg-white border border-slate-100 rounded-lg p-2 max-h-48 overflow-y-auto">{presets.find(p => p.id === promptStyle)?.instructions || ''}</pre>
+            )}
+          </div>
+        )}
+
         {/* Breakdown as selectable tags, applied to every question below */}
         <div className="no-print flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500 mr-1">Break down by</span>

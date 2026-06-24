@@ -41,8 +41,15 @@ export default function ReportBuilder({ user }) {
   const [report, setReport] = useState(null) // { blocks: [] }
   const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState(true)
+  const [prompt, setPrompt] = useState({ style: 'rigorous', custom: '' })
   const dragId = useRef(null)
   const loadedRef = useRef(false)
+  const autoExecRef = useRef(false)
+
+  // Read the analysis technique chosen on the Analysis tab (shared via localStorage).
+  useEffect(() => {
+    try { const raw = localStorage.getItem('analysis-prompt'); if (raw) setPrompt(JSON.parse(raw)) } catch { /* ignore */ }
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -81,6 +88,19 @@ export default function ReportBuilder({ user }) {
     if (from < 0 || to < 0 || from === to) return bs
     const next = [...bs]; const [m] = next.splice(from, 1); next.splice(to, 0, m); return next
   })
+
+  // Auto-generate the executive summary on first open once chart findings exist.
+  useEffect(() => {
+    if (!report || autoExecRef.current) return
+    const execBlock = report.blocks.find(b => b.type === 'text' && b.role === 'exec')
+    const findings = report.blocks.filter(b => b.type === 'chart' && b.summary).map(b => ({ title: b.title, summary: b.summary }))
+    if (!execBlock || execBlock.text || findings.length < 2) return
+    autoExecRef.current = true
+    setBusy(execBlock.id)
+    fetch('/api/analysis/report/exec-summary', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ findings, style: prompt.style, customInstructions: prompt.custom }) })
+      .then(async r => { const d = await r.json(); if (r.ok && d.summary) updateBlock(execBlock.id, { text: d.summary }) })
+      .catch(() => {}).finally(() => setBusy(''))
+  }, [report, prompt]) // eslint-disable-line
 
   // ---- data helpers ----
   const groupsBy = (dk) => {
@@ -129,7 +149,7 @@ export default function ReportBuilder({ user }) {
     const q = resolveQ(block.qKey); if (!q) return
     setBusy(block.id)
     try {
-      const res = await fetch('/api/analysis/summarize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: block.title, kind: aiKind(q), views: profileOf(q) }) })
+      const res = await fetch('/api/analysis/summarize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: block.title, kind: aiKind(q), views: profileOf(q), style: prompt.style, customInstructions: prompt.custom }) })
       const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Failed')
       updateBlock(block.id, { summary: d.summary })
     } catch (e) { alert(e.message) } finally { setBusy('') }
@@ -140,7 +160,7 @@ export default function ReportBuilder({ user }) {
       if (block.role === 'exec') {
         const findings = report.blocks.filter(b => b.type === 'chart' && b.summary).map(b => ({ title: b.title, summary: b.summary }))
         if (!findings.length) throw new Error('Generate some chart summaries first.')
-        const res = await fetch('/api/analysis/report/exec-summary', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ findings }) })
+        const res = await fetch('/api/analysis/report/exec-summary', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ findings, style: prompt.style, customInstructions: prompt.custom }) })
         const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Failed'); updateBlock(block.id, { text: d.summary })
       } else {
         const locs = new Set(data.respondents.map(r => r.d.loc).filter(Boolean)).size
@@ -162,7 +182,7 @@ export default function ReportBuilder({ user }) {
   const genMapSummary = async (block) => {
     setBusy(block.id)
     try {
-      const res = await fetch('/api/analysis/summarize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Geographic patterns across wellbeing and trust', kind: 'mean', views: mapViews() }) })
+      const res = await fetch('/api/analysis/summarize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Geographic patterns across wellbeing and trust', kind: 'mean', views: mapViews(), style: prompt.style, customInstructions: prompt.custom }) })
       const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Failed'); updateBlock(block.id, { summary: d.summary })
     } catch (e) { alert(e.message) } finally { setBusy('') }
   }
