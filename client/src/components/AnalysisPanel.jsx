@@ -216,19 +216,9 @@ function QualitativeSection({ fields }) {
 
   const showFullData = (field, label) => {
     setDataModal('loading')
-    fetch(`/api/analysis/responses?field=${encodeURIComponent(field)}`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('failed')))
+    loadResponses({ field })
       .then(d => setDataModal({ label: d.label || label, rows: d.responses || [] }))
       .catch(() => { setDataModal(null); alert('Could not load full data') })
-  }
-  const downloadDataCsv = (dm) => {
-    const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-    const lines = [['Survey #', 'Area', 'Date', 'Gender', 'Origin', 'Age', 'Answer'].join(',')]
-    dm.rows.forEach((r, i) => lines.push([i + 1, r.area, r.date, r.gender, r.nationality, r.age, r.text].map(esc).join(',')))
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
-    a.download = `${String(dm.label).replace(/[^\w -]+/g, '').trim()}-responses.csv`
-    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
   }
 
   const run = (field) => {
@@ -331,54 +321,7 @@ function QualitativeSection({ fields }) {
         )}
       </div>
 
-      {/* Full-data table modal */}
-      {dataModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setDataModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full my-8" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
-              <h3 className="font-semibold text-slate-800 text-sm">
-                {dataModal === 'loading' ? 'Loading…' : `Full responses — ${dataModal.label} (${dataModal.rows.length})`}
-              </h3>
-              <div className="flex items-center gap-3">
-                {dataModal !== 'loading' && <button onClick={() => downloadDataCsv(dataModal)} className="text-xs text-slate-500 hover:text-blue-600">⤓ CSV</button>}
-                <button onClick={() => setDataModal(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
-              </div>
-            </div>
-            {dataModal === 'loading' ? (
-              <p className="p-10 text-center text-slate-400 text-sm">Loading…</p>
-            ) : (
-              <div className="overflow-auto max-h-[75vh]">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">#</th>
-                      <th className="px-3 py-2 font-medium">Area</th>
-                      <th className="px-3 py-2 font-medium">Date</th>
-                      <th className="px-3 py-2 font-medium">Gender</th>
-                      <th className="px-3 py-2 font-medium">Origin</th>
-                      <th className="px-3 py-2 font-medium">Age</th>
-                      <th className="px-3 py-2 font-medium">Answer</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dataModal.rows.map((r, i) => (
-                      <tr key={i} className="border-t border-slate-50 align-top">
-                        <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
-                        <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{r.area}</td>
-                        <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.date}</td>
-                        <td className="px-3 py-1.5 text-slate-700">{r.gender}</td>
-                        <td className="px-3 py-1.5 text-slate-700">{r.nationality}</td>
-                        <td className="px-3 py-1.5 text-slate-700">{r.age}</td>
-                        <td className="px-3 py-1.5 text-slate-800 min-w-[16rem]" dir="auto">{r.text}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <FullDataModal data={dataModal} onClose={() => setDataModal(null)} />
     </section>
   )
 }
@@ -463,6 +406,64 @@ function ChartView({ type, rows, series, domain, unit, rowH }) {
   return <HBar rows={rows} series={series} domain={domain} unit={unit} rowH={rowH} />
 }
 
+// Fetch the per-respondent full data for any question (open-text by `field`,
+// closed by `qKey`), used by the "Show full data" modal.
+function loadResponses(params) {
+  const qs = params.field ? `field=${encodeURIComponent(params.field)}` : `qKey=${encodeURIComponent(params.qKey)}`
+  return fetch(`/api/analysis/responses?${qs}`, { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject(new Error('failed')))
+}
+function downloadResponsesCsv(dm) {
+  const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+  const lines = [['Survey #', 'Area', 'Date', 'Gender', 'Origin', 'Age', 'Answer'].join(',')]
+  dm.rows.forEach((r, i) => lines.push([i + 1, r.area, r.date, r.gender, r.nationality, r.age, r.text].map(esc).join(',')))
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
+  a.download = `${String(dm.label).replace(/[^\w -]+/g, '').trim() || 'responses'}-responses.csv`
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+// Shared full-data table modal. `data` is null | 'loading' | { label, rows }.
+function FullDataModal({ data, onClose }) {
+  if (!data) return null
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full my-8" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
+          <h3 className="font-semibold text-slate-800 text-sm">{data === 'loading' ? 'Loading…' : `Full responses — ${data.label} (${data.rows.length})`}</h3>
+          <div className="flex items-center gap-3">
+            {data !== 'loading' && <button onClick={() => downloadResponsesCsv(data)} className="text-xs text-slate-500 hover:text-blue-600">⤓ CSV</button>}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+          </div>
+        </div>
+        {data === 'loading' ? <p className="p-10 text-center text-slate-400 text-sm">Loading…</p> : (
+          <div className="overflow-auto max-h-[75vh]">
+            <table className="w-full text-xs">
+              <thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
+                <tr>
+                  <th className="px-3 py-2 font-medium">#</th><th className="px-3 py-2 font-medium">Area</th><th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Gender</th><th className="px-3 py-2 font-medium">Origin</th><th className="px-3 py-2 font-medium">Age</th><th className="px-3 py-2 font-medium">Answer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((r, i) => (
+                  <tr key={i} className="border-t border-slate-50 align-top">
+                    <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{r.area}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.date}</td>
+                    <td className="px-3 py-1.5 text-slate-700">{r.gender}</td>
+                    <td className="px-3 py-1.5 text-slate-700">{r.nationality}</td>
+                    <td className="px-3 py-1.5 text-slate-700">{r.age}</td>
+                    <td className="px-3 py-1.5 text-slate-800 min-w-[16rem]" dir="auto">{r.text}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Shared state for per-graph AI summaries + team notes + a registry the report
 // generator iterates over.
 const AnalysisCtx = createContext(null)
@@ -512,7 +513,7 @@ function GraphTools({ graph }) {
 }
 
 const VIZ_LABEL = { bar: 'Bar', column: 'Column', pie: 'Pie', table: 'Table' }
-function Card({ title, n, note, csv, graph, viz, onPush, pushed, children }) {
+function Card({ title, n, note, csv, graph, viz, onPush, onShowData, pushed, children }) {
   return (
     <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
       <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -526,7 +527,7 @@ function Card({ title, n, note, csv, graph, viz, onPush, pushed, children }) {
           )}
         </div>
       </div>
-      {(viz || onPush) && (
+      {(viz || onPush || onShowData) && (
         <div className="no-print flex items-center gap-2 mb-2 flex-wrap">
           {viz && (
             <label className="flex items-center gap-1 text-xs text-slate-500">Visualize
@@ -535,6 +536,9 @@ function Card({ title, n, note, csv, graph, viz, onPush, pushed, children }) {
                 {viz.options.map(o => <option key={o} value={o}>{VIZ_LABEL[o]}</option>)}
               </select>
             </label>
+          )}
+          {onShowData && (
+            <button onClick={onShowData} className="text-xs px-2 py-0.5 rounded-md border border-slate-200 text-slate-500 hover:border-blue-300">⊞ Data</button>
           )}
           {onPush && (
             <button onClick={onPush}
@@ -568,6 +572,12 @@ export default function AnalysisPanel({ user }) {
   const [aiAllBusy, setAiAllBusy] = useState(false)
   const [aiProgress, setAiProgress] = useState(null)
   const [pushedAll, setPushedAll] = useState(false)
+  const [dataModal, setDataModal] = useState(null) // 'loading' | { label, rows }
+
+  const showDataQ = (qKey, label) => {
+    setDataModal('loading')
+    loadResponses({ qKey }).then(d => setDataModal({ label: d.label || label, rows: d.responses || [] })).catch(() => { setDataModal(null); alert('Could not load full data') })
+  }
 
   const pushChart = async (meta) => {
     try {
@@ -934,7 +944,7 @@ export default function AnalysisPanel({ user }) {
         {!dimKey ? (
           <Card title="What people experience vs what they expect (1–5)" n={data.n}
             csv={{ rows: gapRows, series: ['Experience', 'Expectation'] }}
-            onPush={() => pushChart({ qKey: 'gap', title: 'Expectation gap (experience vs expectation)', kind: 'gap', viz: 'bar' })} pushed={pushedKey === 'gap'}
+            onPush={() => pushChart({ qKey: 'gap', title: 'Expectation gap (experience vs expectation)', kind: 'gap', viz: 'bar' })} pushed={pushedKey === 'gap'} onShowData={() => showDataQ('gap', 'Expectation gap (experience vs expectation)')}
             note="Sorted by largest gap. A wide gap = people expect far more than they currently receive.">
             <HBar rows={gapRows} series={['Experience', 'Expectation']} domain={[1, 5]} unit="" rowH={30} />
           </Card>
@@ -974,7 +984,7 @@ export default function AnalysisPanel({ user }) {
                 const { rows, n } = meanData(meta.trust.actors); const k = 'trust'; const vt = vizByKey[k] || 'bar'
                 return <Card key="trust" title={meta.trust.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
                   viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
-                  onPush={() => pushChart({ qKey: k, title: meta.trust.label, kind: 'mean', viz: vt })} pushed={pushedKey === k}
+                  onPush={() => pushChart({ qKey: k, title: meta.trust.label, kind: 'mean', viz: vt })} pushed={pushedKey === k} onShowData={() => showDataQ(k, meta.trust.label)}
                   graph={{ key: k, title: meta.trust.label, kind: 'mean', makeProfile: () => buildViews('mean', meta.trust.actors) }}>
                   <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" />
                 </Card>
@@ -982,7 +992,7 @@ export default function AnalysisPanel({ user }) {
               {multis.map(m => { const { rows, n } = multiData(m); const k = `multi:${m.key}`; const vt = vizByKey[k] || 'bar'; return (
                 <Card key={m.key} title={m.label} n={n} note={smallNote} csv={{ rows, series: cats }}
                   viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
-                  onPush={() => pushChart({ qKey: k, title: m.label, kind: 'pct', viz: vt })} pushed={pushedKey === k}
+                  onPush={() => pushChart({ qKey: k, title: m.label, kind: 'pct', viz: vt })} pushed={pushedKey === k} onShowData={() => showDataQ(k, m.label)}
                   graph={{ key: k, title: m.label, kind: 'pct', makeProfile: () => buildViews('multi', m) }}>
                   <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
@@ -993,7 +1003,7 @@ export default function AnalysisPanel({ user }) {
                 return (
                 <Card key={s.key} title={s.label} n={n} note={smallNote} csv={{ rows, series: cats }}
                   viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: opts }}
-                  onPush={() => pushChart({ qKey: k, title: s.label, kind: 'pct', viz: vt })} pushed={pushedKey === k}
+                  onPush={() => pushChart({ qKey: k, title: s.label, kind: 'pct', viz: vt })} pushed={pushedKey === k} onShowData={() => showDataQ(k, s.label)}
                   graph={{ key: k, title: s.label, kind: 'pct', makeProfile: () => buildViews('single', s) }}>
                   <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
@@ -1001,7 +1011,7 @@ export default function AnalysisPanel({ user }) {
               {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); const k = `likert:${l.key}`; const vt = vizByKey[k] || 'bar'; return (
                 <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
                   viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
-                  onPush={() => pushChart({ qKey: k, title: l.label, kind: 'mean', viz: vt })} pushed={pushedKey === k}
+                  onPush={() => pushChart({ qKey: k, title: l.label, kind: 'mean', viz: vt })} pushed={pushedKey === k} onShowData={() => showDataQ(k, l.label)}
                   graph={{ key: k, title: l.label, kind: 'mean', makeProfile: () => buildViews('mean', [{ col: l.key, label: l.label }]) }}>
                   <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
                 </Card>
@@ -1016,6 +1026,7 @@ export default function AnalysisPanel({ user }) {
       <QualitativeSection fields={meta.qualitative} />
 
       <ResponsesBrowser fields={meta.openText} />
+      <FullDataModal data={dataModal} onClose={() => setDataModal(null)} />
     </div>
    </AnalysisCtx.Provider>
   )

@@ -1512,8 +1512,8 @@ app.get('/api/analysis', requireAuth, requireAnalyst, async (req, res) => {
 // the language it was written. No AI / no cost. Allowlisted field only.
 app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res) => {
   const field = String(req.query.field || '');
-  const meta = ANALYSIS.OPEN_TEXT.find(f => f.key === field);
-  if (!meta) return res.status(400).json({ error: 'Unknown or unsupported field' });
+  const qKey = String(req.query.qKey || '');
+  if (!field && !qKey) return res.status(400).json({ error: 'Provide field or qKey' });
 
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
     await refreshCache();
@@ -1522,22 +1522,54 @@ app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res)
 
   const rawRows = Object.values(cache.data.rawByInstance || {});
   const gtsMatch = cache.data.gtsMatchByInstance || {};
-  const SKIP = new Set(['نعم', 'لا', 'no', 'none', 'na', 'n/a', '99', '98', '-', '.']);
-  const responses = rawRows
-    .filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'))
-    .map(r => ({
-      text: String(r[field] ?? '').trim(),
-      id: String(r.instanceID || ''),
-      area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
-      location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
-      date: (toISO(r.SubmissionDate) || '').slice(0, 10),
-      gender: ANALYSIS.prettify(r.gender) || '',
-      nationality: ANALYSIS.prettify(r.nationality) || '',
-      age: (r.age != null && r.age !== '') ? String(r.age) : '',
-    }))
-    .filter(x => x.text.length > 1 && !SKIP.has(x.text.toLowerCase()));
+  const accepted = rawRows.filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'));
+  const lk = v => { const n = parseInt(v, 10); return n >= 1 && n <= 5 ? n : null; };
+  const isNR = v => ANALYSIS.NONRESPONSE.has(v == null ? null : String(v).trim());
+  const meta = r => ({
+    id: String(r.instanceID || ''),
+    area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+    location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+    date: (toISO(r.SubmissionDate) || '').slice(0, 10),
+    gender: ANALYSIS.prettify(r.gender) || '',
+    nationality: ANALYSIS.prettify(r.nationality) || '',
+    age: (r.age != null && r.age !== '') ? String(r.age) : '',
+  });
 
-  res.json({ field, label: meta.label, n: responses.length, fetchedAt: cache.fetchedAt, responses });
+  // Open-text question (verbatim answer).
+  if (field) {
+    const m = ANALYSIS.OPEN_TEXT.find(f => f.key === field);
+    if (!m) return res.status(400).json({ error: 'Unknown or unsupported field' });
+    const SKIP = new Set(['نعم', 'لا', 'no', 'none', 'na', 'n/a', '99', '98', '-', '.']);
+    const responses = accepted
+      .map(r => ({ ...meta(r), text: String(r[field] ?? '').trim() }))
+      .filter(x => x.text.length > 1 && !SKIP.has(x.text.toLowerCase()));
+    return res.json({ label: m.label, n: responses.length, fetchedAt: cache.fetchedAt, responses });
+  }
+
+  // Closed question — resolve each respondent's answer from the registry.
+  const allCols = accepted.length ? Object.keys(accepted[0]) : [];
+  const multiMembers = {};
+  ANALYSIS.MULTI.forEach(mm => {
+    multiMembers[mm.key] = allCols
+      .filter(c => c.startsWith(mm.key + '_'))
+      .map(c => ({ col: c, suffix: c.slice(mm.key.length + 1) }))
+      .filter(x => x.suffix && !['text', '98', '99', '999'].includes(x.suffix))
+      .map(x => ({ col: x.col, label: (mm.labels && mm.labels[x.suffix]) || ANALYSIS.prettify(x.suffix) }));
+  });
+  let label = qKey;
+  const answerFor = (r) => {
+    if (qKey === 'trust') { label = ANALYSIS.TRUST_ACTORS.label; return ANALYSIS.TRUST_ACTORS.actors.map(a => { const n = lk(r[a.col]); return n != null ? `${a.label}: ${n}` : null; }).filter(Boolean).join('; '); }
+    if (qKey === 'gap') { label = 'Expectation gap (experience vs expectation)'; return ANALYSIS.GAP_DIMS.map(g => { const p = lk(r['perception_' + g.suffix]); const e = lk(r['expect_' + g.suffix]); return (p != null && e != null) ? `${g.label}: experienced ${p}, expected ${e}` : null; }).filter(Boolean).join('; '); }
+    const [t, key] = qKey.split(':');
+    if (t === 'likert') { label = (ANALYSIS.LIKERT.find(l => l.key === key) || {}).label || key; const n = lk(r[key]); return n != null ? String(n) : ''; }
+    if (t === 'single') { const ind = ANALYSIS.SINGLE.find(s => s.key === key) || {}; label = ind.label || key; const v = r[key]; if (v == null || v === '' || isNR(v)) return ''; return (ind.valueLabels && ind.valueLabels[v]) || ANALYSIS.prettify(v); }
+    if (t === 'multi') { const mm = ANALYSIS.MULTI.find(m => m.key === key) || {}; label = mm.label || key; return (multiMembers[key] || []).filter(m => String(r[m.col]) === '1').map(m => m.label).join(', '); }
+    return '';
+  };
+  const responses = accepted
+    .map(r => ({ ...meta(r), text: answerFor(r) }))
+    .filter(x => x.text !== '');
+  res.json({ label, n: responses.length, fetchedAt: cache.fetchedAt, responses });
 });
 
 // Qualitative (Claude) analysis of an open-text field. Thematic coding +
