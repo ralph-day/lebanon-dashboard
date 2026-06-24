@@ -115,7 +115,7 @@ function MapSection({ respondents, meta }) {
             </div>
           ))}
         </div>
-        <div className="h-[640px] rounded-lg overflow-hidden">
+        <div className="h-[500px] rounded-lg overflow-hidden">
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (
@@ -428,7 +428,7 @@ function GraphTools({ graph }) {
         {myNotes.length > 0 && <span className="text-xs text-slate-400">{myNotes.length} note{myNotes.length > 1 ? 's' : ''}</span>}
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
-      {summary && <p className="text-xs text-slate-700 bg-violet-50 rounded-lg p-2"><span className="text-violet-500 font-medium">✦ AI:</span> {summary}</p>}
+      {summary && <p className="text-xs text-slate-700 bg-violet-50 rounded-lg p-2 whitespace-pre-wrap break-words"><span className="text-violet-500 font-medium">✦ AI:</span> {summary}</p>}
       {myNotes.length > 0 && (
         <div className="space-y-1">
           {myNotes.map(nt => (
@@ -494,7 +494,7 @@ export default function AnalysisPanel({ user }) {
 
   const pushChart = async (meta) => {
     try {
-      const block = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: 'chart', qKey: meta.qKey, title: meta.title, kind: meta.kind, viz: meta.viz, breakdown: dimKey, summary: '', comment: '' }
+      const block = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: 'chart', qKey: meta.qKey, title: meta.title, kind: meta.kind, viz: meta.viz, breakdown: dimKey, summary: summaries[meta.qKey] || '', comment: '' }
       const res = await fetch('/api/analysis/report/blocks', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ block }) })
       if (!res.ok) throw new Error('Failed')
       setPushedKey(meta.qKey); setTimeout(() => setPushedKey(''), 2000)
@@ -508,6 +508,17 @@ export default function AnalysisPanel({ user }) {
       .catch(e => setError(e.message))
     fetch('/api/notes', { credentials: 'include' }).then(r => r.ok ? r.json() : []).then(setAllNotes).catch(() => {})
   }, [])
+
+  // Persist AI summaries across the session (per data version), so leaving and
+  // returning to the tab doesn't lose them or force a re-generate.
+  useEffect(() => {
+    if (!data?.fetchedAt) return
+    try { const raw = localStorage.getItem(`an-sum::${data.fetchedAt}`); if (raw) setSummaries(JSON.parse(raw)) } catch { /* ignore */ }
+  }, [data?.fetchedAt])
+  useEffect(() => {
+    if (!data?.fetchedAt) return
+    try { localStorage.setItem(`an-sum::${data.fetchedAt}`, JSON.stringify(summaries)) } catch { /* ignore */ }
+  }, [summaries, data?.fetchedAt])
 
   // Context: notes CRUD, per-graph AI summaries, and a registry the report uses.
   const summarizeGraph = async (graph) => {

@@ -5,10 +5,12 @@ const r2 = v => Math.round(v * 100) / 100
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
 function EditableText({ value, onChange, placeholder, rows = 4, className = '' }) {
+  const ref = useRef(null)
+  useEffect(() => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` } }, [value])
   return (
     <>
-      <textarea value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
-        className={`no-print w-full text-sm text-slate-700 border border-slate-200 rounded-lg p-2 focus:outline-none focus:border-blue-300 ${className}`} />
+      <textarea ref={ref} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
+        className={`no-print w-full text-sm text-slate-700 border border-slate-200 rounded-lg p-2 resize-none overflow-hidden focus:outline-none focus:border-blue-300 ${className}`} />
       <div className="hidden print:block whitespace-pre-wrap text-sm text-slate-800">{value || ''}</div>
     </>
   )
