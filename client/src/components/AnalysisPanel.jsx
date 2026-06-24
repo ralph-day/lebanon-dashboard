@@ -210,8 +210,26 @@ function QualitativeSection({ fields }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [cache, setCache] = useState({}) // field -> result
+  const [dataModal, setDataModal] = useState(null) // 'loading' | { label, rows }
 
   if (!fields || !fields.length) return null
+
+  const showFullData = (field, label) => {
+    setDataModal('loading')
+    fetch(`/api/analysis/responses?field=${encodeURIComponent(field)}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('failed')))
+      .then(d => setDataModal({ label: d.label || label, rows: d.responses || [] }))
+      .catch(() => { setDataModal(null); alert('Could not load full data') })
+  }
+  const downloadDataCsv = (dm) => {
+    const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
+    const lines = [['Survey #', 'Area', 'Date', 'Gender', 'Origin', 'Age', 'Answer'].join(',')]
+    dm.rows.forEach((r, i) => lines.push([i + 1, r.area, r.date, r.gender, r.nationality, r.age, r.text].map(esc).join(',')))
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
+    a.download = `${String(dm.label).replace(/[^\w -]+/g, '').trim()}-responses.csv`
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  }
 
   const run = (field) => {
     setActive(field); setError(null)
@@ -259,10 +277,12 @@ function QualitativeSection({ fields }) {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-slate-400">{result.n} responses analyzed · GTS-accepted sample</p>
-              {ctx && (
-                <span className="no-print"><NotesBubble entityType="analysisGraph" entityId={`qual:${active}`} entityLabel={`Qualitative: ${result.label}`}
-                  allNotes={ctx.allNotes} onNoteAdded={ctx.addNote} onNoteDeleted={ctx.deleteNote} currentUser={ctx.user} /></span>
-              )}
+              <div className="flex items-center gap-2 no-print">
+                <button onClick={() => showFullData(active, result.label)}
+                  className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">⊞ Show full data</button>
+                {ctx && <NotesBubble entityType="analysisGraph" entityId={`qual:${active}`} entityLabel={`Qualitative: ${result.label}`}
+                  allNotes={ctx.allNotes} onNoteAdded={ctx.addNote} onNoteDeleted={ctx.deleteNote} currentUser={ctx.user} />}
+              </div>
             </div>
             <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{result.analysis.summary}</p>
             {ctx && ctx.allNotes.filter(n => n.entityType === 'analysisGraph' && n.entityId === `qual:${active}`).map(nt => (
@@ -310,6 +330,55 @@ function QualitativeSection({ fields }) {
           </div>
         )}
       </div>
+
+      {/* Full-data table modal */}
+      {dataModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setDataModal(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3 p-4 border-b border-slate-100 sticky top-0 bg-white rounded-t-xl">
+              <h3 className="font-semibold text-slate-800 text-sm">
+                {dataModal === 'loading' ? 'Loading…' : `Full responses — ${dataModal.label} (${dataModal.rows.length})`}
+              </h3>
+              <div className="flex items-center gap-3">
+                {dataModal !== 'loading' && <button onClick={() => downloadDataCsv(dataModal)} className="text-xs text-slate-500 hover:text-blue-600">⤓ CSV</button>}
+                <button onClick={() => setDataModal(null)} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+              </div>
+            </div>
+            {dataModal === 'loading' ? (
+              <p className="p-10 text-center text-slate-400 text-sm">Loading…</p>
+            ) : (
+              <div className="overflow-auto max-h-[75vh]">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">#</th>
+                      <th className="px-3 py-2 font-medium">Area</th>
+                      <th className="px-3 py-2 font-medium">Date</th>
+                      <th className="px-3 py-2 font-medium">Gender</th>
+                      <th className="px-3 py-2 font-medium">Origin</th>
+                      <th className="px-3 py-2 font-medium">Age</th>
+                      <th className="px-3 py-2 font-medium">Answer</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dataModal.rows.map((r, i) => (
+                      <tr key={i} className="border-t border-slate-50 align-top">
+                        <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
+                        <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{r.area}</td>
+                        <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.date}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{r.gender}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{r.nationality}</td>
+                        <td className="px-3 py-1.5 text-slate-700">{r.age}</td>
+                        <td className="px-3 py-1.5 text-slate-800 min-w-[16rem]" dir="auto">{r.text}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </section>
   )
 }

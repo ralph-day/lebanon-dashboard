@@ -1527,8 +1527,13 @@ app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res)
     .filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'))
     .map(r => ({
       text: String(r[field] ?? '').trim(),
+      id: String(r.instanceID || ''),
+      area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
       location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+      date: (toISO(r.SubmissionDate) || '').slice(0, 10),
+      gender: ANALYSIS.prettify(r.gender) || '',
       nationality: ANALYSIS.prettify(r.nationality) || '',
+      age: (r.age != null && r.age !== '') ? String(r.age) : '',
     }))
     .filter(x => x.text.length > 1 && !SKIP.has(x.text.toLowerCase()));
 
