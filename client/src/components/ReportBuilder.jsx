@@ -226,6 +226,26 @@ export default function ReportBuilder({ user }) {
     } catch (e) { alert(e.message) } finally { setBusy('') }
   }
 
+  // Build a clean Markdown version of the report (a NotebookLM-ready source).
+  const buildReportMarkdown = () => {
+    const lines = [`# Lebanon Emergency Response Perception Study 2026`, `Results report · ${data.n} accepted surveys · ${new Date().toLocaleDateString()}`, '']
+    report.blocks.forEach(b => {
+      if (b.type === 'heading') lines.push(`\n## ${b.text || ''}`)
+      else if (b.type === 'text') { lines.push(`\n## ${b.title || 'Section'}`); if (b.text) lines.push(b.text) }
+      else if (b.type === 'chart') { lines.push(`\n### ${b.title || ''}`); if (b.summary) lines.push(b.summary); if (b.comment) lines.push(`Analyst note: ${b.comment}`) }
+      else if (b.type === 'map') { lines.push(`\n### Geographic patterns`); if (b.summary) lines.push(b.summary) }
+    })
+    return lines.join('\n')
+  }
+  // Export the report as a Markdown file and open NotebookLM to drop it in.
+  const openNotebookLM = () => {
+    const blob = new Blob([buildReportMarkdown()], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
+    a.download = `Lebanon-Report-${new Date().toISOString().slice(0, 10)}.md`
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+    window.open('https://notebooklm.google.com/', '_blank', 'noopener')
+  }
+
   const wrapProps = { dragId, onReorder: reorderTo, onDelete: deleteBlock }
 
   return (
@@ -244,6 +264,8 @@ export default function ReportBuilder({ user }) {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => window.print()} className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300">⎙ PDF</button>
           <button onClick={exportWord} disabled={!!busy} className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300 disabled:opacity-50">⬇ Word</button>
+          <button onClick={openNotebookLM} title="Downloads the report as a Markdown source and opens NotebookLM — add the file there, then use Studio (Audio/Video Overview)."
+            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300">🎧 NotebookLM</button>
         </div>
       </div>
 
