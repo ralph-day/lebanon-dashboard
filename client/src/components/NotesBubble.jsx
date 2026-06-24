@@ -4,16 +4,33 @@ export default function NotesBubble({ entityType, entityId, entityLabel, allNote
   const [open, setOpen]     = useState(false)
   const [text, setText]     = useState('')
   const [saving, setSaving] = useState(false)
+  const [pos, setPos]       = useState(null)
   const ref = useRef(null)
+  const btnRef = useRef(null)
 
   const myNotes = allNotes.filter(n => n.entityType === entityType && n.entityId === entityId)
 
-  // Close on outside click
+  // Open the popup positioned (fixed) just below the button, clamped to the
+  // viewport so it never overflows off-screen regardless of where the bubble is.
+  const W = 288
+  function openPopup() {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) {
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - W - 8)
+      const top = Math.min(r.bottom + 6, window.innerHeight - 80)
+      setPos({ top, left })
+    }
+    setOpen(true)
+  }
+
+  // Close on outside click or scroll
   useEffect(() => {
     if (!open) return
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const onScroll = () => setOpen(false)
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    window.addEventListener('scroll', onScroll, true)
+    return () => { document.removeEventListener('mousedown', handler); window.removeEventListener('scroll', onScroll, true) }
   }, [open])
 
   async function handleAdd(e) {
@@ -41,7 +58,8 @@ export default function NotesBubble({ entityType, entityId, entityLabel, allNote
   return (
     <div className="relative inline-block" ref={ref}>
       <button
-        onClick={e => { e.stopPropagation(); setOpen(v => !v) }}
+        ref={btnRef}
+        onClick={e => { e.stopPropagation(); open ? setOpen(false) : openPopup() }}
         className={`inline-flex items-center gap-1 text-xs rounded-full px-1.5 py-0.5 transition-colors ${
           myNotes.length > 0
             ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
@@ -52,9 +70,10 @@ export default function NotesBubble({ entityType, entityId, entityLabel, allNote
         💬{myNotes.length > 0 && <span className="font-semibold">{myNotes.length}</span>}
       </button>
 
-      {open && (
+      {open && pos && (
         <div
-          className="absolute z-50 right-0 mt-1 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-3 space-y-2"
+          className="z-50 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-3 space-y-2"
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between pb-1 border-b border-slate-100">
