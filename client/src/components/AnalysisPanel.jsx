@@ -115,7 +115,7 @@ function MapSection({ respondents, meta }) {
             </div>
           ))}
         </div>
-        <div className="h-[500px] rounded-lg overflow-hidden">
+        <div className="h-96 rounded-lg overflow-hidden">
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (

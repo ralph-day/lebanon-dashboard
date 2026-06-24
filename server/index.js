@@ -79,7 +79,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '50kb' })); // cap body size
+app.use(express.json({ limit: '2mb' })); // cap body size (report can carry many AI summaries)
 app.use(session({
   secret: process.env.SESSION_SECRET, // always required — startup check above ensures it is set
   resave: false,
