@@ -458,11 +458,15 @@ function Card({ title, n, note, csv, graph, viz, onPush, pushed, children }) {
         </div>
       </div>
       {(viz || onPush) && (
-        <div className="no-print flex items-center gap-1.5 mb-2 flex-wrap">
-          {viz && viz.options.map(o => (
-            <button key={o} onClick={() => viz.setType(o)}
-              className={`text-xs px-2 py-0.5 rounded-md border transition-colors ${viz.type === o ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>{VIZ_LABEL[o]}</button>
-          ))}
+        <div className="no-print flex items-center gap-2 mb-2 flex-wrap">
+          {viz && (
+            <label className="flex items-center gap-1 text-xs text-slate-500">Visualize
+              <select value={viz.type} onChange={e => viz.setType(e.target.value)}
+                className="text-xs border border-slate-200 rounded-md px-2 py-0.5 bg-white text-slate-700">
+                {viz.options.map(o => <option key={o} value={o}>{VIZ_LABEL[o]}</option>)}
+              </select>
+            </label>
+          )}
           {onPush && (
             <button onClick={onPush}
               className="ml-auto text-xs px-2.5 py-0.5 rounded-md border border-violet-200 text-violet-600 hover:bg-violet-50 transition-colors">

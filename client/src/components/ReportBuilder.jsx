@@ -266,14 +266,20 @@ export default function ReportBuilder({ user }) {
           return (
             <Block key={b.id} block={b} {...wrapProps}>
               <h4 className="text-sm font-semibold text-slate-800 mb-1">{b.title}</h4>
-              <div className="no-print flex items-center gap-1.5 mb-2 flex-wrap">
-                <span className="text-[10px] uppercase text-slate-400 mr-1">View</span>
-                {opts.map(o => <button key={o} onClick={() => updateBlock(b.id, { viz: o })} className={`text-xs px-2 py-0.5 rounded-md border ${(b.viz || 'bar') === o ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'}`}>{o[0].toUpperCase() + o.slice(1)}</button>)}
-                <span className="text-[10px] uppercase text-slate-400 ml-2 mr-1">Breakdown</span>
-                <select value={b.breakdown || ''} onChange={e => updateBlock(b.id, { breakdown: e.target.value })} className="text-xs border border-slate-200 rounded-md px-2 py-0.5 bg-white text-slate-600">
-                  <option value="">Overall</option>
-                  {data.dimensions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                </select>
+              <div className="no-print flex items-center gap-2 mb-2 flex-wrap">
+                {opts.length > 0 && (
+                  <label className="flex items-center gap-1 text-xs text-slate-500">Visualize
+                    <select value={b.viz || 'bar'} onChange={e => updateBlock(b.id, { viz: e.target.value })} className="text-xs border border-slate-200 rounded-md px-2 py-0.5 bg-white text-slate-700">
+                      {opts.map(o => <option key={o} value={o}>{o[0].toUpperCase() + o.slice(1)}</option>)}
+                    </select>
+                  </label>
+                )}
+                <label className="flex items-center gap-1 text-xs text-slate-500">Breakdown
+                  <select value={b.breakdown || ''} onChange={e => updateBlock(b.id, { breakdown: e.target.value })} className="text-xs border border-slate-200 rounded-md px-2 py-0.5 bg-white text-slate-600">
+                    <option value="">Overall</option>
+                    {data.dimensions.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                  </select>
+                </label>
               </div>
               {renderChart(b)}
               <div className="flex items-center gap-2 mt-2"><span className="text-xs text-violet-500 font-medium">✦ AI summary</span><AiBtn busy={busy} onClick={() => genChartSummary(b)} k={b.id} label={b.summary ? 'Regenerate' : 'Generate'} /></div>
