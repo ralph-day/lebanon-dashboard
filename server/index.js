@@ -1525,15 +1525,25 @@ app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res)
   const accepted = rawRows.filter(r => String(gtsMatch[r.instanceID] || '').startsWith('Accepted'));
   const lk = v => { const n = parseInt(v, 10); return n >= 1 && n <= 5 ? n : null; };
   const isNR = v => ANALYSIS.NONRESPONSE.has(v == null ? null : String(v).trim());
-  const meta = r => ({
-    id: String(r.instanceID || ''),
-    area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
-    location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
-    date: (toISO(r.SubmissionDate) || '').slice(0, 10),
-    gender: ANALYSIS.prettify(r.gender) || '',
-    nationality: ANALYSIS.prettify(r.nationality) || '',
-    age: (r.age != null && r.age !== '') ? String(r.age) : '',
-  });
+  const enumByCode = new Map(ENUMERATOR_ASSIGNMENTS.map(a => [String(a.code || '').toLowerCase(), a]));
+  const meta = r => {
+    const nc = String(r.NameCode || '');
+    const mm = nc.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+    const code = mm ? mm[2].trim() : '';
+    const a = code ? enumByCode.get(code.toLowerCase()) : null;
+    return {
+      id: String(r.instanceID || ''),
+      surveyCode: code || nc,
+      enumerator: (a && a.name) || (mm ? mm[1].trim() : nc),
+      enumeratorPhone: (a && a.phone) || '',
+      area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+      location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
+      origin: ANALYSIS.prettify(r.governorate_displaced || r.loc_2 || '') || '',
+      date: (toISO(r.SubmissionDate) || '').slice(0, 10),
+      gender: ANALYSIS.prettify(r.gender) || '',
+      age: (r.age != null && r.age !== '') ? String(r.age) : '',
+    };
+  };
 
   // Open-text question (verbatim answer).
   if (field) {

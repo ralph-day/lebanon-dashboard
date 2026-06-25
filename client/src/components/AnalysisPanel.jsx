@@ -412,10 +412,11 @@ function loadResponses(params) {
   const qs = params.field ? `field=${encodeURIComponent(params.field)}` : `qKey=${encodeURIComponent(params.qKey)}`
   return fetch(`/api/analysis/responses?${qs}`, { credentials: 'include' }).then(r => r.ok ? r.json() : Promise.reject(new Error('failed')))
 }
+const waLink = phone => { const d = String(phone || '').replace(/\D/g, ''); return d ? `https://wa.me/${d.startsWith('961') ? d : '961' + d}` : null }
 function downloadResponsesCsv(dm) {
   const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-  const lines = [['Survey #', 'Area', 'Date', 'Gender', 'Origin', 'Age', 'Answer'].join(',')]
-  dm.rows.forEach((r, i) => lines.push([i + 1, r.area, r.date, r.gender, r.nationality, r.age, r.text].map(esc).join(',')))
+  const lines = [['Survey #', 'Survey code', 'Enumerator', 'Phone', 'Area', 'Origin (governorate)', 'Date', 'Gender', 'Age', 'Answer'].join(',')]
+  dm.rows.forEach((r, i) => lines.push([i + 1, r.surveyCode, r.enumerator, r.enumeratorPhone, r.area, r.origin, r.date, r.gender, r.age, r.text].map(esc).join(',')))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
   a.download = `${String(dm.label).replace(/[^\w -]+/g, '').trim() || 'responses'}-responses.csv`
@@ -439,18 +440,25 @@ function FullDataModal({ data, onClose }) {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
                 <tr>
-                  <th className="px-3 py-2 font-medium">#</th><th className="px-3 py-2 font-medium">Area</th><th className="px-3 py-2 font-medium">Date</th>
-                  <th className="px-3 py-2 font-medium">Gender</th><th className="px-3 py-2 font-medium">Origin</th><th className="px-3 py-2 font-medium">Age</th><th className="px-3 py-2 font-medium">Answer</th>
+                  <th className="px-3 py-2 font-medium">#</th><th className="px-3 py-2 font-medium">Survey</th><th className="px-3 py-2 font-medium">Enumerator</th>
+                  <th className="px-3 py-2 font-medium">Area</th><th className="px-3 py-2 font-medium">Origin</th><th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Gender</th><th className="px-3 py-2 font-medium">Age</th><th className="px-3 py-2 font-medium">Answer</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((r, i) => (
                   <tr key={i} className="border-t border-slate-50 align-top">
                     <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap font-mono">{r.surveyCode}</td>
+                    <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
+                      {r.enumerator}
+                      {waLink(r.enumeratorPhone) && <a href={waLink(r.enumeratorPhone)} target="_blank" rel="noreferrer" title={`WhatsApp ${r.enumerator} (${r.enumeratorPhone})`}
+                        className="ml-1.5 inline-flex items-center bg-[#25D366] text-white text-[10px] font-semibold rounded px-1.5 py-0.5 align-middle hover:opacity-90">WA</a>}
+                    </td>
                     <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{r.area}</td>
+                    <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{r.origin}</td>
                     <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.date}</td>
                     <td className="px-3 py-1.5 text-slate-700">{r.gender}</td>
-                    <td className="px-3 py-1.5 text-slate-700">{r.nationality}</td>
                     <td className="px-3 py-1.5 text-slate-700">{r.age}</td>
                     <td className="px-3 py-1.5 text-slate-800 min-w-[16rem]" dir="auto">{r.text}</td>
                   </tr>
