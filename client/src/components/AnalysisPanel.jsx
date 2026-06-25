@@ -415,7 +415,7 @@ function loadResponses(params) {
 const waLink = phone => { const d = String(phone || '').replace(/\D/g, ''); return d ? `https://wa.me/${d.startsWith('961') ? d : '961' + d}` : null }
 function downloadResponsesCsv(dm) {
   const esc = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
-  const lines = [['Survey #', 'Survey code', 'Enumerator', 'Phone', 'Area', 'Origin (governorate)', 'Date', 'Gender', 'Age', 'Answer'].join(',')]
+  const lines = [['Survey #', 'Survey code', 'Enumerator', 'Phone', 'Location', 'Origin (governorate)', 'Date', 'Gender', 'Age', 'Answer'].join(',')]
   dm.rows.forEach((r, i) => lines.push([i + 1, r.surveyCode, r.enumerator, r.enumeratorPhone, r.area, r.origin, r.date, r.gender, r.age, r.text].map(esc).join(',')))
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url
@@ -441,7 +441,7 @@ function FullDataModal({ data, onClose }) {
               <thead className="sticky top-0 bg-slate-50 text-slate-500 text-left">
                 <tr>
                   <th className="px-3 py-2 font-medium">#</th><th className="px-3 py-2 font-medium">Survey</th><th className="px-3 py-2 font-medium">Enumerator</th>
-                  <th className="px-3 py-2 font-medium">Area</th><th className="px-3 py-2 font-medium">Origin</th><th className="px-3 py-2 font-medium">Date</th>
+                  <th className="px-3 py-2 font-medium">Location</th><th className="px-3 py-2 font-medium">Origin</th><th className="px-3 py-2 font-medium">Date</th>
                   <th className="px-3 py-2 font-medium">Gender</th><th className="px-3 py-2 font-medium">Age</th><th className="px-3 py-2 font-medium">Answer</th>
                 </tr>
               </thead>
