@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { HBar, ChartView, MapSection, aggSingle, aggMulti, aggMean } from './AnalysisPanel'
 
 const r2 = v => Math.round(v * 100) / 100
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 
-function EditableText({ value, onChange, placeholder, rows = 4, className = '' }) {
+// Auto-growing text box: always sizes to its content (no clipping), before
+// paint, and on typing / window resize.
+function EditableText({ value, onChange, placeholder, rows = 2, className = '' }) {
   const ref = useRef(null)
-  useEffect(() => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` } }, [value])
+  const fit = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` } }
+  useLayoutEffect(fit, [value])
+  useEffect(() => { window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit) }, [])
   return (
     <>
-      <textarea ref={ref} value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
+      <textarea ref={ref} value={value || ''} onChange={e => onChange(e.target.value)} onInput={fit} placeholder={placeholder} rows={rows}
         className={`no-print w-full text-sm text-slate-700 border border-slate-200 rounded-lg p-2 resize-none overflow-hidden focus:outline-none focus:border-blue-300 ${className}`} />
       <div className="hidden print:block whitespace-pre-wrap text-sm text-slate-800">{value || ''}</div>
     </>
