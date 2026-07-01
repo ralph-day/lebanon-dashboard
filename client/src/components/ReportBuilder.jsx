@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { HBar, ChartView, MapSection, aggSingle, aggMulti, aggMean } from './AnalysisPanel'
+import { HBar, ChartView, MapSection, DataDisclaimer, aggSingle, aggMulti, aggMean } from './AnalysisPanel'
 
 const r2 = v => Math.round(v * 100) / 100
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -226,6 +226,10 @@ export default function ReportBuilder({ user }) {
         else if (b.type === 'chart') { paras.push(new Paragraph({ text: b.title || '', heading: HeadingLevel.HEADING_2 })); block(b.summary); if (b.comment) paras.push(new Paragraph({ children: [new TextRun({ text: 'Analyst note: ', bold: true }), new TextRun(b.comment)] })) }
         else if (b.type === 'map') { paras.push(new Paragraph({ text: 'Geographic patterns', heading: HeadingLevel.HEADING_2 })); block(b.summary) }
       })
+      // Data-protection & AI-use disclaimer (matches the on-screen/PDF footer).
+      paras.push(new Paragraph({ text: 'Data protection & responsible AI use', heading: HeadingLevel.HEADING_2 }))
+      block("This report is produced with AI assistance (Anthropic's Claude) under human review — a researcher reviews and edits every AI-generated output before it is used. The survey collects no respondent names (survey ID numbers only), and the client is disclosed to every respondent at the start of the interview. Charts and summaries are generated from aggregated, de-identified statistics; open-text answers are automatically scrubbed of phone numbers, emails and links before processing, and no personal identifiers or contact details are transmitted.")
+      block("AI processing is governed by Anthropic's Data Processing Addendum (incorporated into its Commercial Terms of Service, with Standard Contractual Clauses for international transfers). Under the Commercial Terms (Section B), Anthropic is not permitted to train its models on Customer Content — the inputs submitted to the service and the outputs it returns. The DPA (Sections B.2–B.3) further restricts processing to the customer's documented instructions and specified business purposes, and prohibits combining the data with data from other sources. Data is used solely for this study.")
       const blob = await Packer.toBlob(new Document({ sections: [{ children: paras }] }))
       const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `Lebanon-Report-${new Date().toISOString().slice(0, 10)}.docx`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
     } catch (e) { alert(e.message) } finally { setBusy('') }
@@ -344,6 +348,8 @@ export default function ReportBuilder({ user }) {
           )
         })}
       </div>
+
+      <div className="pt-2"><DataDisclaimer variant="report" /></div>
     </div>
   )
 }

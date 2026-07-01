@@ -204,6 +204,23 @@ function ResponsesBrowser({ fields }) {
 
 // Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
 // on demand (the API call can take ~30–90s), caches per field in local state.
+// Data-protection & AI-use disclaimer, shown on the Analysis and Report pages
+// and included in printed/exported output.
+function DataDisclaimer({ variant = 'analysis' }) {
+  const what = variant === 'report' ? 'report' : 'analysis'
+  return (
+    <div className="print-card bg-slate-50 border border-slate-100 rounded-xl p-4 text-[11px] leading-relaxed text-slate-500">
+      <p className="font-semibold text-slate-600 mb-1">Data protection &amp; responsible AI use</p>
+      <p>
+        This {what} is produced with AI assistance (Anthropic&rsquo;s Claude) under human review — a researcher reviews and edits every AI-generated output before it is used. The survey collects <strong>no respondent names</strong> (survey ID numbers only), and the client is disclosed to every respondent at the start of the interview. Charts and summaries are generated from <strong>aggregated, de-identified statistics</strong>; open-text answers are automatically scrubbed of phone numbers, emails and links before processing, and no personal identifiers or contact details are transmitted.
+      </p>
+      <p className="mt-1.5">
+        AI processing is governed by Anthropic&rsquo;s Data Processing Addendum (incorporated into its Commercial Terms of Service, with Standard Contractual Clauses for international transfers). Under the Commercial Terms (Section&nbsp;B), <strong>Anthropic is not permitted to train its models on Customer Content</strong> — the inputs submitted to the service and the outputs it returns. The DPA (Sections&nbsp;B.2&ndash;B.3) further restricts processing to the customer&rsquo;s documented instructions and specified business purposes, and prohibits combining the data with data from other sources. Data is used solely for this study.
+      </p>
+    </div>
+  )
+}
+
 // Tag-style word cloud: font size + colour scale with each term's weight.
 function WordCloud({ items, rtl }) {
   if (!items || !items.length) return <p className="text-sm text-slate-400 py-6 text-center">No terms to show.</p>
@@ -1208,6 +1225,8 @@ export default function AnalysisPanel({ user }) {
       <QualitativeSection fields={meta.qualitative} />
 
       <ResponsesBrowser fields={meta.openText} />
+
+      <DataDisclaimer variant="analysis" />
       <FullDataModal data={dataModal} onClose={() => setDataModal(null)} />
     </div>
    </AnalysisCtx.Provider>
@@ -1215,4 +1234,4 @@ export default function AnalysisPanel({ user }) {
 }
 
 // Shared primitives reused by the Report builder.
-export { PALETTE, scaleColor, HBar, Donut, Column, DataTable, ChartView, MapSection, aggSingle, aggMulti, aggMean }
+export { PALETTE, scaleColor, HBar, Donut, Column, DataTable, ChartView, MapSection, DataDisclaimer, aggSingle, aggMulti, aggMean }
