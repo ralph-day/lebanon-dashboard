@@ -1781,8 +1781,9 @@ app.get('/api/analysis/prompts', requireAuth, requireAnalyst, (req, res) => {
 });
 
 app.post('/api/analysis/summarize', requireAuth, requireAnalyst, summaryLimit, async (req, res) => {
-  let { title, kind, views, series, rows, style, customInstructions } = req.body || {};
+  let { title, kind, views, series, rows, style, customInstructions, feedback } = req.body || {};
   if (!title) return res.status(400).json({ error: 'Missing chart title' });
+  feedback = String(feedback || '').slice(0, 1200).trim();
   if (!Array.isArray(views) || !views.length) {
     if (Array.isArray(rows) && Array.isArray(series)) views = [{ label: 'Overall', series, rows }];
     else return res.status(400).json({ error: 'Missing chart data' });
@@ -1803,7 +1804,7 @@ app.post('/api/analysis/summarize', requireAuth, requireAnalyst, summaryLimit, a
       }),
     };
   });
-  const key = crypto.createHash('sha1').update(JSON.stringify({ title, kind, safeViews, style: style || 'rigorous', customInstructions: customInstructions || '' })).digest('hex');
+  const key = crypto.createHash('sha1').update(JSON.stringify({ title, kind, safeViews, style: style || 'rigorous', customInstructions: customInstructions || '', feedback })).digest('hex');
   if (summaryCache.has(key)) return res.json(summaryCache.get(key));
 
   const unit = (kind === 'mean' || kind === 'gap') ? 'means on a 1–5 scale (5 = most positive)' : 'percentages of respondents';
@@ -1812,7 +1813,8 @@ app.post('/api/analysis/summarize', requireAuth, requireAnalyst, summaryLimit, a
   ).join('\n\n').slice(0, 16000);
 
   const system = buildAnalysisSystem(style, customInstructions);
-  const user = `Indicator: "${title}". Values are ${unit}.\nResults from every angle (overall and each disaggregation):\n\n${tables}`;
+  const user = `Indicator: "${title}". Values are ${unit}.\nResults from every angle (overall and each disaggregation):\n\n${tables}` +
+    (feedback ? `\n\n---\nThe analyst reviewed a first draft of your summary and asks you to REVISE it, prioritising this feedback (still grounded strictly in the data above): "${feedback}"` : '');
 
   try {
     const client = new Anthropic({ apiKey, maxRetries: 4 });
@@ -1846,6 +1848,67 @@ function aiErrorResponse(res, err, where) {
   else if (/credit balance/i.test(raw)) msg = 'Anthropic account is out of credits — add a balance in Plans & Billing.';
   res.status(status === 529 || status === 429 ? 503 : 500).json({ error: msg });
 }
+
+// ── "Ask the data" — free-text research question → best indicator to chart ────
+// Claude maps the analyst's question to ONE indicator from the registry (plus a
+// breakdown + chart type); the client then renders that chart from the data it
+// already holds and asks /summarize to write the grounded answer.
+function askCatalog() {
+  const items = [
+    { qKey: 'gap', label: 'Expectation gap — experience vs expectation across accountability dimensions (consultation, dignity, transparency, feedback, etc.)', kind: 'gap', section: 'Accountability' },
+    { qKey: 'trust', label: 'Trust in different actors (community leaders, local authorities, NGOs, UN, government, Red Cross, etc.)', kind: 'mean', section: 'Trust' },
+  ];
+  for (const s of ANALYSIS.SINGLE) items.push({ qKey: `single:${s.key}`, label: s.label, kind: 'single', section: s.section });
+  for (const l of ANALYSIS.LIKERT) items.push({ qKey: `likert:${l.key}`, label: l.label, kind: 'mean', section: l.section });
+  for (const m of ANALYSIS.MULTI) items.push({ qKey: `multi:${m.key}`, label: m.label, kind: 'multi', section: m.section });
+  return items;
+}
+
+app.post('/api/analysis/ask', requireAuth, requireAnalyst, summaryLimit, async (req, res) => {
+  const question = String(req.body?.question || '').slice(0, 500).trim();
+  if (question.length < 3) return res.status(400).json({ error: 'Please type a research question' });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI not configured (ANTHROPIC_API_KEY missing in Railway)' });
+
+  const catalog = askCatalog();
+  const qKeys = catalog.map(c => c.qKey);
+  const dimKeys = ANALYSIS.DIMENSIONS.map(d => d.key);
+  const schema = {
+    type: 'object', additionalProperties: false,
+    required: ['canAnswer', 'qKey', 'breakdown', 'chartType', 'rationale'],
+    properties: {
+      canAnswer: { type: 'boolean', description: 'true if one of the catalog indicators can answer the question' },
+      qKey: { type: 'string', enum: [...qKeys, ''], description: 'the single best indicator, or "" if none fits' },
+      breakdown: { type: 'string', enum: ['', ...dimKeys], description: 'disaggregation dimension if the question implies one, else ""' },
+      chartType: { type: 'string', enum: ['bar', 'column', 'pie', 'table'] },
+      rationale: { type: 'string', description: 'one sentence: which indicator and why it answers the question (or why nothing fits)' },
+    },
+  };
+
+  const catalogText = catalog.map(c => `- ${c.qKey}  [${c.kind}, ${c.section}]  — ${c.label}`).join('\n');
+  const system = `${STUDY_OBJECTIVE}
+
+You are helping an analyst explore the survey results. You are given a catalog of the indicators that can be charted from this dataset, each with a stable qKey. Map the analyst's research question to the SINGLE best-matching indicator (its qKey), choose a breakdown dimension only if the question explicitly or clearly implies one (e.g. "by gender", "across governorates", "for Syrians vs Lebanese"), and pick a sensible chart type (bar/column for comparisons, pie only for a single categorical share, table for dense multi-category data). If no indicator can reasonably answer the question, set canAnswer=false, qKey="" and explain briefly. Never invent a qKey that is not in the catalog.`;
+  const user = `Analyst question: "${question}"\n\nAvailable indicators:\n${catalogText}`;
+
+  try {
+    const client = new Anthropic({ apiKey, maxRetries: 4 });
+    const stream = client.messages.stream({
+      model: 'claude-opus-4-8', max_tokens: 1200, thinking: { type: 'adaptive' },
+      system, output_config: { format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: user }],
+    });
+    const message = await stream.finalMessage();
+    const textBlock = message.content.find(b => b.type === 'text');
+    if (!textBlock) throw new Error('No answer returned');
+    const plan = JSON.parse(textBlock.text);
+    if (plan.qKey && !qKeys.includes(plan.qKey)) { plan.canAnswer = false; plan.qKey = ''; }
+    const label = catalog.find(c => c.qKey === plan.qKey)?.label || '';
+    res.json({ question, ...plan, label });
+  } catch (err) {
+    aiErrorResponse(res, err, 'Ask');
+  }
+});
 
 // ── Analysis report (one living, auto-saved document) ─────────────────────────
 const REPORT_PATH = path.join(DATA_DIR, 'analysis_report.json');

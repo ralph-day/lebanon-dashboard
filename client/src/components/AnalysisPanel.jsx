@@ -64,7 +64,7 @@ function scaleColor(v) {
 
 // Graduated-symbol map: one bubble per location, colored by an indicator's mean
 // (1–5) and sized by respondent count, at each location's GPS centroid.
-function MapSection({ respondents, meta, mapBoxClass = 'h-96' }) {
+function MapSection({ respondents, meta, mapBoxClass = 'h-[340px]' }) {
   const metricGroups = useMemo(() => [
     { group: 'Wellbeing', items: meta.likert.map(l => ({ col: l.key, label: l.label })) },
     { group: 'Trust in actors', items: meta.trust.actors.map(a => ({ col: a.col, label: a.label })) },
@@ -115,7 +115,7 @@ function MapSection({ respondents, meta, mapBoxClass = 'h-96' }) {
             </div>
           ))}
         </div>
-        <div className={`${mapBoxClass} rounded-lg overflow-hidden`}>
+        <div className={`${mapBoxClass} rounded-lg overflow-hidden relative z-0 isolate`}>
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (
@@ -482,29 +482,52 @@ function GraphTools({ graph }) {
   const ctx = useContext(AnalysisCtx)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [refineOpen, setRefineOpen] = useState(false)
+  const [fb, setFb] = useState('')
 
   // Register/refresh this graph's metadata so the report can summarize it.
   useEffect(() => { ctx?.registerGraph(graph) }) // eslint-disable-line
   if (!ctx) return null
 
   const summary = ctx.summaries[graph.key]
-  const run = async () => {
+  const run = async (feedback = '') => {
     setLoading(true); setError(null)
-    try { await ctx.summarizeGraph(graph) } catch (e) { setError(e.message) } finally { setLoading(false) }
+    try { await ctx.summarizeGraph(graph, feedback) } catch (e) { setError(e.message) } finally { setLoading(false) }
+  }
+  const applyFeedback = async () => {
+    if (!fb.trim()) return
+    await run(fb.trim()); setRefineOpen(false)
   }
   const myNotes = ctx.allNotes.filter(n => n.entityType === 'analysisGraph' && n.entityId === graph.key)
 
   return (
     <div className="mt-3 border-t border-slate-100 pt-2 space-y-2">
-      <div className="flex items-center gap-2 no-print">
-        <button onClick={run} disabled={loading}
+      <div className="flex items-center gap-2 no-print flex-wrap">
+        <button onClick={() => run()} disabled={loading}
           className="text-xs px-2.5 py-1 rounded-lg border border-violet-200 text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-50">
-          ✦ {loading ? 'Summarizing…' : summary ? 'Re-summarize' : 'AI summary'}
+          ✦ {loading ? 'Working…' : summary ? 'Re-summarize' : 'AI summary'}
         </button>
+        {summary && (
+          <button onClick={() => setRefineOpen(o => !o)} disabled={loading}
+            className="text-xs px-2.5 py-1 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50">
+            ✎ Refine with feedback
+          </button>
+        )}
         <NotesBubble entityType="analysisGraph" entityId={graph.key} entityLabel={graph.title}
           allNotes={ctx.allNotes} onNoteAdded={ctx.addNote} onNoteDeleted={ctx.deleteNote} currentUser={ctx.user} />
         {myNotes.length > 0 && <span className="text-xs text-slate-400">{myNotes.length} note{myNotes.length > 1 ? 's' : ''}</span>}
       </div>
+      {refineOpen && (
+        <div className="no-print flex items-start gap-2">
+          <textarea value={fb} onChange={e => setFb(e.target.value)} rows={2} autoFocus
+            placeholder="Tell the AI how to revise — e.g. 'focus on the gender gap', 'be more concise', 'flag the Akkar outlier'…"
+            className="flex-1 text-xs border border-blue-200 rounded-lg p-2 resize-none focus:outline-none focus:border-blue-400" />
+          <button onClick={applyFeedback} disabled={loading || !fb.trim()}
+            className="text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 whitespace-nowrap">
+            {loading ? '…' : 'Regenerate'}
+          </button>
+        </div>
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
       {summary && <p className="text-xs text-slate-700 bg-violet-50 rounded-lg p-2 whitespace-pre-wrap break-words"><span className="text-violet-500 font-medium">✦ AI:</span> {summary}</p>}
       {myNotes.length > 0 && (
@@ -581,6 +604,11 @@ export default function AnalysisPanel({ user }) {
   const [aiProgress, setAiProgress] = useState(null)
   const [pushedAll, setPushedAll] = useState(false)
   const [dataModal, setDataModal] = useState(null) // 'loading' | { label, rows }
+  // Ask the data (free-text research question → chart + grounded answer)
+  const [askQ, setAskQ] = useState('')
+  const [askBusy, setAskBusy] = useState(false)
+  const [askErr, setAskErr] = useState('')
+  const [ask, setAsk] = useState(null) // { plan, chart, answer, answering, answerErr }
 
   const showDataQ = (qKey, label) => {
     setDataModal('loading')
@@ -625,7 +653,7 @@ export default function AnalysisPanel({ user }) {
   }, [promptStyle, promptCustom])
 
   // Context: notes CRUD, per-graph AI summaries, and a registry the report uses.
-  const summarizeGraph = async (graph) => {
+  const summarizeGraph = async (graph, feedback = '') => {
     // Prefer the multi-angle profile (overall + every breakdown); fall back to
     // the single current-view rows for charts without a profile (e.g. the map).
     const base = graph.makeProfile
@@ -633,7 +661,7 @@ export default function AnalysisPanel({ user }) {
       : { title: graph.title, kind: graph.kind, series: graph.series, rows: graph.rows }
     const res = await fetch('/api/analysis/summarize', {
       method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...base, style: promptStyle, customInstructions: promptCustom }),
+      body: JSON.stringify({ ...base, style: promptStyle, customInstructions: promptCustom, feedback }),
     })
     const d = await res.json(); if (!res.ok) throw new Error(d.error || 'Summary failed')
     setSummaries(s => ({ ...s, [graph.key]: d.summary }))
@@ -877,6 +905,48 @@ export default function AnalysisPanel({ user }) {
     })
   }
 
+  // Resolve an Ask-the-data plan (qKey + breakdown) into a renderable chart,
+  // reusing the same aggregation the section cards use.
+  const resolveAsk = (plan) => {
+    const bd = groupsBy(plan.breakdown || '')
+    const multi = bd.length > 1
+    const q = plan.qKey
+    if (q === 'gap') return { title: 'Expectation gap (experience vs expectation)', kind: 'gap', rows: gapPanelRows(data.respondents), series: ['Experience', 'Expectation'], domain: [1, 5], unit: '', chartType: 'bar', makeProfile: gapMakeProfile }
+    if (q === 'trust') { const a = aggMean(bd, meta.trust.actors); return { title: meta.trust.label, kind: 'mean', rows: a.rows, series: a.series, domain: [1, 5], unit: '', chartType: plan.chartType === 'pie' ? 'bar' : plan.chartType, makeProfile: () => buildViews('mean', meta.trust.actors) } }
+    const [pfx, key] = q.includes(':') ? [q.slice(0, q.indexOf(':')), q.slice(q.indexOf(':') + 1)] : [q, '']
+    if (pfx === 'single') { const s = meta.single.find(x => x.key === key); if (!s) return null; const a = aggSingle(bd, s); return { title: s.label, kind: 'pct', rows: a.rows, series: a.series, unit: '%', chartType: (plan.chartType === 'pie' && multi) ? 'bar' : plan.chartType, makeProfile: () => buildViews('single', s) } }
+    if (pfx === 'multi') { const m = meta.multi.find(x => x.key === key); if (!m) return null; const a = aggMulti(bd, m); return { title: m.label, kind: 'pct', rows: a.rows, series: a.series, unit: '%', chartType: plan.chartType === 'pie' ? 'bar' : plan.chartType, makeProfile: () => buildViews('multi', m) } }
+    if (pfx === 'likert') { const l = meta.likert.find(x => x.key === key); if (!l) return null; const cols = [{ col: l.key, label: l.label }]; const a = aggMean(bd, cols); return { title: l.label, kind: 'mean', rows: a.rows, series: a.series, domain: [1, 5], unit: '', chartType: plan.chartType === 'pie' ? 'bar' : plan.chartType, makeProfile: () => buildViews('mean', cols) } }
+    return null
+  }
+  const runAsk = async () => {
+    const q = askQ.trim(); if (q.length < 3) return
+    setAskBusy(true); setAskErr(''); setAsk(null)
+    try {
+      const res = await fetch('/api/analysis/ask', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q }) })
+      const plan = await res.json(); if (!res.ok) throw new Error(plan.error || 'Failed')
+      const chart = (plan.canAnswer && plan.qKey) ? resolveAsk(plan) : null
+      if (!chart) { setAsk({ plan, chart: null }); setAskBusy(false); return }
+      setAsk({ plan, chart, answering: true })
+      setAskBusy(false)
+      try {
+        const base = { title: chart.title, kind: chart.kind, views: chart.makeProfile() }
+        const feedback = `The analyst asked this research question: "${q}". Answer it directly and specifically using the data in 2–4 sentences, then note the single most important difference across subgroups.`
+        const ar = await fetch('/api/analysis/summarize', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...base, style: promptStyle, customInstructions: promptCustom, feedback }) })
+        const ad = await ar.json(); if (!ar.ok) throw new Error(ad.error || 'Answer failed')
+        setAsk(a => ({ ...a, answer: ad.summary, answering: false }))
+      } catch (e) { setAsk(a => ({ ...a, answering: false, answerErr: e.message })) }
+    } catch (e) { setAskErr(e.message); setAskBusy(false) }
+  }
+  const pushAskToReport = async (a) => {
+    try {
+      const block = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type: 'chart', qKey: a.plan.qKey, title: a.chart.title, kind: a.chart.kind, viz: a.chart.chartType, breakdown: a.plan.breakdown || '', summary: a.answer || '', comment: '' }
+      const res = await fetch('/api/analysis/report/blocks', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ block }) })
+      if (!res.ok) throw new Error('Failed')
+      setAsk(x => ({ ...x, pushed: true })); setTimeout(() => setAsk(x => x ? { ...x, pushed: false } : x), 2000)
+    } catch { alert('Could not push to report') }
+  }
+
   return (
    <AnalysisCtx.Provider value={ctxValue}>
     <div className="space-y-5">
@@ -942,6 +1012,44 @@ export default function AnalysisPanel({ user }) {
           ))}
         </div>
       </div>
+
+      {/* Ask the data — free-text research question → chart + grounded answer */}
+      <section className="no-print bg-gradient-to-br from-violet-50 to-blue-50 rounded-xl border border-violet-100 p-4">
+        <div className="flex items-center gap-2 mb-1"><span className="text-violet-600">✦</span><h3 className="text-sm font-bold text-slate-800">Ask the data</h3></div>
+        <p className="text-xs text-slate-500 mb-2">Ask any research question in plain language — Claude finds the right indicator, charts it, and writes the answer from the survey.</p>
+        <div className="flex items-start gap-2">
+          <textarea value={askQ} onChange={e => setAskQ(e.target.value)} rows={2}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAsk() }}
+            placeholder="e.g. Which actors do people trust least? Do Syrians feel less in control than Lebanese? Where are the biggest accountability gaps?"
+            className="flex-1 text-sm border border-violet-200 rounded-lg p-2 resize-none focus:outline-none focus:border-violet-400" />
+          <button onClick={runAsk} disabled={askBusy || askQ.trim().length < 3}
+            className="text-sm px-4 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 whitespace-nowrap">
+            {askBusy ? 'Thinking…' : 'Ask'}
+          </button>
+        </div>
+        {askErr && <p className="text-xs text-red-600 mt-2">{askErr}</p>}
+        {ask && (
+          <div className="mt-3 bg-white rounded-lg border border-slate-100 p-3">
+            {ask.chart ? (
+              <>
+                <div className="flex items-baseline justify-between gap-2 mb-2">
+                  <h4 className="text-sm font-semibold text-slate-800">{ask.chart.title}{ask.plan.breakdown ? ` · by ${data.dimensions.find(d => d.key === ask.plan.breakdown)?.label || ask.plan.breakdown}` : ''}</h4>
+                  <button onClick={() => pushAskToReport(ask)}
+                    className="text-xs px-2.5 py-0.5 rounded-md border border-violet-200 text-violet-600 hover:bg-violet-50 whitespace-nowrap">
+                    {ask.pushed ? '✓ Pushed' : '⤴ Push to report'}
+                  </button>
+                </div>
+                <ChartView type={ask.chart.chartType} rows={ask.chart.rows} series={ask.chart.series} domain={ask.chart.domain} unit={ask.chart.unit} />
+                {ask.answering && <p className="text-xs text-slate-400 mt-2 animate-pulse">Writing the answer…</p>}
+                {ask.answer && <p className="text-sm text-slate-700 bg-violet-50 rounded-lg p-3 mt-2 whitespace-pre-wrap break-words"><span className="text-violet-500 font-medium">✦ Answer:</span> {ask.answer}</p>}
+                {ask.answerErr && <p className="text-xs text-red-600 mt-2">{ask.answerErr}</p>}
+              </>
+            ) : (
+              <p className="text-sm text-slate-600"><span className="text-slate-400">No matching chart —</span> {ask.plan.rationale || 'This question can’t be answered from the available indicators.'}</p>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* Flagship: expectation gap */}
       <section>

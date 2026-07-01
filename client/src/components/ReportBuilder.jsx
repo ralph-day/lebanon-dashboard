@@ -311,7 +311,7 @@ export default function ReportBuilder({ user }) {
           if (b.type === 'map') return (
             <Block key={b.id} block={b} {...wrapProps}>
               <h2 className="text-lg font-bold text-slate-800 mb-2">Geographic patterns</h2>
-              <MapSection respondents={data.respondents} meta={meta} mapBoxClass="h-[560px] max-w-md mx-auto" />
+              <MapSection respondents={data.respondents} meta={meta} mapBoxClass="h-[400px] max-w-sm mx-auto" />
               <div className="flex items-center gap-2 mt-2"><span className="text-xs text-violet-500 font-medium">✦ AI</span><AiBtn busy={busy} onClick={() => genMapSummary(b)} k={b.id} label={b.summary ? 'Regenerate' : 'Analyze across metrics'} /></div>
               <EditableText value={b.summary} onChange={v => updateBlock(b.id, { summary: v })} placeholder="AI geographic analysis…" rows={3} />
             </Block>
