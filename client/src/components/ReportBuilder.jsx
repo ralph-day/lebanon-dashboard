@@ -42,6 +42,7 @@ export default function ReportBuilder({ user }) {
   const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState(true)
   const [prompt, setPrompt] = useState({ style: 'rigorous', custom: '' })
+  const [exportOpen, setExportOpen] = useState(false)
   const dragId = useRef(null)
   const loadedRef = useRef(false)
   const autoExecRef = useRef(false)
@@ -250,22 +251,28 @@ export default function ReportBuilder({ user }) {
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
-      {/* Toolbar */}
-      <div className="no-print bg-white rounded-xl border border-slate-100 p-4 flex flex-wrap items-center gap-3 sticky top-[97px] z-10">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Report builder</p>
-          <p className="text-xs text-slate-400">{saved ? 'All changes saved' : 'Saving…'} · drag ⠿ to reorder · push charts from Analysis</p>
-        </div>
-        <div className="flex items-center gap-1.5">
+      {/* Toolbar — compact single row */}
+      <div className="no-print bg-white rounded-xl border border-slate-100 px-4 py-2 flex flex-wrap items-center gap-2 sticky top-[97px] z-20">
+        <p className="text-sm font-semibold text-slate-800">Report builder</p>
+        <span className="text-xs text-slate-400">· {saved ? 'saved' : 'saving…'}</span>
+        <span className="hidden md:inline text-xs text-slate-400">· drag ⠿ to reorder</span>
+        <div className="ml-auto flex items-center gap-1.5">
           <button onClick={() => addBlock({ id: uid(), type: 'heading', text: 'New section' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Heading</button>
           <button onClick={() => addBlock({ id: uid(), type: 'text', title: 'Section', text: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Paragraph</button>
           <button onClick={() => addBlock({ id: uid(), type: 'map', summary: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Map</button>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <button onClick={() => window.print()} className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300">⎙ PDF</button>
-          <button onClick={exportWord} disabled={!!busy} className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300 disabled:opacity-50">⬇ Word</button>
-          <button onClick={openNotebookLM} title="Downloads the report as a Markdown source and opens NotebookLM — add the file there, then use Studio (Audio/Video Overview)."
-            className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 hover:border-blue-300">🎧 NotebookLM</button>
+          <div className="relative">
+            <button onClick={() => setExportOpen(o => !o)} className="text-sm border border-slate-200 rounded-lg px-3 py-1 text-slate-600 hover:border-blue-300">⬇ Export ▾</button>
+            {exportOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                <div className="absolute right-0 mt-1 z-20 w-44 bg-white rounded-lg border border-slate-200 shadow-lg py-1 text-sm">
+                  <button onClick={() => { setExportOpen(false); window.print() }} className="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50">⎙ PDF (print)</button>
+                  <button onClick={() => { setExportOpen(false); exportWord() }} disabled={!!busy} className="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50 disabled:opacity-50">⬇ Word (.docx)</button>
+                  <button onClick={() => { setExportOpen(false); openNotebookLM() }} className="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50" title="Downloads a Markdown source and opens NotebookLM for Audio/Video Overview.">🎧 NotebookLM</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -300,7 +307,7 @@ export default function ReportBuilder({ user }) {
           if (b.type === 'map') return (
             <Block key={b.id} block={b} {...wrapProps}>
               <h2 className="text-lg font-bold text-slate-800 mb-2">Geographic patterns</h2>
-              <MapSection respondents={data.respondents} meta={meta} />
+              <MapSection respondents={data.respondents} meta={meta} mapBoxClass="h-[560px] max-w-md mx-auto" />
               <div className="flex items-center gap-2 mt-2"><span className="text-xs text-violet-500 font-medium">✦ AI</span><AiBtn busy={busy} onClick={() => genMapSummary(b)} k={b.id} label={b.summary ? 'Regenerate' : 'Analyze across metrics'} /></div>
               <EditableText value={b.summary} onChange={v => updateBlock(b.id, { summary: v })} placeholder="AI geographic analysis…" rows={3} />
             </Block>

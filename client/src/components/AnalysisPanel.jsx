@@ -64,7 +64,7 @@ function scaleColor(v) {
 
 // Graduated-symbol map: one bubble per location, colored by an indicator's mean
 // (1–5) and sized by respondent count, at each location's GPS centroid.
-function MapSection({ respondents, meta }) {
+function MapSection({ respondents, meta, mapBoxClass = 'h-96' }) {
   const metricGroups = useMemo(() => [
     { group: 'Wellbeing', items: meta.likert.map(l => ({ col: l.key, label: l.label })) },
     { group: 'Trust in actors', items: meta.trust.actors.map(a => ({ col: a.col, label: a.label })) },
@@ -115,7 +115,7 @@ function MapSection({ respondents, meta }) {
             </div>
           ))}
         </div>
-        <div className="h-96 rounded-lg overflow-hidden">
+        <div className={`${mapBoxClass} rounded-lg overflow-hidden`}>
           <MapContainer center={[33.85, 35.9]} zoom={8} scrollWheelZoom style={{ height: '100%', width: '100%' }}>
             <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
             {locs.map(l => (
