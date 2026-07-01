@@ -204,6 +204,24 @@ function ResponsesBrowser({ fields }) {
 
 // Qualitative (Claude) analysis of one open-text field. Self-contained: fetches
 // on demand (the API call can take ~30–90s), caches per field in local state.
+// Tag-style word cloud: font size + colour scale with each term's weight.
+function WordCloud({ items, rtl }) {
+  if (!items || !items.length) return <p className="text-sm text-slate-400 py-6 text-center">No terms to show.</p>
+  const ws = items.map(i => i.weight)
+  const max = Math.max(...ws), min = Math.min(...ws)
+  const t = w => (max === min ? 0.5 : (w - min) / (max - min))
+  return (
+    <div dir={rtl ? 'rtl' : 'ltr'} className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 p-4 min-h-[8rem]">
+      {items.map((it, i) => (
+        <span key={i} title={`weight ${it.weight}`} className="font-semibold leading-tight"
+          style={{ fontSize: `${12 + t(it.weight) * 30}px`, color: `hsl(${222 - t(it.weight) * 190}, 68%, ${58 - t(it.weight) * 18}%)` }}>
+          {it.text}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function QualitativeSection({ fields }) {
   const ctx = useContext(AnalysisCtx)
   const [active, setActive] = useState(null)
@@ -211,8 +229,25 @@ function QualitativeSection({ fields }) {
   const [error, setError] = useState(null)
   const [cache, setCache] = useState({}) // field -> result
   const [dataModal, setDataModal] = useState(null) // 'loading' | { label, rows }
+  // Word cloud (respondents' own words) — Arabic / English / English themes.
+  const [wc, setWc] = useState({}) // field -> wordcloud result
+  const [wcOpen, setWcOpen] = useState(false)
+  const [wcLoading, setWcLoading] = useState(false)
+  const [wcErr, setWcErr] = useState(null)
+  const [wcMode, setWcMode] = useState('ar') // 'ar' | 'en' | 'themes'
 
   if (!fields || !fields.length) return null
+
+  const loadWordcloud = (field) => {
+    setWcOpen(true); setWcErr(null)
+    if (wc[field]) return
+    setWcLoading(true)
+    fetch('/api/analysis/wordcloud', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ field }) })
+      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Word cloud failed'); return d })
+      .then(d => setWc(c => ({ ...c, [field]: d })))
+      .catch(e => setWcErr(e.message))
+      .finally(() => setWcLoading(false))
+  }
 
   const showFullData = (field, label) => {
     setDataModal('loading')
@@ -222,7 +257,7 @@ function QualitativeSection({ fields }) {
   }
 
   const run = (field) => {
-    setActive(field); setError(null)
+    setActive(field); setError(null); setWcOpen(false)
     if (cache[field]) return
     setLoading(true)
     fetch('/api/analysis/qualitative', {
@@ -268,6 +303,8 @@ function QualitativeSection({ fields }) {
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs text-slate-400">{result.n} responses analyzed · GTS-accepted sample</p>
               <div className="flex items-center gap-2 no-print">
+                <button onClick={() => (wcOpen ? setWcOpen(false) : loadWordcloud(active))}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${wcOpen ? 'bg-violet-600 text-white border-violet-600' : 'border-slate-200 text-slate-600 hover:border-violet-300'}`}>☁ Word cloud</button>
                 <button onClick={() => showFullData(active, result.label)}
                   className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">⊞ Show full data</button>
                 {ctx && <NotesBubble entityType="analysisGraph" entityId={`qual:${active}`} entityLabel={`Qualitative: ${result.label}`}
@@ -275,6 +312,35 @@ function QualitativeSection({ fields }) {
               </div>
             </div>
             <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{result.analysis.summary}</p>
+
+            {wcOpen && (
+              <div className="border border-violet-100 bg-violet-50/30 rounded-lg p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <p className="text-xs font-semibold text-slate-700">Word cloud — respondents' own words</p>
+                  <div className="flex items-center gap-1 no-print">
+                    {[{ k: 'ar', label: 'Arabic' }, { k: 'en', label: 'English' }, { k: 'themes', label: 'Themes (EN)' }].map(m => (
+                      <button key={m.k} onClick={() => setWcMode(m.k)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${wcMode === m.k ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'}`}>{m.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 mb-1">
+                  {wcMode === 'ar' && 'Most frequent terms in the original Arabic (size = frequency).'}
+                  {wcMode === 'en' && 'The same frequent terms, translated to English.'}
+                  {wcMode === 'themes' && 'Thematic meaning grouped into English themes (not a word-for-word translation).'}
+                </p>
+                {wcLoading && (
+                  <div className="flex items-center gap-3 py-8 justify-center text-slate-500 text-sm">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-violet-600" /> Building word cloud…
+                  </div>
+                )}
+                {wcErr && <p className="text-sm text-red-600 py-2">{wcErr}</p>}
+                {!wcLoading && !wcErr && wc[active] && (
+                  <WordCloud rtl={wcMode === 'ar'}
+                    items={wcMode === 'ar' ? wc[active].arabic : wcMode === 'en' ? wc[active].english : wc[active].themes} />
+                )}
+              </div>
+            )}
             {ctx && ctx.allNotes.filter(n => n.entityType === 'analysisGraph' && n.entityId === `qual:${active}`).map(nt => (
               <p key={nt.id} className="text-xs text-slate-600 bg-slate-50 rounded-lg p-2"><span className="text-slate-400">{nt.author}:</span> {nt.text}</p>
             ))}
