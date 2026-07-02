@@ -1239,7 +1239,7 @@ export default function AnalysisPanel({ user }) {
                   <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
-              {likerts.map(l => { const k = `likert:${l.key}`; const vt = vizByKey[k] || 'bar'; const isDist = vt === 'distribution'
+              {likerts.map(l => { const k = `likert:${l.key}`; const vt = vizByKey[k] || 'distribution'; const isDist = vt === 'distribution'
                 const { rows, n } = meanData([{ col: l.key, label: l.label }])
                 return (
                 <Card key={l.key} title={l.label + (isDist ? ' (distribution)' : ' (mean 1–5)')} n={n} note={smallNote} csv={{ rows, series: cats }}
