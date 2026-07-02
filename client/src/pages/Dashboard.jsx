@@ -72,7 +72,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
   // Analysis + Report are open to anyone with dashboard access; only Team is gated.
   const canAnalyze    = true
   const TABS = BASE_TABS.flatMap(t => (t === 'Data Quality' && canAnalyze) ? [t, 'Analysis', 'Report'] : [t])
-  if (canAccessTeam) TABS.push('Team')
+  TABS.push('Team') // always shown; locked (disabled) for non-team accounts
 
   // Initialise active tab from URL hash
   const [activeTab, setActiveTab] = useState(() => {
@@ -187,19 +187,26 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
         {/* Tabs — horizontally scrollable on narrow screens so all tabs stay
             reachable instead of overflowing off the edge on phones. */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex gap-0 border-t border-slate-100 overflow-x-auto no-scrollbar">
-          {TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => switchTab(tab)}
-              className={`shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+          {TABS.map(tab => {
+            const locked = tab === 'Team' && !canAccessTeam
+            return (
+              <button
+                key={tab}
+                onClick={() => { if (!locked) switchTab(tab) }}
+                disabled={locked}
+                title={locked ? 'Team tools (tasks & payments) — not available for your account' : undefined}
+                className={`shrink-0 whitespace-nowrap px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab
+                    ? 'border-blue-600 text-blue-600'
+                    : locked
+                      ? 'border-transparent text-slate-300 cursor-not-allowed'
+                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {locked ? `🔒 ${tab}` : tab}
+              </button>
+            )
+          })}
         </div>
       </header>
 
@@ -230,7 +237,7 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
             {activeTab === 'Analysis'      && canAnalyze && <AnalysisPanel user={user} />}
             {activeTab === 'Report'        && canAnalyze && <ReportBuilder user={user} />}
             {activeTab === 'Map'           && <MapPanel gpsPoints={data.gpsPoints || []} />}
-            {activeTab === 'Team'          && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} initialSubTab={initialTeamSubTab} />}
+            {activeTab === 'Team' && canAccessTeam && <TeamHub user={user} enumerators={data.enumerators || []} qaRows={data.qa?.rows || []} onUnauth={onUnauth} initialSubTab={initialTeamSubTab} />}
             {activeTab === 'Security'      && <SecurityAlertsPanel />}
           </>
         )}
