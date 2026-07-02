@@ -1529,6 +1529,9 @@ app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res)
   const lk = v => { const n = parseInt(v, 10); return n >= 1 && n <= 5 ? n : null; };
   const isNR = v => ANALYSIS.NONRESPONSE.has(v == null ? null : String(v).trim());
   const enumByCode = new Map(ENUMERATOR_ASSIGNMENTS.map(a => [String(a.code || '').toLowerCase(), a]));
+  // Field-staff identity (enumerator name + phone) is internal-only. Non-team
+  // accounts (e.g. the client analyst) get it redacted so it never leaves here.
+  const canSeeStaff = TEAM_EMAILS.includes(req.session.user?.email);
   const meta = r => {
     const nc = String(r.NameCode || '');
     const mm = nc.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
@@ -1536,9 +1539,9 @@ app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res)
     const a = code ? enumByCode.get(code.toLowerCase()) : null;
     return {
       id: String(r.instanceID || ''),
-      surveyCode: code || nc,
-      enumerator: (a && a.name) || (mm ? mm[1].trim() : nc),
-      enumeratorPhone: (a && a.phone) || '',
+      surveyCode: canSeeStaff ? (code || nc) : (code || ''),
+      enumerator: canSeeStaff ? ((a && a.name) || (mm ? mm[1].trim() : nc)) : '',
+      enumeratorPhone: canSeeStaff ? ((a && a.phone) || '') : '',
       area: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
       location: ANALYSIS.prettify(r.loc_4 || r['Fixed Location'] || '') || '',
       origin: ANALYSIS.prettify(r.governorate_displaced || r.loc_2 || '') || '',
