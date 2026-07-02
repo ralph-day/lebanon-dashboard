@@ -7,7 +7,8 @@ import {
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 
-const PALETTE = ['#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#65a30d']
+// Client (H2H / Ground Truth) brand palette — led by their primary teal.
+const PALETTE = ['#00CEA4', '#DD3160', '#537080', '#94CEBA', '#E39399', '#00A88A', '#AAAAAA', '#DAE1D9']
 const SECTION_ORDER = ['Demographics', 'Priorities & Coping', 'Community & Aid', 'Trust', 'Information', 'Future Outlook']
 const SMALL_N = 20 // warn when a disaggregated cell is below this
 const PIE_MAX = 6  // single-choice questions with <= this many options render as a donut (overall view)
