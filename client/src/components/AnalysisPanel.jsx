@@ -473,6 +473,44 @@ function ChartView({ type, rows, series, domain, unit, rowH }) {
   return <HBar rows={rows} series={series} domain={domain} unit={unit} rowH={rowH} />
 }
 
+// ── Client (H2H / Ground Truth) house style ──────────────────────────────────
+// Their scale questions are diverging 100%-stacked horizontal bars in this exact
+// palette. Segments run: no-answer, 1(low)…5(high).
+const H2H = { dk: '#AAAAAA', s1: '#DD3160', s2: '#E39399', s3: '#DAE1D9', s4: '#94CEBA', s5: '#00CEA4', label: '#537080' }
+const H2H_SEGS = ['dk', 's1', 's2', 's3', 's4', 's5']
+const H2H_TEXT = { dk: '#ffffff', s1: '#ffffff', s2: '#7a3742', s3: '#537080', s4: '#2f5a4a', s5: '#ffffff' }
+const H2H_LABELS = { dk: 'No answer', s1: 'Not at all', s2: 'A little', s3: 'Somewhat', s4: 'Mostly', s5: 'Fully' }
+
+// Diverging stacked-bar renderer (client house style). `rows` = one entry per
+// group: { name, n, dk, s1..s5 } as percentages that sum to ~100.
+function DivergingBar({ rows, labels = H2H_LABELS }) {
+  const multi = rows.length > 1
+  return (
+    <div className="space-y-2.5">
+      {rows.map((r, i) => (
+        <div key={i}>
+          {multi && <div className="text-[11px] mb-0.5" style={{ color: H2H.label }}>{r.name} <span className="text-slate-400">n={r.n}</span></div>}
+          <div className="flex w-full h-7 rounded overflow-hidden">
+            {H2H_SEGS.map(s => (r[s] > 0 ? (
+              <div key={s} style={{ width: `${r[s]}%`, background: H2H[s] }}
+                className="flex items-center justify-center border-r border-white last:border-r-0" title={`${labels[s]}: ${r[s]}%`}>
+                {r[s] >= 8 && <span className="text-[10px] font-medium" style={{ color: H2H_TEXT[s] }}>{r[s]}%</span>}
+              </div>
+            ) : null))}
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
+        {H2H_SEGS.map(s => (
+          <span key={s} className="inline-flex items-center gap-1 text-[10px]" style={{ color: H2H.label }}>
+            <span className="w-2.5 h-2.5 inline-block rounded-sm" style={{ background: H2H[s] }} />{labels[s]}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Fetch the per-respondent full data for any question (open-text by `field`,
 // closed by `qKey`), used by the "Show full data" modal.
 function loadResponses(params) {
@@ -610,7 +648,7 @@ function GraphTools({ graph }) {
   )
 }
 
-const VIZ_LABEL = { bar: 'Bar', column: 'Column', pie: 'Pie', table: 'Table' }
+const VIZ_LABEL = { bar: 'Bar', column: 'Column', pie: 'Pie', table: 'Table', distribution: 'H2H distribution' }
 function Card({ title, n, note, csv, graph, viz, onPush, onShowData, pushed, children }) {
   return (
     <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
@@ -911,6 +949,16 @@ export default function AnalysisPanel({ user }) {
     return { rows: rows.sort((a, b) => b._t - a._t), n: cols.length === 1 ? Math.round(nTot) : null }
   }
 
+  // Likert distribution for the client (H2H) diverging bar: one row per group,
+  // % at each 1–5 point plus a "no answer" bucket, over the group's full N.
+  const likertDist = (col) => groups.map(g => {
+    const c = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, dk: 0 }
+    g.rows.forEach(r => { const v = r.v[col]; if (typeof v === 'number' && v >= 1 && v <= 5) c[v]++; else c.dk++ })
+    const tot = g.rows.length
+    const p = x => (tot ? Math.round((x / tot) * 1000) / 10 : 0)
+    return { name: g.key, n: tot, dk: p(c.dk), s1: p(c[1]), s2: p(c[2]), s3: p(c[3]), s4: p(c[4]), s5: p(c[5]) }
+  })
+
   // small-n warning when breaking down
   const smallNote = dimKey && groups.some(g => g.rows.length < SMALL_N)
     ? `Some ${data?.dimensions.find(d => d.key === dimKey)?.label.toLowerCase()} groups have few respondents (n < ${SMALL_N}) — interpret with care.`
@@ -1191,12 +1239,16 @@ export default function AnalysisPanel({ user }) {
                   <ChartView type={vt} rows={rows} series={cats} unit="%" />
                 </Card>
               )})}
-              {likerts.map(l => { const { rows, n } = meanData([{ col: l.key, label: l.label }]); const k = `likert:${l.key}`; const vt = vizByKey[k] || 'bar'; return (
-                <Card key={l.key} title={l.label + ' (mean 1–5)'} n={n} note={smallNote} csv={{ rows, series: cats }}
-                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table'] }}
+              {likerts.map(l => { const k = `likert:${l.key}`; const vt = vizByKey[k] || 'bar'; const isDist = vt === 'distribution'
+                const { rows, n } = meanData([{ col: l.key, label: l.label }])
+                return (
+                <Card key={l.key} title={l.label + (isDist ? ' (distribution)' : ' (mean 1–5)')} n={n} note={smallNote} csv={{ rows, series: cats }}
+                  viz={{ type: vt, setType: t => setVizByKey(v => ({ ...v, [k]: t })), options: ['bar', 'column', 'table', 'distribution'] }}
                   onPush={() => pushChart({ qKey: k, title: l.label, kind: 'mean', viz: vt })} pushed={pushedKey === k} onShowData={() => showDataQ(k, l.label)}
                   graph={{ key: k, title: l.label, kind: 'mean', makeProfile: () => buildViews('mean', [{ col: l.key, label: l.label }]) }}>
-                  <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />
+                  {isDist
+                    ? <DivergingBar rows={likertDist(l.key)} />
+                    : <ChartView type={vt} rows={rows} series={cats} domain={[1, 5]} unit="" rowH={30} />}
                 </Card>
               )})}
             </div>
