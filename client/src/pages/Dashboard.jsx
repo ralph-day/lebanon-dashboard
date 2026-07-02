@@ -69,7 +69,8 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
   const [error, setError] = useState(null)
   const canApproveQA  = user?.email === QA_ALLOWED_EMAIL
   const canAccessTeam = TEAM_ALLOWED_EMAILS.includes(user?.email)
-  const canAnalyze    = ANALYST_ALLOWED_EMAILS.includes(user?.email)
+  // Analysis + Report are open to anyone with dashboard access; only Team is gated.
+  const canAnalyze    = true
   const TABS = BASE_TABS.flatMap(t => (t === 'Data Quality' && canAnalyze) ? [t, 'Analysis', 'Report'] : [t])
   if (canAccessTeam) TABS.push('Team')
 
@@ -78,7 +79,6 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
     const { tabSlug } = parseHash()
     const tab = SLUG_TO_TAB[tabSlug]
     if (tab === 'Team' && !TEAM_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
-    if ((tab === 'Analysis' || tab === 'Report') && !ANALYST_ALLOWED_EMAILS.includes(user?.email)) return 'Overview'
     return tab || 'Overview'
   })
   const [initialTeamSubTab, setInitialTeamSubTab] = useState(() => parseHash().subSlug || 'tasks')

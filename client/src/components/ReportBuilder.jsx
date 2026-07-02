@@ -43,6 +43,10 @@ export default function ReportBuilder({ user }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [report, setReport] = useState(null) // { blocks: [] }
+  const [reports, setReports] = useState([]) // the log: every author's report
+  const [currentKey, setCurrentKey] = useState('') // which author's report is open
+  const [canEdit, setCanEdit] = useState(true)
+  const [reportTitle, setReportTitle] = useState('')
   const [busy, setBusy] = useState('')
   const [saved, setSaved] = useState(true)
   const [prompt, setPrompt] = useState({ style: 'rigorous', custom: '' })
@@ -56,33 +60,55 @@ export default function ReportBuilder({ user }) {
     try { const raw = localStorage.getItem('analysis-prompt'); if (raw) setPrompt(JSON.parse(raw)) } catch { /* ignore */ }
   }, [])
 
+  const refreshList = () =>
+    fetch('/api/analysis/reports', { credentials: 'include' }).then(r => r.ok ? r.json() : { reports: [], myKey: '' })
+
+  // Mount: load analysis data + the report log; open the current user's own report.
   useEffect(() => {
     Promise.all([
       fetch('/api/analysis', { credentials: 'include' }).then(r => { if (!r.ok) throw new Error('Failed to load analysis data'); return r.json() }),
-      fetch('/api/analysis/report', { credentials: 'include' }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, rep]) => {
+      refreshList(),
+    ]).then(([d, rl]) => {
       setData(d)
-      let blocks = Array.isArray(rep.blocks) ? rep.blocks : null
-      if (!blocks || !blocks.length) {
-        blocks = [
-          { id: uid(), type: 'text', role: 'intro', title: 'Introduction', text: '' },
-          { id: uid(), type: 'text', role: 'methodology', title: 'Methodology', text: '' },
-          { id: uid(), type: 'text', role: 'exec', title: 'Executive summary', text: '' },
-        ]
-      }
-      setReport({ ...rep, blocks })
+      setReports(rl.reports || [])
+      setCurrentKey(rl.myKey || '')
     }).catch(e => setError(e.message))
   }, [])
 
+  // Load whichever author's report is selected.
   useEffect(() => {
-    if (!report) return
+    if (!currentKey) return
+    fetch(`/api/analysis/report?owner=${encodeURIComponent(currentKey)}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : {})
+      .then(rep => {
+        const editable = rep.canEdit !== false
+        let blocks = Array.isArray(rep.blocks) ? rep.blocks : null
+        if ((!blocks || !blocks.length) && editable) {
+          blocks = [
+            { id: uid(), type: 'text', role: 'intro', title: 'Introduction', text: '' },
+            { id: uid(), type: 'text', role: 'methodology', title: 'Methodology', text: '' },
+            { id: uid(), type: 'text', role: 'exec', title: 'Executive summary', text: '' },
+          ]
+        }
+        loadedRef.current = false       // skip the autosave this programmatic load triggers
+        autoExecRef.current = !editable // only auto-draft exec summary in your own editable report
+        setCanEdit(editable)
+        setReportTitle(rep.title || 'Report')
+        setReport({ ...rep, blocks: blocks || [] })
+      }).catch(e => setError(e.message))
+  }, [currentKey])
+
+  // Autosave — only your own (or an admin editing another's) report.
+  useEffect(() => {
+    if (!report || !canEdit) return
     if (!loadedRef.current) { loadedRef.current = true; return }
     setSaved(false)
     const t = setTimeout(() => {
-      fetch('/api/analysis/report', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(report) }).then(() => setSaved(true)).catch(() => {})
+      fetch(`/api/analysis/report?owner=${encodeURIComponent(currentKey)}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(report) })
+        .then(() => setSaved(true)).catch(() => {})
     }, 900)
     return () => clearTimeout(t)
-  }, [report])
+  }, [report]) // eslint-disable-line
 
   const setBlocks = fn => setReport(r => ({ ...r, blocks: fn(r.blocks) }))
   const updateBlock = (id, patch) => setBlocks(bs => bs.map(b => b.id === id ? { ...b, ...patch } : b))
@@ -261,13 +287,19 @@ export default function ReportBuilder({ user }) {
     <div className="max-w-4xl mx-auto space-y-4">
       {/* Toolbar — compact single row */}
       <div className="no-print bg-white rounded-xl border border-slate-100 px-4 py-2 flex flex-wrap items-center gap-2 sticky top-[97px] z-20">
-        <p className="text-sm font-semibold text-slate-800">Report builder</p>
-        <span className="text-xs text-slate-400">· {saved ? 'saved' : 'saving…'}</span>
-        <span className="hidden md:inline text-xs text-slate-400">· drag ⠿ to reorder</span>
+        <select value={currentKey} onChange={e => setCurrentKey(e.target.value)} title="Switch report"
+          className="text-sm font-semibold text-slate-800 border border-slate-200 rounded-lg px-2 py-1 bg-white max-w-[220px]">
+          {reports.map(r => <option key={r.key} value={r.key}>{r.title}{r.mine ? ' (you)' : ''}</option>)}
+        </select>
+        {canEdit
+          ? <span className="text-xs text-slate-400">· {saved ? 'saved' : 'saving…'}</span>
+          : <span className="text-xs font-medium text-amber-600">· read-only</span>}
         <div className="ml-auto flex items-center gap-1.5">
-          <button onClick={() => addBlock({ id: uid(), type: 'heading', text: 'New section' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Heading</button>
-          <button onClick={() => addBlock({ id: uid(), type: 'text', title: 'Section', text: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Paragraph</button>
-          <button onClick={() => addBlock({ id: uid(), type: 'map', summary: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Map</button>
+          {canEdit && <>
+            <button onClick={() => addBlock({ id: uid(), type: 'heading', text: 'New section' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Heading</button>
+            <button onClick={() => addBlock({ id: uid(), type: 'text', title: 'Section', text: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Paragraph</button>
+            <button onClick={() => addBlock({ id: uid(), type: 'map', summary: '' })} className="text-xs px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-300">+ Map</button>
+          </>}
           <div className="relative">
             <button onClick={() => setExportOpen(o => !o)} className="text-sm border border-slate-200 rounded-lg px-3 py-1 text-slate-600 hover:border-blue-300">⬇ Export ▾</button>
             {exportOpen && (

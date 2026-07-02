@@ -112,12 +112,17 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/callback'
 );
 
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || '';
+// Client stakeholders granted dashboard access in code (works without touching
+// Railway env). They see everything except the Team tab (tasks/payments).
+const EXTRA_ALLOWED = ['nour@groundtruthsolutions.org'];
 
 function isAllowed(email) {
-  if (ALLOWED_DOMAIN && email.endsWith('@' + ALLOWED_DOMAIN)) return true;
-  if (ALLOWED_EMAILS.includes(email)) return true;
+  const e = String(email || '').toLowerCase();
+  if (ALLOWED_DOMAIN && e.endsWith('@' + ALLOWED_DOMAIN)) return true;
+  if (ALLOWED_EMAILS.includes(e)) return true;
+  if (EXTRA_ALLOWED.includes(e)) return true;
   return false;
 }
 
@@ -210,14 +215,12 @@ function requireTeam(req, res, next) {
   res.status(403).json({ error: 'Team access only' });
 }
 
-// Analysis feature is restricted to a small allowlist (override via env
-// ANALYST_EMAILS, comma-separated). Mirrors the client-side gate.
-const ANALYST_EMAILS = (process.env.ANALYST_EMAILS || 'ralph@influeanswers.com')
-  .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-function requireAnalyst(req, res, next) {
-  if (ANALYST_EMAILS.includes(String(req.session.user?.email || '').toLowerCase())) return next();
-  res.status(403).json({ error: 'Analysis access restricted' });
-}
+// Analysis + Report are open to ANY authenticated dashboard user (requireAuth
+// runs first). Only the Team tab (tasks/payments) stays restricted.
+function requireAnalyst(req, res, next) { return next(); }
+// Admins may edit any author's report; everyone else edits only their own.
+const REPORT_ADMINS = ['ralph@influeanswers.com', 'ralphbaydoun@gmail.com'];
+const isReportAdmin = req => REPORT_ADMINS.includes(String(req.session.user?.email || '').toLowerCase());
 
 // ── Data cache ────────────────────────────────────────────────────────────────
 let cache = { data: null, fetchedAt: null };
@@ -2012,32 +2015,88 @@ You are helping an analyst explore the survey results. You are given a catalog o
   }
 });
 
-// ── Analysis report (one living, auto-saved document) ─────────────────────────
-const REPORT_PATH = path.join(DATA_DIR, 'analysis_report.json');
-let analysisReport = {};
-try { if (fs.existsSync(REPORT_PATH)) analysisReport = JSON.parse(fs.readFileSync(REPORT_PATH, 'utf8')); } catch (e) { console.error('Could not load report:', e.message); }
-function saveReport() { try { atomicWrite(REPORT_PATH, JSON.stringify(analysisReport, null, 2)); } catch (e) { console.error('Could not save report:', e.message); } }
+// ── Analysis reports (one living document PER AUTHOR) ─────────────────────────
+// Each user gets their own auto-saved report ("Report by <name>"). Pushing an
+// analysis to the report always lands in the pusher's own report. Everyone can
+// browse the full log of reports; you edit your own (admins edit any).
+const REPORTS_PATH = path.join(DATA_DIR, 'analysis_reports.json');
+const LEGACY_REPORT_PATH = path.join(DATA_DIR, 'analysis_report.json');
+let analysisReports = {};
+try { if (fs.existsSync(REPORTS_PATH)) analysisReports = JSON.parse(fs.readFileSync(REPORTS_PATH, 'utf8')); } catch (e) { console.error('Could not load reports:', e.message); }
+// One-time migration: fold the old single report into Ralph's report.
+try {
+  if (!Object.keys(analysisReports).length && fs.existsSync(LEGACY_REPORT_PATH)) {
+    const old = JSON.parse(fs.readFileSync(LEGACY_REPORT_PATH, 'utf8'));
+    analysisReports['ralph@influeanswers.com'] = {
+      ownerEmail: 'ralph@influeanswers.com', ownerName: 'Ralph', title: 'Report by Ralph',
+      blocks: Array.isArray(old.blocks) ? old.blocks : [], updatedAt: old.updatedAt || new Date().toISOString(),
+    };
+    console.log('[report] migrated legacy report -> Report by Ralph');
+  }
+} catch (e) { console.error('Could not migrate legacy report:', e.message); }
+function saveReports() { try { atomicWrite(REPORTS_PATH, JSON.stringify(analysisReports, null, 2)); } catch (e) { console.error('Could not save reports:', e.message); } }
 
-app.get('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => res.json(analysisReport));
+const myKey = req => String(req.session.user?.email || '').toLowerCase();
+const firstName = (name, email) => (name && name.trim().split(/\s+/)[0]) || String(email || '').split('@')[0] || 'User';
+function ensureReport(req) {
+  const key = myKey(req);
+  if (!analysisReports[key]) {
+    const nm = firstName(req.session.user?.name, req.session.user?.email);
+    analysisReports[key] = { ownerEmail: req.session.user?.email || key, ownerName: nm, title: `Report by ${nm}`, blocks: [], updatedAt: new Date().toISOString() };
+    saveReports();
+  }
+  return analysisReports[key];
+}
+
+// List every author's report (the log).
+app.get('/api/analysis/reports', requireAuth, requireAnalyst, (req, res) => {
+  ensureReport(req);
+  const reports = Object.entries(analysisReports).map(([key, r]) => ({
+    key, ownerName: r.ownerName, ownerEmail: r.ownerEmail, title: r.title || `Report by ${r.ownerName}`,
+    blockCount: Array.isArray(r.blocks) ? r.blocks.length : 0, updatedAt: r.updatedAt, mine: key === myKey(req),
+  })).sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+  res.json({ reports, myKey: myKey(req) });
+});
+
+// Get one report — mine by default, or ?owner=<key> for another author's.
+app.get('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => {
+  const owner = String(req.query.owner || '').toLowerCase();
+  if (owner && owner !== myKey(req)) {
+    const r = analysisReports[owner];
+    if (!r) return res.status(404).json({ error: 'Report not found' });
+    return res.json({ ...r, key: owner, canEdit: isReportAdmin(req) });
+  }
+  res.json({ ...ensureReport(req), key: myKey(req), canEdit: true });
+});
+
+// Save a report — your own, or any if you're an admin.
 app.put('/api/analysis/report', requireAuth, requireAnalyst, (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Invalid report' });
   if (JSON.stringify(body).length > 2000000) return res.status(413).json({ error: 'Report too large' });
-  analysisReport = { ...body, updatedAt: new Date().toISOString(), updatedBy: req.session.user?.email || '' };
-  saveReport();
-  res.json({ ok: true, updatedAt: analysisReport.updatedAt });
+  const owner = String(req.query.owner || myKey(req)).toLowerCase();
+  if (owner !== myKey(req) && !isReportAdmin(req)) return res.status(403).json({ error: 'You can only edit your own report' });
+  const existing = analysisReports[owner] || ensureReport(req);
+  analysisReports[owner] = {
+    ...existing,
+    blocks: Array.isArray(body.blocks) ? body.blocks : existing.blocks || [],
+    title: body.title || existing.title,
+    updatedAt: new Date().toISOString(), updatedBy: req.session.user?.email || '',
+  };
+  saveReports();
+  res.json({ ok: true, updatedAt: analysisReports[owner].updatedAt });
 });
 
-// Append one block ({block}) or many ({blocks:[...]}) to the living report.
+// Append block(s) — always to the pusher's OWN report.
 app.post('/api/analysis/report/blocks', requireAuth, requireAnalyst, (req, res) => {
   const incoming = Array.isArray(req.body?.blocks) ? req.body.blocks : (req.body?.block ? [req.body.block] : null);
   if (!incoming || !incoming.every(b => b && typeof b === 'object')) return res.status(400).json({ error: 'Invalid block(s)' });
-  if (!Array.isArray(analysisReport.blocks)) analysisReport.blocks = [];
-  analysisReport.blocks.push(...incoming);
-  analysisReport.updatedAt = new Date().toISOString();
-  analysisReport.updatedBy = req.session.user?.email || '';
-  saveReport();
-  res.json({ ok: true, count: analysisReport.blocks.length });
+  const r = ensureReport(req);
+  if (!Array.isArray(r.blocks)) r.blocks = [];
+  r.blocks.push(...incoming);
+  r.updatedAt = new Date().toISOString(); r.updatedBy = req.session.user?.email || '';
+  saveReports();
+  res.json({ ok: true, count: r.blocks.length });
 });
 
 // Executive summary — synthesise all per-question findings into a conclusion.
