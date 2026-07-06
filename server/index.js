@@ -116,7 +116,12 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map(e => e.
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || '';
 // Client stakeholders granted dashboard access in code (works without touching
 // Railway env). They see everything except the Team tab (tasks/payments).
-const EXTRA_ALLOWED = ['nour@groundtruthsolutions.org'];
+const EXTRA_ALLOWED = [
+  'nour@groundtruthsolutions.org',
+  'kaikameisan@gmail.com',
+  'pamelasaab9@gmail.com',
+  'noor.j.khalil@gmail.com',
+];
 
 function isAllowed(email) {
   const e = String(email || '').toLowerCase();
