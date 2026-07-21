@@ -121,6 +121,7 @@ const EXTRA_ALLOWED = [
   'kaikameisan@gmail.com',
   'pamelasaab9@gmail.com',
   'noor.j.khalil@gmail.com',
+  'felip.daza@gmail.com',
 ];
 
 function isAllowed(email) {
