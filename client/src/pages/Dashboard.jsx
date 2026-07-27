@@ -101,6 +101,15 @@ export default function Dashboard({ user, onLogout, onUnauth }) {
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [canAnalyze, canAccessTeam])
+
+  // Usage audit: report the active tab (server throttles repeats).
+  useEffect(() => {
+    fetch('/api/usage/track', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tab: activeTab }),
+    }).catch(() => {})
+  }, [activeTab])
   const [notes, setNotes]         = useState([])
 
   useEffect(() => {

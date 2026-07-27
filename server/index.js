@@ -183,6 +183,7 @@ app.get('/auth/callback', async (req, res) => {
     }
     // Only store safe, non-sensitive profile fields
     req.session.user = { email: data.email, name: data.name, picture: data.picture };
+    logUsage(data.email, 'signin');
     res.redirect(clientUrl);
   } catch (e) {
     console.error('Auth error:', e.message);
@@ -228,6 +229,35 @@ function requireAnalyst(req, res, next) { return next(); }
 const REPORT_ADMINS = ['ralph@influeanswers.com', 'ralphbaydoun@gmail.com'];
 const isReportAdmin = req => REPORT_ADMINS.includes(String(req.session.user?.email || '').toLowerCase());
 
+// Client beacons the active tab; throttled server-side.
+app.post('/api/usage/track', requireAuth, (req, res) => {
+  const tab = String(req.body?.tab || '').slice(0, 40);
+  if (tab) logTabUsage(req.session.user.email, tab);
+  res.json({ ok: true });
+});
+
+// Team-only usage summary: per-user sign-ins, active days, tab opens.
+app.get('/api/usage', requireAuth, requireTeam, (req, res) => {
+  let lines = [];
+  try { lines = fs.readFileSync(USAGE_FILE(), 'utf8').split('\n').filter(Boolean); }
+  catch { return res.json({ users: [], events: 0 }); }
+  const users = {};
+  for (const line of lines) {
+    let row; try { row = JSON.parse(line); } catch { continue; }
+    const u = users[row.email] = users[row.email] || { email: row.email, signins: 0, firstSeen: row.t, lastSeen: row.t, days: new Set(), tabs: {} };
+    u.lastSeen = row.t;
+    u.days.add(row.t.slice(0, 10));
+    if (row.event === 'signin') u.signins++;
+    if (row.event === 'tab' && row.tab) u.tabs[row.tab] = (u.tabs[row.tab] || 0) + 1;
+  }
+  res.json({
+    events: lines.length,
+    users: Object.values(users)
+      .map(u => ({ ...u, days: u.days.size, activeDays: [...u.days].sort() }))
+      .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen)),
+  });
+});
+
 // ── Data cache ────────────────────────────────────────────────────────────────
 let cache = { data: null, fetchedAt: null };
 const CACHE_TTL_MS = 15 * 60 * 1000;
@@ -239,6 +269,27 @@ const DATA_DIR = process.env.DATA_DIR
   ? (fs.mkdirSync(process.env.DATA_DIR, { recursive: true }), process.env.DATA_DIR)
   : __dirname;
 console.log(`[data] Using data directory: ${DATA_DIR}`);
+
+// ── Usage audit (sign-ins + tab opens) ────────────────────────────────────────
+// Append-only JSONL on the persistent volume; survives restarts, greppable.
+const USAGE_FILE = () => path.join(DATA_DIR, 'usage.jsonl');
+function logUsage(email, event, tab = null) {
+  try {
+    const row = { t: new Date().toISOString(), email: String(email || '').toLowerCase(), event };
+    if (tab) row.tab = tab;
+    fs.appendFileSync(USAGE_FILE(), JSON.stringify(row) + '\n');
+  } catch (e) { console.warn('[usage] write failed:', e.message); }
+}
+// Throttle tab events: one write per email+tab per 5 minutes, so tab-hopping
+// doesn't flood the file but a genuine revisit later still counts.
+const usageSeen = new Map();
+function logTabUsage(email, tab) {
+  const key = `${email}:${tab}`;
+  const now = Date.now();
+  if (now - (usageSeen.get(key) || 0) < 5 * 60 * 1000) return;
+  usageSeen.set(key, now);
+  logUsage(email, 'tab', tab);
+}
 
 // ── QA Approvals (persist to disk so overrides survive restarts) ──────────────
 const APPROVALS_PATH = path.join(DATA_DIR, 'qa_approvals.json');
