@@ -1595,7 +1595,7 @@ app.get('/api/public/analysis', publicMapLimit, analysisHandler);
 
 // Raw open-text responses for one field — every accepted answer, verbatim, in
 // the language it was written. No AI / no cost. Allowlisted field only.
-app.get('/api/analysis/responses', requireAuth, requireAnalyst, async (req, res) => {
+app.get('/api/analysis/responses', publicMapLimit, async (req, res) => { // public: verbatim answers are PII-scrubbed at ingest
   const field = String(req.query.field || '');
   const qKey = String(req.query.qKey || '');
   if (!field && !qKey) return res.status(400).json({ error: 'Provide field or qKey' });
@@ -1727,7 +1727,7 @@ function scrubText(t) {
     .replace(/[+00]?\d[\d\s\-().]{6,}\d/g, '[number]'); // phone-shaped digit runs
 }
 
-app.post('/api/analysis/qualitative', requireAuth, requireAnalyst, qualLimit, async (req, res) => {
+app.post('/api/analysis/qualitative', qualLimit, async (req, res) => { // public: AI result cached per field+data version
   const field = String(req.body?.field || '');
   const meta = ANALYSIS.QUALITATIVE.find(f => f.key === field);
   if (!meta) return res.status(400).json({ error: 'Unknown or unsupported field' });
@@ -1836,7 +1836,7 @@ function termFrequencies(texts, top = 50) {
     .map(([text, weight]) => ({ text, weight }));
 }
 
-app.post('/api/analysis/wordcloud', requireAuth, requireAnalyst, qualLimit, async (req, res) => {
+app.post('/api/analysis/wordcloud', qualLimit, async (req, res) => { // public: computed, rate-limited
   const field = String(req.body?.field || '');
   const meta = ANALYSIS.QUALITATIVE.find(f => f.key === field);
   if (!meta) return res.status(400).json({ error: 'Unknown or unsupported field' });

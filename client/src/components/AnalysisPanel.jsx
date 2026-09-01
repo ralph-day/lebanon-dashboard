@@ -1076,7 +1076,7 @@ export default function AnalysisPanel({ user, publicMode = false }) {
         <p className="text-sm text-slate-500">Results report · {data.n} accepted surveys · {dimKey ? `Broken down by ${dimLabel}` : 'Overall'} · Generated {new Date().toLocaleDateString()}</p>
       </div>
       {/* Controls */}
-      <div className="bg-white rounded-xl border border-slate-100 p-4 sticky top-[97px] z-10">
+      <div className={`bg-white rounded-xl border border-slate-100 p-4 sticky z-10 ${publicMode ? 'top-[61px]' : 'top-[97px]'}`}>
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
@@ -1263,9 +1263,9 @@ export default function AnalysisPanel({ user, publicMode = false }) {
 
       <MapSection respondents={data.respondents} meta={meta} />
 
-      {!publicMode && <QualitativeSection fields={meta.qualitative} />}
+      <QualitativeSection fields={meta.qualitative} />
 
-      {!publicMode && <ResponsesBrowser fields={meta.openText} />}
+      <ResponsesBrowser fields={meta.openText} />
 
       <DataDisclaimer variant="analysis" />
       <FullDataModal data={dataModal} onClose={() => setDataModal(null)} />
