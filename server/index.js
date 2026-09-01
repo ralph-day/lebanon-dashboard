@@ -1498,6 +1498,27 @@ app.get('/api/data', requireAuth, dataLimit, async (req, res) => {
   res.json({ ...publicData, qa: { ...cache.data.qa, rows: clientRows, pass, review, fail, rejected }, fetchedAt: cache.fetchedAt });
 });
 
+// ── Public heat map (no auth) ────────────────────────────────────────────────
+// Shareable with prospects: aggregated per-location progress ONLY. Strict field
+// whitelist — no enumerators, no QA rows, no demographics, no raw submissions.
+const publicMapLimit = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
+app.get('/api/public/heatmap', publicMapLimit, async (req, res) => {
+  if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
+    await refreshCache();
+  }
+  if (!cache.data) return res.status(503).json({ error: 'Data not available yet' });
+  const locations = (cache.data.locations || []).map(l => ({
+    location: l.location, region: l.region, district: l.district, type: l.type,
+    target: l.target, accepted: l.accepted, remaining: l.remaining,
+    pctComplete: l.pctComplete, lat: l.lat, lng: l.lng,
+  }));
+  const totals = locations.reduce((a, l) => ({
+    target: a.target + (Number(l.target) || 0),
+    accepted: a.accepted + (Number(l.accepted) || 0),
+  }), { target: 0, accepted: 0 });
+  res.json({ locations, totals: { ...totals, locations: locations.length }, fetchedAt: cache.fetchedAt });
+});
+
 // Analysis dataset — a compact, PII-free projection of the ACCEPTED surveys for
 // the results explorer. The client cross-tabs this in-browser, so we ship one
 // sparse record per respondent (only answered values) plus the indicator

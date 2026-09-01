@@ -99,12 +99,14 @@ function AlertZone({ zone, label }) {
   )
 }
 
-export default function LebanonMap({ locations }) {
+export default function LebanonMap({ locations, publicView = false }) {
   const mapped = locations.filter(l => l.lat && l.lng)
   const [activeAlerts, setActiveAlerts] = useState([])
 
-  // Poll active security alerts every 60 seconds
+  // Poll active security alerts every 60 seconds (internal dashboard only —
+  // the public share page never fetches or displays alerts).
   useEffect(() => {
+    if (publicView) return
     const load = () =>
       fetch('/api/security-alerts/active', { credentials: 'include' })
         .then(r => r.json())
@@ -113,7 +115,7 @@ export default function LebanonMap({ locations }) {
     load()
     const id = setInterval(load, 60_000)
     return () => clearInterval(id)
-  }, [])
+  }, [publicView])
 
   // Collect unique zones to highlight
   const alertZones = []

@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import EnumeratorProfile from './pages/EnumeratorProfile'
+import PublicHeatmap from './pages/PublicHeatmap'
 
 // Global authenticated fetch — automatically logs the user out on any 401
 export function authFetch(url, opts = {}, onUnauth) {
@@ -51,6 +52,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public share page — no sign-in, aggregated map only */}
+        <Route path="/heatmap" element={<PublicHeatmap />} />
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />} />
         <Route path="/enumerator/:code" element={user ? <EnumeratorProfileWrapper onLogout={handleUnauth} /> : <Navigate to="/login" />} />
         <Route path="/*" element={user ? <Dashboard user={user} onLogout={handleUnauth} onUnauth={handleUnauth} /> : <Navigate to="/login" />} />
