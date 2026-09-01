@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import EnumeratorProfile from './pages/EnumeratorProfile'
 import PublicHeatmap from './pages/PublicHeatmap'
+import PublicAnalysis from './pages/PublicAnalysis'
 
 // Global authenticated fetch — automatically logs the user out on any 401
 export function authFetch(url, opts = {}, onUnauth) {
@@ -52,8 +53,9 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public share page — no sign-in, aggregated map only */}
+        {/* Public share pages — no sign-in, aggregated/PII-free data only */}
         <Route path="/heatmap" element={<PublicHeatmap />} />
+        <Route path="/analysis-public" element={<PublicAnalysis />} />
         <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />} />
         <Route path="/enumerator/:code" element={user ? <EnumeratorProfileWrapper onLogout={handleUnauth} /> : <Navigate to="/login" />} />
         <Route path="/*" element={user ? <Dashboard user={user} onLogout={handleUnauth} onUnauth={handleUnauth} /> : <Navigate to="/login" />} />

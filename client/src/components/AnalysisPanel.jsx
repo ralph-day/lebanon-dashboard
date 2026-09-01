@@ -651,6 +651,9 @@ function GraphTools({ graph }) {
 
 const VIZ_LABEL = { bar: 'Bar', column: 'Column', pie: 'Pie', table: 'Table', distribution: 'H2H distribution' }
 function Card({ title, n, note, csv, graph, viz, onPush, onShowData, pushed, children }) {
+  // Public (no-login) pages provide no ctx: hide report-push and raw-data tools.
+  const cardCtx = useContext(AnalysisCtx)
+  if (!cardCtx) { onPush = null; onShowData = null }
   return (
     <div className="print-card bg-white rounded-xl border border-slate-100 p-4">
       <div className="flex items-baseline justify-between gap-3 mb-2">
@@ -692,7 +695,7 @@ function Card({ title, n, note, csv, graph, viz, onPush, onShowData, pushed, chi
   )
 }
 
-export default function AnalysisPanel({ user }) {
+export default function AnalysisPanel({ user, publicMode = false }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [dimKey, setDimKey] = useState('') // '' = no breakdown
@@ -731,12 +734,12 @@ export default function AnalysisPanel({ user }) {
   }
 
   useEffect(() => {
-    fetch('/api/analysis', { credentials: 'include' })
+    fetch(publicMode ? '/api/public/analysis' : '/api/analysis', publicMode ? {} : { credentials: 'include' })
       .then(r => { if (!r.ok) throw new Error('Failed to load analysis data'); return r.json() })
       .then(setData)
       .catch(e => setError(e.message))
-    fetch('/api/notes', { credentials: 'include' }).then(r => r.ok ? r.json() : []).then(setAllNotes).catch(() => {})
-  }, [])
+    if (!publicMode) fetch('/api/notes', { credentials: 'include' }).then(r => r.ok ? r.json() : []).then(setAllNotes).catch(() => {})
+  }, [publicMode])
 
   // Persist AI summaries across the session (per data version), so leaving and
   // returning to the tab doesn't lose them or force a re-generate.
@@ -751,6 +754,7 @@ export default function AnalysisPanel({ user }) {
 
   // Prompt techniques: load presets + persisted choice (shared with the report).
   useEffect(() => {
+    if (publicMode) return
     fetch('/api/analysis/prompts', { credentials: 'include' }).then(r => r.ok ? r.json() : { presets: [] }).then(d => setPresets(d.presets || [])).catch(() => {})
     try { const raw = localStorage.getItem('analysis-prompt'); if (raw) { const p = JSON.parse(raw); setPromptStyle(p.style || 'rigorous'); setPromptCustom(p.custom || '') } } catch { /* ignore */ }
   }, [])
@@ -1064,7 +1068,7 @@ export default function AnalysisPanel({ user }) {
   }
 
   return (
-   <AnalysisCtx.Provider value={ctxValue}>
+   <AnalysisCtx.Provider value={publicMode ? null : ctxValue}>
     <div className="space-y-5">
       {/* Print-only report header */}
       <div className="hidden print:block mb-2">
@@ -1078,7 +1082,7 @@ export default function AnalysisPanel({ user }) {
             <p className="text-sm font-semibold text-slate-800">Results Analysis</p>
             <p className="text-xs text-slate-400">{data.n} accepted surveys · GTS-verified sample</p>
           </div>
-          <div className="no-print ml-auto flex items-center gap-2 flex-wrap">
+          {!publicMode && <div className="no-print ml-auto flex items-center gap-2 flex-wrap">
             <button onClick={() => setPromptOpen(o => !o)}
               className="text-sm rounded-lg px-3 py-1.5 border border-slate-200 bg-white text-slate-600 hover:border-violet-300">
               ⚙ Prompt: {promptStyle === 'custom' ? 'Custom' : (presets.find(p => p.id === promptStyle)?.label || 'Rigorous analyst')}
@@ -1092,7 +1096,7 @@ export default function AnalysisPanel({ user }) {
               {pushedAll ? '✓ Pushed all' : '⤴ Push all to report'}
             </button>
             <a href="#report" className="text-sm rounded-lg px-3 py-1.5 bg-slate-800 text-white hover:bg-slate-700 transition-colors">Report →</a>
-          </div>
+          </div>}
         </div>
 
         {/* Prompt techniques panel */}
@@ -1130,7 +1134,7 @@ export default function AnalysisPanel({ user }) {
       </div>
 
       {/* Ask the data — free-text research question → chart + grounded answer */}
-      <section className="no-print bg-gradient-to-br from-violet-50 to-blue-50 rounded-xl border border-violet-100 p-4">
+      {!publicMode && <section className="no-print bg-gradient-to-br from-violet-50 to-blue-50 rounded-xl border border-violet-100 p-4">
         <div className="flex items-center gap-2 mb-1"><span className="text-violet-600">✦</span><h3 className="text-sm font-bold text-slate-800">Ask the data</h3></div>
         <p className="text-xs text-slate-500 mb-2">Ask any research question in plain language — Claude finds the right indicator, charts it, and writes the answer from the survey.</p>
         <div className="flex items-start gap-2">
@@ -1165,7 +1169,7 @@ export default function AnalysisPanel({ user }) {
             )}
           </div>
         )}
-      </section>
+      </section>}
 
       {/* Flagship: expectation gap */}
       <section>
@@ -1259,9 +1263,9 @@ export default function AnalysisPanel({ user }) {
 
       <MapSection respondents={data.respondents} meta={meta} />
 
-      <QualitativeSection fields={meta.qualitative} />
+      {!publicMode && <QualitativeSection fields={meta.qualitative} />}
 
-      <ResponsesBrowser fields={meta.openText} />
+      {!publicMode && <ResponsesBrowser fields={meta.openText} />}
 
       <DataDisclaimer variant="analysis" />
       <FullDataModal data={dataModal} onClose={() => setDataModal(null)} />
@@ -1271,4 +1275,23 @@ export default function AnalysisPanel({ user }) {
 }
 
 // Shared primitives reused by the Report builder.
+// Header for the public (no sign-in) share pages — IA brand, no account controls.
+export function PublicShellHeader({ subtitle }) {
+  return (
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+        <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+          <span className="text-white text-sm font-bold">IA</span>
+        </div>
+        <div className="min-w-0">
+          <h1 className="text-sm font-bold text-slate-800 leading-tight tracking-wide uppercase truncate">
+            Communities Know Best — {subtitle} — InflueAnswers
+          </h1>
+          <p className="text-xs text-slate-400 truncate">Emergency Response Perception Study 2026 · Lebanon</p>
+        </div>
+      </div>
+    </header>
+  )
+}
+
 export { PALETTE, scaleColor, HBar, Donut, Column, DataTable, ChartView, MapSection, DataDisclaimer, aggSingle, aggMulti, aggMean }

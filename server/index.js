@@ -1523,7 +1523,7 @@ app.get('/api/public/heatmap', publicMapLimit, async (req, res) => {
 // the results explorer. The client cross-tabs this in-browser, so we ship one
 // sparse record per respondent (only answered values) plus the indicator
 // registry that tells the client how to interpret each field.
-app.get('/api/analysis', requireAuth, requireAnalyst, async (req, res) => {
+const analysisHandler = async (req, res) => {
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
     await refreshCache();
   }
@@ -1587,7 +1587,11 @@ app.get('/api/analysis', requireAuth, requireAnalyst, async (req, res) => {
     },
     respondents,
   });
-});
+};
+app.get('/api/analysis', requireAuth, requireAnalyst, analysisHandler);
+// Public (no sign-in) variant for the shareable analysis/geo pages. Same
+// PII-free projection (no names/phones/GPS of people — location-level only).
+app.get('/api/public/analysis', publicMapLimit, analysisHandler);
 
 // Raw open-text responses for one field — every accepted answer, verbatim, in
 // the language it was written. No AI / no cost. Allowlisted field only.
