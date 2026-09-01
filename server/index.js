@@ -1595,10 +1595,15 @@ app.get('/api/public/analysis', publicMapLimit, analysisHandler);
 
 // Raw open-text responses for one field — every accepted answer, verbatim, in
 // the language it was written. No AI / no cost. Allowlisted field only.
+// Open-text fields visitors may read without signing in (the share pages).
+const PUBLIC_OPEN_TEXT = new Set(['message_to_world', 'hope_future']);
 app.get('/api/analysis/responses', publicMapLimit, async (req, res) => { // public: verbatim answers are PII-scrubbed at ingest
   const field = String(req.query.field || '');
   const qKey = String(req.query.qKey || '');
   if (!field && !qKey) return res.status(400).json({ error: 'Provide field or qKey' });
+  // Anonymous visitors: only the two showcase questions; everything else needs sign-in.
+  if (!req.session.user && !(field && PUBLIC_OPEN_TEXT.has(field)))
+    return res.status(403).json({ error: 'This question is available to signed-in users only' });
 
   if (!cache.data || !cache.fetchedAt || Date.now() - new Date(cache.fetchedAt).getTime() > CACHE_TTL_MS) {
     await refreshCache();

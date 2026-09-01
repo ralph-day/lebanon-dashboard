@@ -145,13 +145,19 @@ function MapSection({ respondents, meta, mapBoxClass = 'h-[340px]' }) {
 
 // Raw browser: read every answer to an open-text question verbatim, in the
 // language it was written. No AI — just the responses.
+// Open-text questions anonymous visitors may read on the public share pages
+// (mirrors the server-side PUBLIC_OPEN_TEXT allowlist).
+const PUBLIC_OPEN_TEXT = new Set(['message_to_world', 'hope_future'])
+
 function ResponsesBrowser({ fields }) {
+  const ctx = useContext(AnalysisCtx) // null on the public pages
   const [field, setField] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [cache, setCache] = useState({})
 
   if (!fields || !fields.length) return null
+  const locked = f => !ctx && !PUBLIC_OPEN_TEXT.has(f.key)
 
   const load = (f) => {
     setField(f); setError(null)
@@ -177,8 +183,13 @@ function ResponsesBrowser({ fields }) {
           <select value={field} onChange={e => load(e.target.value)}
             className="no-print text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white text-slate-700 max-w-full">
             <option value="">— Select a question —</option>
-            {fields.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+            {fields.map(f => (
+              <option key={f.key} value={f.key} disabled={locked(f)}>
+                {f.label}{locked(f) ? '  🔒' : ''}
+              </option>
+            ))}
           </select>
+          {!ctx && <span className="text-xs text-slate-400">🔒 Full access for signed-in users</span>}
           {result && <span className="text-xs text-slate-400 ml-auto">{result.n} responses</span>}
         </div>
 
